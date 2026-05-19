@@ -240,24 +240,12 @@ object PlayerManager {
 
     fun seekToNext() {
         if (currentIndex < currentPlaylist.size - 1) {
-            currentIndex++
-            val song = currentPlaylist[currentIndex]
-            val cachedUrl = urlCache[song.rid]
-            if (!cachedUrl.isNullOrEmpty()) {
-                replaceMediaItemUri(currentIndex, cachedUrl)
-            }
             player?.next()
         }
     }
 
     fun seekToPrevious() {
         if (currentIndex > 0) {
-            currentIndex--
-            val song = currentPlaylist[currentIndex]
-            val cachedUrl = urlCache[song.rid]
-            if (!cachedUrl.isNullOrEmpty()) {
-                replaceMediaItemUri(currentIndex, cachedUrl)
-            }
             player?.previous()
         }
     }
