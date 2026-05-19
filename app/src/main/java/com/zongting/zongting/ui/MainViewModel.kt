@@ -2,6 +2,7 @@ package com.zongting.zongting.ui
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import androidx.media3.common.Player
 import com.zongting.zongting.data.model.Song
 import com.zongting.zongting.data.repository.FavoriteRepository
 import com.zongting.zongting.data.repository.MusicRepository
@@ -48,6 +49,10 @@ class MainViewModel @Inject constructor(
     // 收藏歌曲的完整信息（用于展示列表）
     private val _favoriteSongList = MutableStateFlow<List<Song>>(emptyList())
     val favoriteSongList: StateFlow<List<Song>> = _favoriteSongList.asStateFlow()
+
+    // 播放模式：0=顺序播放, 1=单曲循环, 2=随机播放
+    private val _playMode = MutableStateFlow(0)
+    val playMode: StateFlow<Int> = _playMode.asStateFlow()
 
     // 最近播放列表
     private val _recentlyPlayed = MutableStateFlow<List<Song>>(emptyList())
@@ -196,11 +201,69 @@ class MainViewModel @Inject constructor(
     }
 
     fun playNext() {
-        PlayerManager.seekToNext()
+        when (_playMode.value) {
+            1 -> {
+                // ★ 单曲循环：回到开头重新播放当前歌曲
+                PlayerManager.seekTo(0)
+            }
+            2 -> {
+                // ★ 随机播放：随机选一首播放（不能和当前相同）
+                val playlist = _currentPlaylist.value
+                if (playlist.size > 1) {
+                    val currentIdx = _currentIndex.value
+                    val randomIdx = (playlist.indices - currentIdx).random()
+                    playSong(playlist[randomIdx], playlist)
+                } else if (playlist.isNotEmpty()) {
+                    PlayerManager.seekTo(0)
+                }
+            }
+            else -> {
+                // ★ 顺序播放：正常切下一首
+                PlayerManager.seekToNext()
+            }
+        }
     }
 
     fun playPrevious() {
-        PlayerManager.seekToPrevious()
+        when (_playMode.value) {
+            1 -> {
+                // ★ 单曲循环：回到开头重新播放当前歌曲
+                PlayerManager.seekTo(0)
+            }
+            2 -> {
+                // ★ 随机播放：随机选一首播放
+                val playlist = _currentPlaylist.value
+                if (playlist.isNotEmpty()) {
+                    val randomIdx = playlist.indices.random()
+                    playSong(playlist[randomIdx], playlist)
+                }
+            }
+            else -> {
+                // ★ 顺序播放：正常切上一首
+                PlayerManager.seekToPrevious()
+            }
+        }
+    }
+
+    fun togglePlayMode() {
+        _playMode.value = (_playMode.value + 1) % 3
+        // 同步设置 ExoPlayer 的 repeat/shuffle 模式
+        PlayerManager.getPlayer()?.let { p ->
+            when (_playMode.value) {
+                1 -> {
+                    p.repeatMode = Player.REPEAT_MODE_ONE
+                    p.shuffleModeEnabled = false
+                }
+                2 -> {
+                    p.repeatMode = Player.REPEAT_MODE_ALL
+                    p.shuffleModeEnabled = true
+                }
+                else -> {
+                    p.repeatMode = Player.REPEAT_MODE_OFF
+                    p.shuffleModeEnabled = false
+                }
+            }
+        }
     }
 
     fun seekTo(position: Long) {

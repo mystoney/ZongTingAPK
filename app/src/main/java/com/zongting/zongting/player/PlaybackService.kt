@@ -265,15 +265,33 @@ object PlayerManager {
     fun seekTo(position: Long) { player?.seekTo(position) }
 
     fun seekToNext() {
-        val p = player
-        Log.d("ZongTing", "seekToNext: mediaItemCount=${p?.mediaItemCount}, currentIndex=${p?.currentMediaItemIndex}, currentPlaylist.size=${currentPlaylist.size}, currentIndex_var=$currentIndex")
-        p?.seekToNextMediaItem()
+        val p = player ?: return
+        val count = p.mediaItemCount
+        if (count == 0) return
+        val idx = p.currentMediaItemIndex
+        Log.d("ZongTing", "seekToNext: mediaItemCount=$count, currentIndex=$idx, currentPlaylist.size=${currentPlaylist.size}")
+        if (idx == count - 1) {
+            // ★ 循环：最后一首 → 切到第一首
+            Log.d("ZongTing", "  -> wrap to first (index 0)")
+            p.seekTo(0, 0)
+        } else {
+            p.seekToNextMediaItem()
+        }
     }
 
     fun seekToPrevious() {
-        val p = player
-        Log.d("ZongTing", "seekToPrevious: mediaItemCount=${p?.mediaItemCount}, currentIndex=${p?.currentMediaItemIndex}, currentPlaylist.size=${currentPlaylist.size}, currentIndex_var=$currentIndex")
-        p?.seekToPreviousMediaItem()
+        val p = player ?: return
+        val count = p.mediaItemCount
+        if (count == 0) return
+        val idx = p.currentMediaItemIndex
+        Log.d("ZongTing", "seekToPrevious: mediaItemCount=$count, currentIndex=$idx, currentPlaylist.size=${currentPlaylist.size}")
+        if (idx == 0) {
+            // ★ 循环：第一首 → 切到最后一首
+            Log.d("ZongTing", "  -> wrap to last (index ${count - 1})")
+            p.seekTo(count - 1, 0)
+        } else {
+            p.seekToPreviousMediaItem()
+        }
     }
 
     fun getPlayer(): Player? = player

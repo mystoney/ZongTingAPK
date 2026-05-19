@@ -130,6 +130,8 @@ fun PlayerScreen(
                     isPlaying = isPlaying,
                     playbackState = playbackState,
                     onTogglePlay = { viewModel.togglePlayPause() },
+                    playMode = viewModel.playMode.value,
+                    onTogglePlayMode = { viewModel.togglePlayMode() },
                     onSeek = { pos ->
                         isSeeking = true
                         viewModel.seekTo(pos)
@@ -171,17 +173,18 @@ private fun AlbumCoverPage(
     currentPlaylist: List<Song>,
     isPlaying: Boolean,
     playbackState: PlaybackState,
+    playMode: Int,
     onTogglePlay: () -> Unit,
     onSeek: (Long) -> Unit,
     onDrag: (Long) -> Unit,
     onPrevious: () -> Unit,
     onNext: () -> Unit,
     onToggleFavorite: () -> Unit,
+    onTogglePlayMode: () -> Unit,
     isFavorite: Boolean,
     onPlaySong: (Song) -> Unit
 ) {
     // 播放模式：0=顺序播放, 1=单曲循环, 2=随机播放
-    var playMode by remember { mutableStateOf(0) }
     var showPlaylistSheet by remember { mutableStateOf(false) }
     val playlistListState = rememberLazyListState()
     val playModeIcon = when (playMode) {
@@ -335,7 +338,7 @@ private fun AlbumCoverPage(
                         .padding(vertical = 2.dp),
                     horizontalArrangement = Arrangement.SpaceEvenly
                 ) {
-                    IconButton(onClick = { playMode = (playMode + 1) % 3 }) {
+                    IconButton(onClick = onTogglePlayMode) {
                         Icon(
                             imageVector = playModeIcon,
                             contentDescription = playModeDesc,
