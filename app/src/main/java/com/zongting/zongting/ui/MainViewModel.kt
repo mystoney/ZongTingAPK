@@ -89,19 +89,32 @@ class MainViewModel @Inject constructor(
     }
 
     fun playSong(song: Song, playlist: List<Song> = listOf(song), replace: Boolean = false) {
-        // 清空现有播放列表，替换为新歌单
-        val newPlaylist = if (replace) {
-            playlist.take(50)
+        // 检查歌曲是否已在当前播放列表中
+        val existingPlaylist = _currentPlaylist.value.toMutableList()
+        val existingIndex = existingPlaylist.indexOfFirst { it.rid == song.rid }
+
+        val newPlaylist: List<Song>
+        val targetIndex: Int
+
+        if (replace) {
+            // 替换模式：清空并播放新歌单
+            newPlaylist = playlist.take(50)
+            targetIndex = 0
+        } else if (existingIndex >= 0) {
+            // 歌曲已在播放列表中：保持列表不变，只切换到该位置播放
+            newPlaylist = existingPlaylist
+            targetIndex = existingIndex
         } else {
-            // 选歌时插入到播放列表第一首，保持队列连贯
-            val existing = _currentPlaylist.value.toMutableList()
-            existing.removeAll { it.rid == song.rid }
-            existing.add(0, song)
-            existing.take(50)
+            // 歌曲不在播放列表中：插入到第一首
+            existingPlaylist.removeAll { it.rid == song.rid }
+            existingPlaylist.add(0, song)
+            newPlaylist = existingPlaylist.take(50)
+            targetIndex = 0
         }
+
         _currentSong.value = song
         _currentPlaylist.value = newPlaylist
-        _currentIndex.value = 0
+        _currentIndex.value = targetIndex
         _isPlaying.value = true
 
         // 添加到最近播放（最多保留50首，去重）
