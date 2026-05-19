@@ -80,8 +80,6 @@ object PlayerManager {
 
     // 防止切歌时重复触发
     private var isFetchingUrlForIndex: Int = -1
-    // 导航锁：防止 onMediaItemTransition 在 seekToNext/Previous 时触发 replaceMediaItemUri
-    private var isNavigating: Boolean = false
 
     val isPlaying: Boolean
         get() = player?.isPlaying == true
@@ -129,11 +127,6 @@ object PlayerManager {
                 val prevIndex = currentIndex
                 currentIndex = newIndex
                 onSongChanged?.invoke(newSong, newIndex)
-                // 如果是导航触发的跳切，跳过 URL 替换（由下一个 playSong 统一处理）
-                if (isNavigating) {
-                    isNavigating = false
-                    return
-                }
                 // 如果 URL 已缓存，直接更新 MediaItem 的 URI
                 val cachedUrl = urlCache[newSong.rid]
                 if (!cachedUrl.isNullOrEmpty()) {
@@ -246,14 +239,10 @@ object PlayerManager {
     fun seekTo(position: Long) { player?.seekTo(position) }
 
     fun seekToNext() {
-        Log.d("ZongTing", "seekToNext called, player=$player, mediaItemCount=${player?.mediaItemCount}, currentIndex=${player?.currentMediaItemIndex}")
-        isNavigating = true
         player?.seekToNextMediaItem()
     }
 
     fun seekToPrevious() {
-        Log.d("ZongTing", "seekToPrevious called, player=$player, mediaItemCount=${player?.mediaItemCount}, currentIndex=${player?.currentMediaItemIndex}")
-        isNavigating = true
         player?.seekToPreviousMediaItem()
     }
 
