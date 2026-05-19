@@ -156,6 +156,9 @@ fun MainNavigation(
                     onBackClick = { navController.popBackStack() },
                     onSongClick = { song, playlist ->
                         mainViewModel.playSong(song, playlist)
+                    },
+                    onPlayAll = {
+                        mainViewModel.playPlaylist(playlistId)
                     }
                 )
             }

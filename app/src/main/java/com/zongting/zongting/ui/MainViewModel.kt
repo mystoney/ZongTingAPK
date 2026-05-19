@@ -88,13 +88,17 @@ class MainViewModel @Inject constructor(
         _favoriteSongList.value = currentList
     }
 
-    fun playSong(song: Song, playlist: List<Song> = listOf(song)) {
-        // 选歌时插入到播放列表第一首，保持队列连贯
-        val existing = _currentPlaylist.value.toMutableList()
-        existing.removeAll { it.rid == song.rid }
-        existing.add(0, song)
-        val maxQueue = 50
-        val newPlaylist = existing.take(maxQueue)
+    fun playSong(song: Song, playlist: List<Song> = listOf(song), replace: Boolean = false) {
+        // 清空现有播放列表，替换为新歌单
+        val newPlaylist = if (replace) {
+            playlist.take(50)
+        } else {
+            // 选歌时插入到播放列表第一首，保持队列连贯
+            val existing = _currentPlaylist.value.toMutableList()
+            existing.removeAll { it.rid == song.rid }
+            existing.add(0, song)
+            existing.take(50)
+        }
         _currentSong.value = song
         _currentPlaylist.value = newPlaylist
         _currentIndex.value = 0
@@ -135,7 +139,7 @@ class MainViewModel @Inject constructor(
                 onSuccess = { playlistData ->
                     val songs = playlistData.musicList.map { it.copy(source = "kuwo", playable = true) }
                     if (songs.isNotEmpty()) {
-                        playSong(songs.first(), songs)
+                        playSong(songs.first(), songs, replace = true)
                     } else {
                         _playbackState.value = PlaybackState(error = "歌单为空", isLoading = false)
                     }
@@ -148,7 +152,6 @@ class MainViewModel @Inject constructor(
     }
 
     private suspend fun getPlayUrl(rid: Long, source: String = "kuwo"): String? {
-        // 先检查缓存（按 source + rid 组合）
         val cacheKey = "${source}_$rid"
         _playUrlCache[cacheKey]?.let { return it }
 

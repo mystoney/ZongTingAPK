@@ -28,7 +28,8 @@ fun PlaylistScreen(
     playlistId: Long,
     viewModel: PlaylistViewModel = hiltViewModel(),
     onBackClick: () -> Unit,
-    onSongClick: (Song, List<Song>) -> Unit
+    onSongClick: (Song, List<Song>) -> Unit,
+    onPlayAll: () -> Unit = {}
 ) {
     val uiState by viewModel.uiState.collectAsState()
 
@@ -116,11 +117,7 @@ fun PlaylistScreen(
                     // 播放全部按钮
                     item {
                         Button(
-                            onClick = {
-                                uiState.songs.firstOrNull()?.let {
-                                    onSongClick(it, uiState.songs)
-                                }
-                            },
+                            onClick = onPlayAll,
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .padding(horizontal = 16.dp)
