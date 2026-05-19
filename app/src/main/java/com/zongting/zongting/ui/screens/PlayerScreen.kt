@@ -630,9 +630,79 @@ fun LyricPage(
                     }
                 }
             }
+            }
+        }
+
+        // ===== 底部播放控制栏 =====
+        Surface(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(topStart = 12.dp, topEnd = 12.dp),
+            color = MaterialTheme.colorScheme.surface,
+            tonalElevation = 2.dp
+        ) {
+            Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
+                // 上一首 / 播放暂停 / 下一首
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceEvenly,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    IconButton(onClick = onPrevious, modifier = Modifier.size(48.dp)) {
+                        Icon(
+                            Icons.Default.SkipPrevious,
+                            contentDescription = "上一首",
+                            modifier = Modifier.size(28.dp)
+                        )
+                    }
+
+                    FilledIconButton(
+                        onClick = onTogglePlay,
+                        modifier = Modifier.size(56.dp),
+                        shape = CircleShape
+                    ) {
+                        Icon(
+                            if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
+                            contentDescription = if (isPlaying) "暂停" else "播放",
+                            modifier = Modifier.size(32.dp)
+                        )
+                    }
+
+                    IconButton(onClick = onNext, modifier = Modifier.size(48.dp)) {
+                        Icon(
+                            Icons.Default.SkipNext,
+                            contentDescription = "下一首",
+                            modifier = Modifier.size(28.dp)
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(2.dp))
+
+                // 播放模式 / 收藏 按钮行
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceEvenly
+                ) {
+                    IconButton(onClick = { }) {
+                        Icon(
+                            Icons.Default.Repeat,
+                            contentDescription = "播放模式",
+                            modifier = Modifier.size(24.dp)
+                        )
+                    }
+
+                    IconButton(onClick = onToggleFavorite) {
+                        Icon(
+                            imageVector = if (isFavorite) Icons.Filled.Favorite else Icons.Outlined.FavoriteBorder,
+                            contentDescription = if (isFavorite) "取消喜欢" else "我喜欢",
+                            tint = if (isFavorite) Color(0xFFFF5252) else MaterialTheme.colorScheme.onSurface,
+                            modifier = Modifier.size(24.dp)
+                        )
+                    }
+                }
+            }
         }
     }
-}
 }
 
 fun formatDuration(millis: Long): String {

@@ -54,6 +54,10 @@ class MainViewModel @Inject constructor(
     val recentlyPlayed: StateFlow<List<Song>> = _recentlyPlayed.asStateFlow()
 
     init {
+        // 设置 PlayerManager 的 URL 获取器（用于切歌时动态获取播放 URL）
+        PlayerManager.setUrlFetcher { song ->
+            getPlayUrl(song.rid, song.source)
+        }
         // 从磁盘加载收藏歌曲
         viewModelScope.launch {
             val songs = favoriteRepository.favoriteSongs.first()
