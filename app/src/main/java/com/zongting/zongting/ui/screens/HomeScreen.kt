@@ -94,7 +94,6 @@ fun HomeScreen(
                             PlaylistCard(
                                 playlist = playlist,
                                 onClick = {
-                                    onPlaylistPlay(playlist.id)
                                     onPlaylistClick(playlist.id)
                                 }
                             )
