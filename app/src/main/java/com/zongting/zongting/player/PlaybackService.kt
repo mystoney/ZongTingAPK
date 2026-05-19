@@ -158,18 +158,18 @@ object PlayerManager {
      */
     private fun replaceMediaItemUri(index: Int, url: String) {
         player?.let { p ->
-            // 记录当前播放位置（ms），用于切歌后恢复
-            val savedPos = if (p.isPlaying) p.currentPosition else 0L
-            // 获取旧 MediaItem 并重建（只换 URI，保留 metadata）
-            val oldItem = p.currentMediaItem
-            if (oldItem != null && index == p.currentMediaItemIndex) {
+            if (index == p.currentMediaItemIndex) {
                 // 正在播放的这一首，直接用 setMediaItem 替换
+                val oldItem = p.currentMediaItem ?: return
                 p.setMediaItem(oldItem.buildUpon().setUri(url).build())
-                p.seekTo(savedPos)
+                if (p.isPlaying) p.seekTo(p.currentPosition)
             } else if (index < p.mediaItemCount) {
-                // 非当前项，通过 remove + add 替换
+                // 非当前项：用 getMediaItemAt(index) 获取目标项，再用 remove+add 替换
+                val targetItem = p.getMediaItemAt(index)
+                val savedPos = if (p.isPlaying) p.currentPosition else 0L
                 p.removeMediaItem(index)
-                p.addMediaItem(index, oldItem!!.buildUpon().setUri(url).build())
+                p.addMediaItem(index, targetItem.buildUpon().setUri(url).build())
+                p.seekTo(p.currentMediaItemIndex, savedPos)
             }
         }
     }
