@@ -122,7 +122,7 @@ fun MainNavigation(
                         mainViewModel.playSong(song, playlist)
                     },
                     onPlaylistPlay = { playlistId ->
-                        mainViewModel.playPlaylist(playlistId)
+                        mainViewModel.playPlaylistIfEmpty(playlistId)
                     }
                 )
             }

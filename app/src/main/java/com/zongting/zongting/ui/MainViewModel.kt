@@ -151,6 +151,15 @@ class MainViewModel @Inject constructor(
         }
     }
 
+    /**
+     * 仅在播放列表为空时播放歌单，否则不操作
+     */
+    fun playPlaylistIfEmpty(playlistId: Long) {
+        if (_currentPlaylist.value.isEmpty()) {
+            playPlaylist(playlistId)
+        }
+    }
+
     private suspend fun getPlayUrl(rid: Long, source: String = "kuwo"): String? {
         val cacheKey = "${source}_$rid"
         _playUrlCache[cacheKey]?.let { return it }
