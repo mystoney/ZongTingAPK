@@ -9,10 +9,8 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material.icons.outlined.FavoriteBorder
@@ -471,233 +469,231 @@ fun LyricPage(
     onToggleFavorite: () -> Unit,
     isFavorite: Boolean
 ) {
-    // LazyListState + scrollOffset 精确居中
     val lazyListState = rememberLazyListState()
-    // 用户是否在手动滑动
     var isUserScrolling by remember { mutableStateOf(false) }
 
     Surface(
         modifier = Modifier.fillMaxSize(),
         color = MaterialTheme.colorScheme.background
     ) {
-        Column(modifier = Modifier.fillMaxSize()) {
-            // 歌词内容区域（占据主要空间）
-            Box(modifier = Modifier.weight(1f)) {
-            when (lyricState) {
-                is LyricState.Loading -> {
-                    Box(
-                        modifier = Modifier.fillMaxSize(),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            CircularProgressIndicator()
-                            Spacer(modifier = Modifier.height(12.dp))
-                            Text("正在加载歌词...", color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        }
-                    }
-                }
-                is LyricState.Success -> {
-                    val lines = lyricState.lyrics
-                    val position = playbackState.position
-
-                    val currentLineIndex = remember(lines, position) {
-                        var idx = 0
-                        for ((i, line) in lines.withIndex()) {
-                            if (position >= line.timestamp) idx = i
-                        }
-                        idx
-                    }
-
-                    val lineHeightDp = 40.dp
-                    val estimatedLineHeightPx = with(LocalDensity.current) { lineHeightDp.toPx().toInt() }
-
-                    BoxWithConstraints(
-                        modifier = Modifier.fillMaxSize()
-                    ) {
-                        val boxHeightPx = with(LocalDensity.current) { maxHeight.toPx().toInt() }
-                        val topPaddingPx = boxHeightPx / 2 - estimatedLineHeightPx / 2
-
-                        LaunchedEffect(currentLineIndex) {
-                            if (lines.isNotEmpty() && currentLineIndex in lines.indices) {
-                                lazyListState.animateScrollToItem(index = currentLineIndex)
+        Box(modifier = Modifier.fillMaxSize()) {
+            // 歌词内容区域
+            Box(modifier = Modifier.fillMaxSize()) {
+                when (lyricState) {
+                    is LyricState.Loading -> {
+                        Box(
+                            modifier = Modifier.fillMaxSize(),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                CircularProgressIndicator()
+                                Spacer(modifier = Modifier.height(12.dp))
+                                Text("正在加载歌词...", color = MaterialTheme.colorScheme.onSurfaceVariant)
                             }
                         }
+                    }
+                    is LyricState.Success -> {
+                        val lines = lyricState.lyrics
+                        val position = playbackState.position
 
-                        LaunchedEffect(lazyListState) {
-                            snapshotFlow { lazyListState.isScrollInProgress }
-                                .collect { isScrolling ->
-                                    if (isScrolling) isUserScrolling = true
-                                    else if (isUserScrolling) {
-                                        kotlinx.coroutines.delay(500)
-                                        if (!lazyListState.isScrollInProgress) isUserScrolling = false
-                                    }
-                                }
+                        val currentLineIndex = remember(lines, position) {
+                            var idx = 0
+                            for ((i, line) in lines.withIndex()) {
+                                if (position >= line.timestamp) idx = i
+                            }
+                            idx
                         }
 
-                        Box(modifier = Modifier.fillMaxSize()) {
-                            LazyColumn(
-                                state = lazyListState,
-                                modifier = Modifier
-                                    .fillMaxSize()
-                                    .padding(horizontal = 24.dp),
-                                horizontalAlignment = Alignment.CenterHorizontally,
-                                contentPadding = PaddingValues(
-                                    top = with(LocalDensity.current) { topPaddingPx.toDp() },
-                                    bottom = with(LocalDensity.current) { topPaddingPx.toDp() }
+                        val lineHeightDp = 40.dp
+                        val estimatedLineHeightPx = with(LocalDensity.current) { lineHeightDp.toPx().toInt() }
+
+                        BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
+                            val boxHeightPx = with(LocalDensity.current) { maxHeight.toPx().toInt() }
+                            val topPaddingPx = boxHeightPx / 2 - estimatedLineHeightPx / 2
+
+                            LaunchedEffect(currentLineIndex) {
+                                if (lines.isNotEmpty() && currentLineIndex in lines.indices) {
+                                    lazyListState.animateScrollToItem(index = currentLineIndex)
+                                }
+                            }
+
+                            LaunchedEffect(lazyListState) {
+                                snapshotFlow { lazyListState.isScrollInProgress }
+                                    .collect { isScrolling ->
+                                        if (isScrolling) isUserScrolling = true
+                                        else if (isUserScrolling) {
+                                            kotlinx.coroutines.delay(500)
+                                            if (!lazyListState.isScrollInProgress) isUserScrolling = false
+                                        }
+                                    }
+                            }
+
+                            Box(modifier = Modifier.fillMaxSize()) {
+                                LazyColumn(
+                                    state = lazyListState,
+                                    modifier = Modifier
+                                        .fillMaxSize()
+                                        .padding(horizontal = 24.dp),
+                                    horizontalAlignment = Alignment.CenterHorizontally,
+                                    contentPadding = PaddingValues(
+                                        top = with(LocalDensity.current) { topPaddingPx.toDp() },
+                                        bottom = with(LocalDensity.current) { topPaddingPx.toDp() }
+                                    )
+                                ) {
+                                    itemsIndexed(lines) { index, lyricLine ->
+                                        val isCurrentLine = index == currentLineIndex
+                                        Text(
+                                            text = lyricLine.text,
+                                            fontSize = if (isCurrentLine) 18.sp else 14.sp,
+                                            fontWeight = if (isCurrentLine) FontWeight.Bold else FontWeight.Normal,
+                                            color = if (isCurrentLine)
+                                                MaterialTheme.colorScheme.primary
+                                            else
+                                                MaterialTheme.colorScheme.onSurfaceVariant,
+                                            textAlign = TextAlign.Center,
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .padding(vertical = 6.dp)
+                                        )
+                                    }
+                                }
+
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .height(with(LocalDensity.current) { (boxHeightPx / 2).toDp() })
+                                        .align(Alignment.TopCenter)
+                                        .background(
+                                            brush = Brush.verticalGradient(
+                                                colors = listOf(
+                                                    MaterialTheme.colorScheme.surface.copy(alpha = 0.85f),
+                                                    Color.Transparent
+                                                )
+                                            )
+                                        )
                                 )
-                            ) {
-                                itemsIndexed(lines) { index, lyricLine ->
-                                    val isCurrentLine = index == currentLineIndex
-                                    Text(
-                                        text = lyricLine.text,
-                                        fontSize = if (isCurrentLine) 18.sp else 14.sp,
-                                        fontWeight = if (isCurrentLine) FontWeight.Bold else FontWeight.Normal,
-                                        color = if (isCurrentLine)
-                                            MaterialTheme.colorScheme.primary
-                                        else
-                                            MaterialTheme.colorScheme.onSurfaceVariant,
-                                        textAlign = TextAlign.Center,
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .padding(vertical = 6.dp)
-                                    )
-                                }
-                            }
-
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .height(with(LocalDensity.current) { (boxHeightPx / 2).toDp() })
-                                    .align(Alignment.TopCenter)
-                                    .background(
-                                        brush = Brush.verticalGradient(
-                                            colors = listOf(
-                                                MaterialTheme.colorScheme.surface.copy(alpha = 0.85f),
-                                                Color.Transparent
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .height(with(LocalDensity.current) { (boxHeightPx / 2).toDp() })
+                                        .align(Alignment.BottomCenter)
+                                        .background(
+                                            brush = Brush.verticalGradient(
+                                                colors = listOf(
+                                                    Color.Transparent,
+                                                    MaterialTheme.colorScheme.surface.copy(alpha = 0.85f)
+                                                )
                                             )
                                         )
-                                    )
-                            )
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .height(with(LocalDensity.current) { (boxHeightPx / 2).toDp() })
-                                    .align(Alignment.BottomCenter)
-                                    .background(
-                                        brush = Brush.verticalGradient(
-                                            colors = listOf(
-                                                Color.Transparent,
-                                                MaterialTheme.colorScheme.surface.copy(alpha = 0.85f)
-                                            )
-                                        )
-                                    )
-                            )
+                                )
 
-                            LaunchedEffect(isUserScrolling, currentLineIndex) {
-                                if (!isUserScrolling && lines.isNotEmpty()) {
-                                    kotlinx.coroutines.delay(5000)
-                                    if (!lazyListState.isScrollInProgress) {
-                                        lazyListState.animateScrollToItem(
-                                            index = currentLineIndex,
-                                            scrollOffset = -topPaddingPx
-                                        )
+                                LaunchedEffect(isUserScrolling, currentLineIndex) {
+                                    if (!isUserScrolling && lines.isNotEmpty()) {
+                                        kotlinx.coroutines.delay(5000)
+                                        if (!lazyListState.isScrollInProgress) {
+                                            lazyListState.animateScrollToItem(
+                                                index = currentLineIndex,
+                                                scrollOffset = -topPaddingPx
+                                            )
+                                        }
                                     }
                                 }
                             }
                         }
                     }
-                }
-                is LyricState.Error -> {
-                    Box(
-                        modifier = Modifier.fillMaxSize(),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text(
-                            text = lyricState.message,
-                            color = MaterialTheme.colorScheme.error
-                        )
+                    is LyricState.Error -> {
+                        Box(
+                            modifier = Modifier.fillMaxSize(),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = lyricState.message,
+                                color = MaterialTheme.colorScheme.error
+                            )
+                        }
                     }
-                }
-                is LyricState.Idle -> {
-                    Box(
-                        modifier = Modifier.fillMaxSize(),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text(
-                            text = "正在加载歌词...",
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
+                    is LyricState.Idle -> {
+                        Box(
+                            modifier = Modifier.fillMaxSize(),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = "正在加载歌词...",
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
                     }
                 }
             }
-            }
-        }
 
-        // ===== 底部播放控制栏 =====
-        Surface(
-            modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(topStart = 12.dp, topEnd = 12.dp),
-            color = MaterialTheme.colorScheme.surface,
-            tonalElevation = 2.dp
-        ) {
-            Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
-                // 上一首 / 播放暂停 / 下一首
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceEvenly,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    IconButton(onClick = onPrevious, modifier = Modifier.size(48.dp)) {
-                        Icon(
-                            Icons.Default.SkipPrevious,
-                            contentDescription = "上一首",
-                            modifier = Modifier.size(28.dp)
-                        )
-                    }
-
-                    FilledIconButton(
-                        onClick = onTogglePlay,
-                        modifier = Modifier.size(56.dp),
-                        shape = CircleShape
+            // 底部播放控制栏（固定在页面最下方）
+            Surface(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .align(Alignment.BottomCenter),
+                shape = RoundedCornerShape(topStart = 12.dp, topEnd = 12.dp),
+                color = MaterialTheme.colorScheme.surface,
+                tonalElevation = 2.dp
+            ) {
+                Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
+                    // 上一首 / 播放暂停 / 下一首
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceEvenly,
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Icon(
-                            if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
-                            contentDescription = if (isPlaying) "暂停" else "播放",
-                            modifier = Modifier.size(32.dp)
-                        )
+                        IconButton(onClick = onPrevious, modifier = Modifier.size(48.dp)) {
+                            Icon(
+                                Icons.Default.SkipPrevious,
+                                contentDescription = "上一首",
+                                modifier = Modifier.size(28.dp)
+                            )
+                        }
+
+                        FilledIconButton(
+                            onClick = onTogglePlay,
+                            modifier = Modifier.size(56.dp),
+                            shape = CircleShape
+                        ) {
+                            Icon(
+                                if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
+                                contentDescription = if (isPlaying) "暂停" else "播放",
+                                modifier = Modifier.size(32.dp)
+                            )
+                        }
+
+                        IconButton(onClick = onNext, modifier = Modifier.size(48.dp)) {
+                            Icon(
+                                Icons.Default.SkipNext,
+                                contentDescription = "下一首",
+                                modifier = Modifier.size(28.dp)
+                            )
+                        }
                     }
 
-                    IconButton(onClick = onNext, modifier = Modifier.size(48.dp)) {
-                        Icon(
-                            Icons.Default.SkipNext,
-                            contentDescription = "下一首",
-                            modifier = Modifier.size(28.dp)
-                        )
-                    }
-                }
+                    Spacer(modifier = Modifier.height(2.dp))
 
-                Spacer(modifier = Modifier.height(2.dp))
+                    // 播放模式 / 收藏 按钮行
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceEvenly
+                    ) {
+                        IconButton(onClick = { }) {
+                            Icon(
+                                Icons.Default.Repeat,
+                                contentDescription = "播放模式",
+                                modifier = Modifier.size(24.dp)
+                            )
+                        }
 
-                // 播放模式 / 收藏 按钮行
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceEvenly
-                ) {
-                    IconButton(onClick = { }) {
-                        Icon(
-                            Icons.Default.Repeat,
-                            contentDescription = "播放模式",
-                            modifier = Modifier.size(24.dp)
-                        )
-                    }
-
-                    IconButton(onClick = onToggleFavorite) {
-                        Icon(
-                            imageVector = if (isFavorite) Icons.Filled.Favorite else Icons.Outlined.FavoriteBorder,
-                            contentDescription = if (isFavorite) "取消喜欢" else "我喜欢",
-                            tint = if (isFavorite) Color(0xFFFF5252) else MaterialTheme.colorScheme.onSurface,
-                            modifier = Modifier.size(24.dp)
-                        )
+                        IconButton(onClick = onToggleFavorite) {
+                            Icon(
+                                imageVector = if (isFavorite) Icons.Filled.Favorite else Icons.Outlined.FavoriteBorder,
+                                contentDescription = if (isFavorite) "取消喜欢" else "我喜欢",
+                                tint = if (isFavorite) Color(0xFFFF5252) else MaterialTheme.colorScheme.onSurface,
+                                modifier = Modifier.size(24.dp)
+                            )
+                        }
                     }
                 }
             }
