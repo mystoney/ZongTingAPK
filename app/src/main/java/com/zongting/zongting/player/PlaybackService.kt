@@ -199,11 +199,13 @@ object PlayerManager {
                 val url = if (i == idx) playUrl else (urlCache[s.rid] ?: "")
                 p.addMediaItem(buildMediaItem(s, url))
             }
-            p.seekTo(idx, 0)
+            // 先 prepare，让播放器知道有哪些 media item
             p.prepare()
-            p.play()
+            // 再 seek 到目标位置
+            p.seekTo(idx, 0)
             // 恢复正确的索引
             currentIndex = idx
+            p.play()
 
             // 预取后续几首歌的 URL（异步，不阻塞播放）
             if (playlist.size > 1) {
