@@ -191,6 +191,8 @@ object PlayerManager {
         urlCache[song.rid] = playUrl
 
         player?.let { p ->
+            // 先临时设 currentIndex=0，防止 clearMediaItems 触发 onMediaItemTransition 时误判
+            currentIndex = 0
             // 替换整个播放列表，避免 addMediaItem 打乱正在播放的歌曲位置
             p.clearMediaItems()
             playlist.forEachIndexed { i, s ->
@@ -200,6 +202,8 @@ object PlayerManager {
             p.seekTo(idx, 0)
             p.prepare()
             p.play()
+            // 恢复正确的索引
+            currentIndex = idx
 
             // 预取后续几首歌的 URL（异步，不阻塞播放）
             if (playlist.size > 1) {
