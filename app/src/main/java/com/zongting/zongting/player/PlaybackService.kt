@@ -27,27 +27,22 @@ class PlaybackService : MediaSessionService() {
             .setUsage(C.USAGE_MEDIA)
             .build()
 
-        // 创建 ExoPlayer
-        val player = ExoPlayer.Builder(this)
-            .setAudioAttributes(audioAttributes, true)
-            .setHandleAudioBecomingNoisy(true)
-            .build()
-
         // 创建 PendingIntent 用于点击通知跳转到 App
         val pendingIntent = PendingIntent.getActivity(
-            this,
-            0,
-            Intent(this, MainActivity::class.java),
+            this, 0, Intent(this, MainActivity::class.java),
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
-        // 创建 MediaSession
-        mediaSession = MediaSession.Builder(this, player)
+        // 创建 MediaSession（Service 自己管理 player，不再单独创建）
+        mediaSession = MediaSession.Builder(this, ExoPlayer.Builder(this)
+            .setAudioAttributes(audioAttributes, true)
+            .setHandleAudioBecomingNoisy(true)
+            .build())
             .setSessionActivity(pendingIntent)
             .build()
 
-        // 初始化 PlayerManager
-        PlayerManager.initialize(player, mediaSession!!)
+        // 初始化 PlayerManager（传入 session.player，与 MediaSession 共用同一实例）
+        PlayerManager.initialize(mediaSession!!.player, mediaSession!!)
     }
 
     override fun onGetSession(controllerInfo: MediaSession.ControllerInfo): MediaSession? {
@@ -67,7 +62,7 @@ class PlaybackService : MediaSessionService() {
 // ==================== 播放器管理器 ====================
 object PlayerManager {
 
-    private var player: ExoPlayer? = null
+    private var player: Player? = null
     private var mediaSession: MediaSession? = null
     private var currentPlaylist: List<Song> = emptyList()
     private var currentIndex: Int = 0
@@ -102,27 +97,27 @@ object PlayerManager {
         urlFetcher = fetcher
     }
 
-    fun initialize(exoPlayer: ExoPlayer, session: MediaSession) {
-        player = exoPlayer
+    fun initialize(player: Player, session: MediaSession) {
+        this.player = player
         mediaSession = session
 
         // 注册播放器监听器
-        exoPlayer.addListener(object : Player.Listener {
+        player.addListener(object : Player.Listener {
             override fun onIsPlayingChanged(playing: Boolean) {
                 onPlayingChanged?.invoke(playing)
             }
 
             override fun onPlaybackStateChanged(state: Int) {
                 if (state == Player.STATE_READY) {
-                    val pos = exoPlayer.currentPosition
-                    val dur = exoPlayer.duration
-                    onPositionChanged?.invoke(pos, dur)
+                    val pos = player?.currentPosition ?: 0L
+                    val dur = player?.duration ?: 0L
+                    if (dur > 0) onPositionChanged?.invoke(pos, dur)
                 }
             }
 
             // ExoPlayer 切换 MediaItem 时触发（自动切歌或用户切换）
             override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
-                val newIndex = exoPlayer.currentMediaItemIndex
+                val newIndex = player?.currentMediaItemIndex ?: return
                 if (newIndex < 0 || newIndex >= currentPlaylist.size) return
                 val newSong = currentPlaylist[newIndex]
                 // 跳过同一首（playlist 重设时也会触发）
