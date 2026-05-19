@@ -191,21 +191,22 @@ object PlayerManager {
         urlCache[song.rid] = playUrl
 
         player?.let { p ->
-            // 先临时设 currentIndex=0，防止 clearMediaItems 触发 onMediaItemTransition 时误判
-            currentIndex = 0
             // 替换整个播放列表，避免 addMediaItem 打乱正在播放的歌曲位置
             p.clearMediaItems()
             playlist.forEachIndexed { i, s ->
                 val url = if (i == idx) playUrl else (urlCache[s.rid] ?: "")
                 p.addMediaItem(buildMediaItem(s, url))
             }
-            // 先 prepare，让播放器知道有哪些 media item
+            // 先禁止自动播放，防止 prepare() 后 ExoPlayer 从 index 0 开始播放
+            val wasPlaying = p.isPlaying
+            p.playWhenReady = false
             p.prepare()
-            // 再 seek 到目标位置
+            // seek 到目标位置（此时不会触发 index 0 的播放）
             p.seekTo(idx, 0)
-            // 恢复正确的索引
             currentIndex = idx
-            p.play()
+            // 恢复播放状态
+            p.playWhenReady = true
+            if (wasPlaying) p.play()
 
             // 预取后续几首歌的 URL（异步，不阻塞播放）
             if (playlist.size > 1) {
