@@ -118,56 +118,56 @@ object PlayerManager {
 
             // ExoPlayer 切换 MediaItem 时触发（自动切歌或用户切换）
             override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
-                val newIndex = player?.currentMediaItemIndex ?: return
-                if (newIndex < 0 || newIndex >= currentPlaylist.size) return
+                val p = player ?: return
+                val newIndex = p.currentMediaItemIndex
+                // ★ 修复：playlist 为空时直接跳过，避免 getMediaItemAt crash
+                if (p.mediaItemCount == 0 || newIndex < 0) {
+                    Log.d("ZongTing", "onMediaItemTransition: playlist empty or invalid index, skipping")
+                    return
+                }
+                Log.d("ZongTing", "onMediaItemTransition: newIndex=$newIndex, currentIndex=$currentIndex, mediaItemCount=${p.mediaItemCount}, reason=$reason, mediaId=${mediaItem?.mediaId}")
+                if (newIndex < 0 || newIndex >= currentPlaylist.size) {
+                    Log.d("ZongTing", "  -> out of bounds (newIndex=$newIndex, playlist.size=${currentPlaylist.size}), skipping")
+                    return
+                }
                 val newSong = currentPlaylist[newIndex]
                 // 跳过同一首（playlist 重设时也会触发）
-                if (newSong.rid == currentPlaylist.getOrNull(currentIndex)?.rid) return
+                if (newSong.rid == currentPlaylist.getOrNull(currentIndex)?.rid) {
+                    Log.d("ZongTing", "  -> same song, skipping")
+                    return
+                }
 
                 currentIndex = newIndex
                 onSongChanged?.invoke(newSong, newIndex)
+                Log.d("ZongTing", "  -> switching to song: ${newSong.name}, rid=${newSong.rid}")
                 // 如果 URL 已缓存，直接更新 MediaItem 的 URI
                 val cachedUrl = urlCache[newSong.rid]
                 if (!cachedUrl.isNullOrEmpty()) {
-                    replaceMediaItemUri(newIndex, cachedUrl)
+                    Log.d("ZongTing", "  -> URL cached, replacing media item")
+                    // ★ 修复：用 replaceMediaItem 替代 setMediaItem，避免破坏播放列表
+                    val updatedItem = p.getMediaItemAt(newIndex).buildUpon().setUri(cachedUrl).build()
+                    p.replaceMediaItem(newIndex, updatedItem)
                 } else if (isFetchingUrlForIndex != newIndex) {
                     // URL 未缓存，暂停，异步获取，获取后更新并继续
                     isFetchingUrlForIndex = newIndex
-                    player?.pause()
+                    Log.d("ZongTing", "  -> URL not cached, fetching async, player state before pause: ${p.playbackState}")
+                    p.pause()
                     scope.launch {
                         val url = urlFetcher?.invoke(newSong)
                         if (url != null) {
+                            Log.d("ZongTing", "  -> URL fetched, updating media item and playing")
                             urlCache[newSong.rid] = url
-                            replaceMediaItemUri(newIndex, url)
-                            player?.play()
+                            val updatedItem = p.getMediaItemAt(newIndex).buildUpon().setUri(url).build()
+                            p.replaceMediaItem(newIndex, updatedItem)
+                            p.play()
+                        } else {
+                            Log.d("ZongTing", "  -> URL fetch failed")
                         }
                         isFetchingUrlForIndex = -1
                     }
                 }
             }
         })
-    }
-
-    /**
-     * 替换指定位置的 MediaItem URI（通过 remove + add 实现）
-     * Media3 Player 有 addMediaItem(int, MediaItem) 但没有 setMediaItem(List)
-     */
-    private fun replaceMediaItemUri(index: Int, url: String) {
-        player?.let { p ->
-            if (index == p.currentMediaItemIndex) {
-                // 正在播放的这一首，直接用 setMediaItem 替换
-                val oldItem = p.currentMediaItem ?: return
-                p.setMediaItem(oldItem.buildUpon().setUri(url).build())
-                if (p.isPlaying) p.seekTo(p.currentPosition)
-            } else if (index < p.mediaItemCount) {
-                // 非当前项：用 getMediaItemAt(index) 获取目标项，再用 remove+add 替换
-                val targetItem = p.getMediaItemAt(index)
-                val savedPos = if (p.isPlaying) p.currentPosition else 0L
-                p.removeMediaItem(index)
-                p.addMediaItem(index, targetItem.buildUpon().setUri(url).build())
-                p.seekTo(p.currentMediaItemIndex, savedPos)
-            }
-        }
     }
 
     fun setPlaylist(songs: List<Song>, startIndex: Int = 0) {
@@ -200,12 +200,15 @@ object PlayerManager {
 
                 if (existingIdx >= 0 && p.mediaItemCount == playlist.size) {
                     // 歌曲已在列表中且列表长度一致：直接 seek 到该位置
+                    // 注意：不在这里 replaceMediaItem，让 onMediaItemTransition 回调统一处理
+                    // （避免双重触发：seekTo 会触发回调，回调里会检测 URL 并 replaceMediaItem）
+                    Log.d("ZongTing", "playSong EXISTING: existingIdx=$existingIdx, targetIdx=$idx, playing=${p.isPlaying}")
                     p.seekTo(existingIdx, 0)
                     currentIndex = existingIdx
-                    // 异步更新该位置的 URL（如果需要）
+                    // 如果 URL 已缓存，直接更新该位置的 MediaItem（避免等回调异步处理）
                     val currentItem = p.getMediaItemAt(existingIdx)
-                    if (currentItem.localConfiguration?.uri?.toString().isNullOrEmpty() ||
-                        currentItem.localConfiguration?.uri?.toString() == "") {
+                    val currentUri = currentItem.localConfiguration?.uri?.toString() ?: ""
+                    if (currentUri.isEmpty() || currentUri == "") {
                         val updatedItem = currentItem.buildUpon().setUri(playUrl).build()
                         p.replaceMediaItem(existingIdx, updatedItem)
                     }
@@ -262,11 +265,15 @@ object PlayerManager {
     fun seekTo(position: Long) { player?.seekTo(position) }
 
     fun seekToNext() {
-        player?.seekToNextMediaItem()
+        val p = player
+        Log.d("ZongTing", "seekToNext: mediaItemCount=${p?.mediaItemCount}, currentIndex=${p?.currentMediaItemIndex}, currentPlaylist.size=${currentPlaylist.size}, currentIndex_var=$currentIndex")
+        p?.seekToNextMediaItem()
     }
 
     fun seekToPrevious() {
-        player?.seekToPreviousMediaItem()
+        val p = player
+        Log.d("ZongTing", "seekToPrevious: mediaItemCount=${p?.mediaItemCount}, currentIndex=${p?.currentMediaItemIndex}, currentPlaylist.size=${currentPlaylist.size}, currentIndex_var=$currentIndex")
+        p?.seekToPreviousMediaItem()
     }
 
     fun getPlayer(): Player? = player
