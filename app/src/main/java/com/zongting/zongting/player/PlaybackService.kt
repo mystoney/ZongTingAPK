@@ -177,36 +177,60 @@ object PlayerManager {
 
     fun playSong(song: Song, playUrl: String, playlist: List<Song> = listOf(song)) {
         val idx = if (playlist.size > 1) playlist.indexOf(song).coerceAtLeast(0) else 0
+        val isSingleSong = playlist.size <= 1
         currentPlaylist = playlist
-        currentIndex = idx
         isFetchingUrlForIndex = -1
         urlCache[song.rid] = playUrl
 
         player?.let { p ->
-            // 替换整个播放列表，避免 addMediaItem 打乱正在播放的歌曲位置
-            p.clearMediaItems()
-            playlist.forEachIndexed { i, s ->
-                val url = if (i == idx) playUrl else (urlCache[s.rid] ?: "")
-                p.addMediaItem(buildMediaItem(s, url))
-            }
-            // 先禁止自动播放，防止 prepare() 后 ExoPlayer 从 index 0 开始播放
-            val wasPlaying = p.isPlaying
-            p.playWhenReady = false
-            p.prepare()
-            // seek 到目标位置（此时不会触发 index 0 的播放）
-            p.seekTo(idx, 0)
-            currentIndex = idx
-            // 恢复播放状态
-            p.playWhenReady = true
-            if (wasPlaying) p.play()
+            if (isSingleSong) {
+                // 单首歌：直接重建简单列表
+                p.clearMediaItems()
+                p.addMediaItem(buildMediaItem(song, playUrl))
+                p.playWhenReady = false
+                p.prepare()
+                currentIndex = 0
+                p.playWhenReady = true
+                p.play()
+            } else {
+                // 多首歌：检查目标歌曲是否已在当前播放列表中
+                val currentMediaIds = (0 until p.mediaItemCount).mapNotNull { p.getMediaItemAt(it).mediaId }
+                val songMediaId = song.rid.toString()
+                val existingIdx = currentMediaIds.indexOf(songMediaId)
 
-            // 预取后续几首歌的 URL（异步，不阻塞播放）
-            if (playlist.size > 1) {
-                scope.launch {
+                if (existingIdx >= 0 && p.mediaItemCount == playlist.size) {
+                    // 歌曲已在列表中且列表长度一致：直接 seek 到该位置
+                    p.seekTo(existingIdx, 0)
+                    currentIndex = existingIdx
+                    // 异步更新该位置的 URL（如果需要）
+                    val currentItem = p.getMediaItemAt(existingIdx)
+                    if (currentItem.localConfiguration?.uri?.toString().isNullOrEmpty() ||
+                        currentItem.localConfiguration?.uri?.toString() == "") {
+                        val updatedItem = currentItem.buildUpon().setUri(playUrl).build()
+                        p.replaceMediaItem(existingIdx, updatedItem)
+                    }
+                    p.play()
+                } else {
+                    // 不在列表中或列表不一致：重建整个列表
+                    p.clearMediaItems()
                     playlist.forEachIndexed { i, s ->
-                        if (i != idx && !urlCache.containsKey(s.rid)) {
-                            val u = urlFetcher?.invoke(s)
-                            if (u != null) urlCache[s.rid] = u
+                        val url = if (i == idx) playUrl else (urlCache[s.rid] ?: "")
+                        p.addMediaItem(buildMediaItem(s, url))
+                    }
+                    p.playWhenReady = false
+                    p.prepare()
+                    p.seekTo(idx, 0)
+                    currentIndex = idx
+                    p.playWhenReady = true
+                    p.play()
+
+                    // 预取后续几首歌的 URL
+                    scope.launch {
+                        playlist.forEachIndexed { i, s ->
+                            if (i != idx && !urlCache.containsKey(s.rid)) {
+                                val u = urlFetcher?.invoke(s)
+                                if (u != null) urlCache[s.rid] = u
+                            }
                         }
                     }
                 }
