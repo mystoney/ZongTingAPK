@@ -124,7 +124,6 @@ object PlayerManager {
                 // 跳过同一首（playlist 重设时也会触发）
                 if (newSong.rid == currentPlaylist.getOrNull(currentIndex)?.rid) return
 
-                val prevIndex = currentIndex
                 currentIndex = newIndex
                 onSongChanged?.invoke(newSong, newIndex)
                 // 如果 URL 已缓存，直接更新 MediaItem 的 URI
