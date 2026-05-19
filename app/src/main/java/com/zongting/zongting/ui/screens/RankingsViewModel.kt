@@ -95,7 +95,7 @@ data class RankingsUiState(
     val selectedBang: Bang? = null,
     val bangSongs: List<Song> = emptyList(),
     val error: String? = null,
-    val source: String = "kuwo", // "kuwo" 或 "netease"
+    val source: String = "netease", // "kuwo" 或 "netease"
     val filters: Set<String> = emptySet() // "free", "vip", "lock"
 ) {
     val displayedSongs: List<Song>

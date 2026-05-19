@@ -16,6 +16,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -50,20 +51,18 @@ fun RankingsScreen(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 2.dp),
-            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                .padding(horizontal = 16.dp, vertical = 6.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            FilterChip(
-                selected = uiState.source == "kuwo",
-                onClick = { viewModel.setSource("kuwo") },
-                label = { Text("酷我", style = MaterialTheme.typography.labelMedium) },
-                modifier = Modifier.height(20.dp)
-            )
             FilterChip(
                 selected = uiState.source == "netease",
                 onClick = { viewModel.setSource("netease") },
-                label = { Text("网易云", style = MaterialTheme.typography.labelMedium) },
-                modifier = Modifier.height(20.dp)
+                label = { Text("网易云音乐", style = MaterialTheme.typography.labelMedium) }
+            )
+            FilterChip(
+                selected = uiState.source == "kuwo",
+                onClick = { viewModel.setSource("kuwo") },
+                label = { Text("酷我音乐", style = MaterialTheme.typography.labelMedium) }
             )
         }
 
@@ -78,20 +77,17 @@ fun RankingsScreen(
                 FilterChip(
                     selected = uiState.filters.contains("free"),
                     onClick = { viewModel.setFilter("free", !uiState.filters.contains("free")) },
-                    label = { Text("免费", style = MaterialTheme.typography.labelMedium) },
-                    modifier = Modifier.height(20.dp)
+                    label = { Text("免费", style = MaterialTheme.typography.labelMedium) }
                 )
                 FilterChip(
                     selected = uiState.filters.contains("vip"),
                     onClick = { viewModel.setFilter("vip", !uiState.filters.contains("vip")) },
-                    label = { Text("VIP", style = MaterialTheme.typography.labelMedium) },
-                    modifier = Modifier.height(20.dp)
+                    label = { Text("VIP", style = MaterialTheme.typography.labelMedium) }
                 )
                 FilterChip(
                     selected = uiState.filters.contains("lock"),
                     onClick = { viewModel.setFilter("lock", !uiState.filters.contains("lock")) },
-                    label = { Text("付费", style = MaterialTheme.typography.labelMedium) },
-                    modifier = Modifier.height(20.dp)
+                    label = { Text("付费", style = MaterialTheme.typography.labelMedium) }
                 )
             }
         }
@@ -164,7 +160,7 @@ fun BangCard(
 ) {
     Card(
         modifier = Modifier
-            .width(100.dp)
+            .width(120.dp)
             .clickable(onClick = onClick),
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surfaceVariant
@@ -176,13 +172,15 @@ fun BangCard(
             Text(
                 text = bang.name,
                 style = MaterialTheme.typography.titleSmall,
-                maxLines = 1
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
             )
             Text(
                 text = bang.intro,
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
-                maxLines = 1
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
             )
         }
     }
@@ -203,18 +201,19 @@ fun RankingSongItem(
     ) {
         // 排名号
         Box(
-            modifier = Modifier.width(28.dp),
+            modifier = Modifier.width(36.dp),
             contentAlignment = Alignment.Center
         ) {
             Text(
                 text = "$rank",
                 style = MaterialTheme.typography.bodyMedium,
-                color = if (rank <= 3) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                color = if (rank <= 3) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(top = 4.dp)
             )
             if (!song.playable) {
                 Box(
                     modifier = Modifier
-                        .align(Alignment.BottomEnd)
+                        .align(Alignment.TopEnd)
                         .size(12.dp)
                         .background(
                             if (song.fee == 1)
