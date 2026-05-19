@@ -239,15 +239,11 @@ object PlayerManager {
     fun seekTo(position: Long) { player?.seekTo(position) }
 
     fun seekToNext() {
-        if (currentIndex < currentPlaylist.size - 1) {
-            player?.next()
-        }
+        player?.next()
     }
 
     fun seekToPrevious() {
-        if (currentIndex > 0) {
-            player?.previous()
-        }
+        player?.previous()
     }
 
     fun getPlayer(): Player? = player
