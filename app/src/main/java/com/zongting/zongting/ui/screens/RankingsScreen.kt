@@ -57,12 +57,14 @@ fun RankingsScreen(
             FilterChip(
                 selected = uiState.source == "netease",
                 onClick = { viewModel.setSource("netease") },
-                label = { Text("网易云音乐", style = MaterialTheme.typography.labelMedium) }
+                label = { Text("网易云音乐", style = MaterialTheme.typography.labelSmall) },
+                modifier = Modifier.height(16.dp)
             )
             FilterChip(
                 selected = uiState.source == "kuwo",
                 onClick = { viewModel.setSource("kuwo") },
-                label = { Text("酷我音乐", style = MaterialTheme.typography.labelMedium) }
+                label = { Text("酷我音乐", style = MaterialTheme.typography.labelSmall) },
+                modifier = Modifier.height(16.dp)
             )
         }
 
@@ -77,17 +79,20 @@ fun RankingsScreen(
                 FilterChip(
                     selected = uiState.filters.contains("free"),
                     onClick = { viewModel.setFilter("free", !uiState.filters.contains("free")) },
-                    label = { Text("免费", style = MaterialTheme.typography.labelMedium) }
+                    label = { Text("免费", style = MaterialTheme.typography.labelSmall) },
+                    modifier = Modifier.height(16.dp)
                 )
                 FilterChip(
                     selected = uiState.filters.contains("vip"),
                     onClick = { viewModel.setFilter("vip", !uiState.filters.contains("vip")) },
-                    label = { Text("VIP", style = MaterialTheme.typography.labelMedium) }
+                    label = { Text("VIP", style = MaterialTheme.typography.labelSmall) },
+                    modifier = Modifier.height(16.dp)
                 )
                 FilterChip(
                     selected = uiState.filters.contains("lock"),
                     onClick = { viewModel.setFilter("lock", !uiState.filters.contains("lock")) },
-                    label = { Text("付费", style = MaterialTheme.typography.labelMedium) }
+                    label = { Text("付费", style = MaterialTheme.typography.labelSmall) },
+                    modifier = Modifier.height(16.dp)
                 )
             }
         }
