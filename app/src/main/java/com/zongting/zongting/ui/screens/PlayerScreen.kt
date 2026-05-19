@@ -160,7 +160,9 @@ fun PlayerScreen(
                     onToggleFavorite = {
                         currentSong?.let { viewModel.toggleFavorite(it) }
                     },
-                    isFavorite = currentSong?.let { viewModel.isFavorite(it.rid) } ?: false
+                    isFavorite = currentSong?.let { viewModel.isFavorite(it.rid) } ?: false,
+                    playMode = viewModel.playMode.value,
+                    onTogglePlayMode = { viewModel.togglePlayMode() }
                 )
             }
         }
@@ -480,7 +482,9 @@ fun LyricPage(
     onPrevious: () -> Unit,
     onNext: () -> Unit,
     onToggleFavorite: () -> Unit,
-    isFavorite: Boolean
+    isFavorite: Boolean,
+    playMode: Int,
+    onTogglePlayMode: () -> Unit
 ) {
     val lazyListState = rememberLazyListState()
     var isUserScrolling by remember { mutableStateOf(false) }
@@ -691,9 +695,14 @@ fun LyricPage(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceEvenly
                     ) {
-                        IconButton(onClick = { }) {
+                        val playModeIcon = when (playMode) {
+                            1 -> Icons.Default.RepeatOne
+                            2 -> Icons.Default.Shuffle
+                            else -> Icons.Default.Repeat
+                        }
+                        IconButton(onClick = onTogglePlayMode) {
                             Icon(
-                                Icons.Default.Repeat,
+                                playModeIcon,
                                 contentDescription = "播放模式",
                                 modifier = Modifier.size(24.dp)
                             )
