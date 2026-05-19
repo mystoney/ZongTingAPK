@@ -2,6 +2,7 @@ package com.zongting.zongting.player
 
 import android.app.PendingIntent
 import android.content.Intent
+import android.util.Log
 import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
 import androidx.media3.common.MediaItem
@@ -79,6 +80,8 @@ object PlayerManager {
 
     // 防止切歌时重复触发
     private var isFetchingUrlForIndex: Int = -1
+    // 导航锁：防止 onMediaItemTransition 在 seekToNext/Previous 时触发 replaceMediaItemUri
+    private var isNavigating: Boolean = false
 
     val isPlaying: Boolean
         get() = player?.isPlaying == true
@@ -123,8 +126,14 @@ object PlayerManager {
                 // 跳过同一首（playlist 重设时也会触发）
                 if (newSong.rid == currentPlaylist.getOrNull(currentIndex)?.rid) return
 
+                val prevIndex = currentIndex
                 currentIndex = newIndex
                 onSongChanged?.invoke(newSong, newIndex)
+                // 如果是导航触发的跳切，跳过 URL 替换（由下一个 playSong 统一处理）
+                if (isNavigating) {
+                    isNavigating = false
+                    return
+                }
                 // 如果 URL 已缓存，直接更新 MediaItem 的 URI
                 val cachedUrl = urlCache[newSong.rid]
                 if (!cachedUrl.isNullOrEmpty()) {
@@ -182,15 +191,11 @@ object PlayerManager {
         urlCache[song.rid] = playUrl
 
         player?.let { p ->
-            // 用第一个 MediaItem（真实 URL）初始化，然后 addMediaItem 追加其余
-            val firstMediaItem = buildMediaItem(song, playUrl)
-            p.setMediaItem(firstMediaItem)
-            // 追加播放列表其余歌曲（用空 URI 占位，之后 onMediaItemTransition 会补上）
+            // 替换整个播放列表，避免 addMediaItem 打乱正在播放的歌曲位置
+            p.clearMediaItems()
             playlist.forEachIndexed { i, s ->
-                if (i != idx) {
-                    val url = urlCache[s.rid] ?: ""
-                    p.addMediaItem(buildMediaItem(s, url))
-                }
+                val url = if (i == idx) playUrl else (urlCache[s.rid] ?: "")
+                p.addMediaItem(buildMediaItem(s, url))
             }
             p.seekTo(idx, 0)
             p.prepare()
@@ -234,11 +239,15 @@ object PlayerManager {
     fun seekTo(position: Long) { player?.seekTo(position) }
 
     fun seekToNext() {
-        player?.next()
+        Log.d("ZongTing", "seekToNext called, player=$player, mediaItemCount=${player?.mediaItemCount}, currentIndex=${player?.currentMediaItemIndex}")
+        isNavigating = true
+        player?.seekToNextMediaItem()
     }
 
     fun seekToPrevious() {
-        player?.previous()
+        Log.d("ZongTing", "seekToPrevious called, player=$player, mediaItemCount=${player?.mediaItemCount}, currentIndex=${player?.currentMediaItemIndex}")
+        isNavigating = true
+        player?.seekToPreviousMediaItem()
     }
 
     fun getPlayer(): Player? = player

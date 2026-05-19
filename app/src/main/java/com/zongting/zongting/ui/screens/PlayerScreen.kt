@@ -183,6 +183,7 @@ private fun AlbumCoverPage(
     // 播放模式：0=顺序播放, 1=单曲循环, 2=随机播放
     var playMode by remember { mutableStateOf(0) }
     var showPlaylistSheet by remember { mutableStateOf(false) }
+    val playlistListState = rememberLazyListState()
     val playModeIcon = when (playMode) {
         0 -> Icons.Default.Repeat
         1 -> Icons.Default.RepeatOne
@@ -363,6 +364,19 @@ private fun AlbumCoverPage(
         }
     }
 
+    // 播放列表展开时自动滚动到当前歌曲
+    LaunchedEffect(showPlaylistSheet, currentSong) {
+        if (showPlaylistSheet && currentSong != null) {
+            val index = currentPlaylist.indexOfFirst { it.rid == currentSong.rid }
+            if (index >= 0) {
+                playlistListState.animateScrollToItem(
+                    index = (index - 1).coerceAtLeast(0),
+                    scrollOffset = 0
+                )
+            }
+        }
+    }
+
     // 播放列表底部弹出面板
     if (showPlaylistSheet) {
         ModalBottomSheet(
@@ -391,7 +405,8 @@ private fun AlbumCoverPage(
                     LazyColumn(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .heightIn(max = 400.dp)
+                            .heightIn(max = 400.dp),
+                        state = playlistListState,
                     ) {
                         itemsIndexed(currentPlaylist) { index, song ->
                             val isCurrentSong = song.rid == currentSong?.rid
