@@ -76,6 +76,7 @@ object PlayerManager {
     // 播放状态监听器
     var onPlayingChanged: ((Boolean) -> Unit)? = null
     var onPositionChanged: ((Long, Long) -> Unit)? = null
+    var onSongChanged: ((Song?, Int) -> Unit)? = null
 
     // URL 获取回调（由 MainViewModel 设置）
     private var urlFetcher: (suspend (Song) -> String?)? = null
@@ -128,6 +129,7 @@ object PlayerManager {
                 if (newSong.rid == currentPlaylist.getOrNull(currentIndex)?.rid) return
 
                 currentIndex = newIndex
+                onSongChanged?.invoke(newSong, newIndex)
                 // 如果 URL 已缓存，直接更新 MediaItem 的 URI
                 val cachedUrl = urlCache[newSong.rid]
                 if (!cachedUrl.isNullOrEmpty()) {
@@ -238,11 +240,10 @@ object PlayerManager {
 
     fun seekToNext() {
         if (currentIndex < currentPlaylist.size - 1) {
-            currentIndex++
-            val song = currentPlaylist[currentIndex]
+            val song = currentPlaylist[currentIndex + 1]
             val cachedUrl = urlCache[song.rid]
             if (!cachedUrl.isNullOrEmpty()) {
-                replaceMediaItemUri(currentIndex, cachedUrl)
+                replaceMediaItemUri(currentIndex + 1, cachedUrl)
             }
             player?.next()
         }
@@ -250,11 +251,10 @@ object PlayerManager {
 
     fun seekToPrevious() {
         if (currentIndex > 0) {
-            currentIndex--
-            val song = currentPlaylist[currentIndex]
+            val song = currentPlaylist[currentIndex - 1]
             val cachedUrl = urlCache[song.rid]
             if (!cachedUrl.isNullOrEmpty()) {
-                replaceMediaItemUri(currentIndex, cachedUrl)
+                replaceMediaItemUri(currentIndex - 1, cachedUrl)
             }
             player?.previous()
         }

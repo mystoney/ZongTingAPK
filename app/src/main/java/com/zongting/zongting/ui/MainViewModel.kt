@@ -168,20 +168,17 @@ class MainViewModel @Inject constructor(
         _isPlaying.value = playing
     }
 
+    fun updateCurrentSong(song: Song?, index: Int) {
+        _currentSong.value = song
+        _currentIndex.value = index
+    }
+
     fun playNext() {
-        val playlist = _currentPlaylist.value
-        val nextIndex = (_currentIndex.value + 1).coerceAtMost(playlist.size - 1)
-        if (nextIndex != _currentIndex.value) {
-            playSong(playlist[nextIndex], playlist)
-        }
+        PlayerManager.seekToNext()
     }
 
     fun playPrevious() {
-        val playlist = _currentPlaylist.value
-        val prevIndex = (_currentIndex.value - 1).coerceAtLeast(0)
-        if (prevIndex != _currentIndex.value) {
-            playSong(playlist[prevIndex], playlist)
-        }
+        PlayerManager.seekToPrevious()
     }
 
     fun seekTo(position: Long) {

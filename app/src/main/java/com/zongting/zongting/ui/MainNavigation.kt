@@ -54,10 +54,13 @@ fun MainNavigation(
     val favoriteSongList = mainViewModel.favoriteSongList.collectAsState()
     val recentlyPlayed = mainViewModel.recentlyPlayed.collectAsState()
 
-    // 注册播放状态监听（PlayerScreen 卸载后 MiniPlayer 仍需响应播放状态变化）
+    // 注册播放状态和歌曲切换监听
     LaunchedEffect(Unit) {
         com.zongting.zongting.player.PlayerManager.onPlayingChanged = { playing ->
             mainViewModel.updatePlayingState(playing)
+        }
+        com.zongting.zongting.player.PlayerManager.onSongChanged = { song, index ->
+            mainViewModel.updateCurrentSong(song, index)
         }
     }
 
