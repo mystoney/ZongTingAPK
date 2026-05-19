@@ -65,11 +65,6 @@ fun PlayerScreen(
     // seek 后的 2 秒内跳过更新，等待 ExoPlayer 真正 seek 到目标位置
     var isSeeking by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) {
-        // 注册播放器状态监听
-        PlayerManager.onPlayingChanged = { playing ->
-            viewModel.updatePlayingState(playing)
-        }
-
         while (true) {
             if (!isSeeking) {
                 val pos = PlayerManager.currentPosition

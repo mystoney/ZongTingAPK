@@ -54,6 +54,13 @@ fun MainNavigation(
     val favoriteSongList = mainViewModel.favoriteSongList.collectAsState()
     val recentlyPlayed = mainViewModel.recentlyPlayed.collectAsState()
 
+    // 注册播放状态监听（PlayerScreen 卸载后 MiniPlayer 仍需响应播放状态变化）
+    LaunchedEffect(Unit) {
+        com.zongting.zongting.player.PlayerManager.onPlayingChanged = { playing ->
+            mainViewModel.updatePlayingState(playing)
+        }
+    }
+
     // 是否显示底部导航
     val showBottomBar = currentDestination?.route in bottomNavItems.map { it.route }
 
