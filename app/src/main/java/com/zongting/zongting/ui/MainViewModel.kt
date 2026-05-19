@@ -124,6 +124,29 @@ class MainViewModel @Inject constructor(
         }
     }
 
+    /**
+     * 播放整个歌单：替换当前播放列表并从第一首开始播放
+     */
+    fun playPlaylist(playlistId: Long) {
+        viewModelScope.launch {
+            _playbackState.value = PlaybackState(isLoading = true)
+            val result = repository.getPlaylistDetail(playlistId)
+            result.fold(
+                onSuccess = { playlistData ->
+                    val songs = playlistData.musicList.map { it.copy(source = "kuwo", playable = true) }
+                    if (songs.isNotEmpty()) {
+                        playSong(songs.first(), songs)
+                    } else {
+                        _playbackState.value = PlaybackState(error = "歌单为空", isLoading = false)
+                    }
+                },
+                onFailure = { e ->
+                    _playbackState.value = PlaybackState(error = e.message ?: "获取歌单失败", isLoading = false)
+                }
+            )
+        }
+    }
+
     private suspend fun getPlayUrl(rid: Long, source: String = "kuwo"): String? {
         // 先检查缓存（按 source + rid 组合）
         val cacheKey = "${source}_$rid"

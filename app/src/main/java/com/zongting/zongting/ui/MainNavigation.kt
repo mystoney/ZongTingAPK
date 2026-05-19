@@ -110,6 +110,9 @@ fun MainNavigation(
                     },
                     onSongClick = { song, playlist ->
                         mainViewModel.playSong(song, playlist)
+                    },
+                    onPlaylistPlay = { playlistId ->
+                        mainViewModel.playPlaylist(playlistId)
                     }
                 )
             }

@@ -34,7 +34,8 @@ import kotlinx.coroutines.launch
 fun HomeScreen(
     viewModel: HomeViewModel = hiltViewModel(),
     onPlaylistClick: (Long) -> Unit,
-    onSongClick: (Song, List<Song>) -> Unit
+    onSongClick: (Song, List<Song>) -> Unit,
+    onPlaylistPlay: (Long) -> Unit = {}
 ) {
     val uiState by viewModel.uiState.collectAsState()
 
@@ -92,7 +93,10 @@ fun HomeScreen(
                         items(uiState.playlists) { playlist ->
                             PlaylistCard(
                                 playlist = playlist,
-                                onClick = { onPlaylistClick(playlist.id) }
+                                onClick = {
+                                    onPlaylistPlay(playlist.id)
+                                    onPlaylistClick(playlist.id)
+                                }
                             )
                         }
                     }
