@@ -198,6 +198,8 @@ class MainViewModel @Inject constructor(
     fun updateCurrentSong(song: Song?, index: Int) {
         _currentSong.value = song
         _currentIndex.value = index
+        // 切歌时重置播放进度，避免新歌显示旧歌的结束位置
+        _playbackState.value = _playbackState.value.copy(position = 0L, duration = 0L)
     }
 
     fun playNext() {

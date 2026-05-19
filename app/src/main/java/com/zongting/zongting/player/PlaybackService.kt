@@ -142,11 +142,23 @@ object PlayerManager {
                 Log.d("ZongTing", "  -> switching to song: ${newSong.name}, rid=${newSong.rid}")
                 // 如果 URL 已缓存，直接更新 MediaItem 的 URI
                 val cachedUrl = urlCache[newSong.rid]
-                if (!cachedUrl.isNullOrEmpty()) {
-                    Log.d("ZongTing", "  -> URL cached, replacing media item")
-                    // ★ 修复：用 replaceMediaItem 替代 setMediaItem，避免破坏播放列表
+                val currentUri = p.getMediaItemAt(newIndex).localConfiguration?.uri?.toString() ?: ""
+                if (!cachedUrl.isNullOrEmpty() && currentUri.isNotEmpty() && currentUri != cachedUrl) {
+                    // ★ 修复：ExoPlayer 缓冲了空 URI 的 MediaItem，先暂停再 replace，避免播放失败
+                    Log.d("ZongTing", "  -> URL cached, replacing media item (currentUri was empty=$currentUri)")
+                    p.pause()
                     val updatedItem = p.getMediaItemAt(newIndex).buildUpon().setUri(cachedUrl).build()
                     p.replaceMediaItem(newIndex, updatedItem)
+                    p.play()
+                } else if (!cachedUrl.isNullOrEmpty() && currentUri.isNotEmpty()) {
+                    Log.d("ZongTing", "  -> URL cached and URI already valid, skipping replace")
+                } else if (!cachedUrl.isNullOrEmpty() && currentUri.isEmpty()) {
+                    // URI 为空但有缓存：直接 replace + play
+                    Log.d("ZongTing", "  -> URL cached but URI empty, replacing media item")
+                    p.pause()
+                    val updatedItem = p.getMediaItemAt(newIndex).buildUpon().setUri(cachedUrl).build()
+                    p.replaceMediaItem(newIndex, updatedItem)
+                    p.play()
                 } else if (isFetchingUrlForIndex != newIndex) {
                     // URL 未缓存，暂停，异步获取，获取后更新并继续
                     isFetchingUrlForIndex = newIndex
@@ -216,9 +228,18 @@ object PlayerManager {
                 } else {
                     // 不在列表中或列表不一致：重建整个列表
                     p.clearMediaItems()
+                    // ★ 修复：预加载所有歌曲 URL，避免 ExoPlayer 缓冲区用空 URI 导致 FileNotFoundException
+                    val urls = mutableMapOf<Int, String>()
+                    urls[idx] = playUrl  // 当前歌曲 URL 一定有效
                     playlist.forEachIndexed { i, s ->
-                        val url = if (i == idx) playUrl else (urlCache[s.rid] ?: "")
-                        p.addMediaItem(buildMediaItem(s, url))
+                        if (i != idx) {
+                            urls[i] = urlCache[s.rid] ?: runBlocking {
+                                withContext(Dispatchers.IO) { urlFetcher?.invoke(s) }
+                            } ?: ""
+                        }
+                    }
+                    playlist.forEachIndexed { i, s ->
+                        p.addMediaItem(buildMediaItem(s, urls[i] ?: ""))
                     }
                     p.playWhenReady = false
                     p.prepare()
@@ -227,10 +248,10 @@ object PlayerManager {
                     p.playWhenReady = true
                     p.play()
 
-                    // 预取后续几首歌的 URL
-                    scope.launch {
-                        playlist.forEachIndexed { i, s ->
-                            if (i != idx && !urlCache.containsKey(s.rid)) {
+                    // 预取后续几首歌的 URL（后台更新缓存，供下次使用）
+                    playlist.forEachIndexed { i, s ->
+                        if (i != idx && !urlCache.containsKey(s.rid)) {
+                            scope.launch {
                                 val u = urlFetcher?.invoke(s)
                                 if (u != null) urlCache[s.rid] = u
                             }

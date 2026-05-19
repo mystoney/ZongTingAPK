@@ -53,6 +53,7 @@ fun PlayerScreen(
 
     val pagerState = rememberPagerState(pageCount = { 2 })
     val coroutineScope = rememberCoroutineScope()
+    var showPlaylistSheet by remember { mutableStateOf(false) }
 
     // 当前歌曲变化时自动获取歌词
     LaunchedEffect(currentSong?.rid) {
@@ -147,7 +148,9 @@ fun PlayerScreen(
                         currentSong?.let { viewModel.toggleFavorite(it) }
                     },
                     isFavorite = currentSong?.let { viewModel.isFavorite(it.rid) } ?: false,
-                    onPlaySong = { song -> viewModel.playSong(song, currentPlaylist) }
+                    onPlaySong = { song -> viewModel.playSong(song, currentPlaylist) },
+                    showPlaylist = showPlaylistSheet,
+                    onShowPlaylist = { showPlaylistSheet = it }
                 )
                 1 -> LyricPage(
                     currentSong = currentSong,
@@ -162,7 +165,9 @@ fun PlayerScreen(
                     },
                     isFavorite = currentSong?.let { viewModel.isFavorite(it.rid) } ?: false,
                     playMode = viewModel.playMode.value,
-                    onTogglePlayMode = { viewModel.togglePlayMode() }
+                    onTogglePlayMode = { viewModel.togglePlayMode() },
+                    showPlaylist = showPlaylistSheet,
+                    onShowPlaylist = { showPlaylistSheet = it }
                 )
             }
         }
@@ -184,10 +189,10 @@ private fun AlbumCoverPage(
     onToggleFavorite: () -> Unit,
     onTogglePlayMode: () -> Unit,
     isFavorite: Boolean,
-    onPlaySong: (Song) -> Unit
+    onPlaySong: (Song) -> Unit,
+    showPlaylist: Boolean,
+    onShowPlaylist: (Boolean) -> Unit
 ) {
-    // 播放模式：0=顺序播放, 1=单曲循环, 2=随机播放
-    var showPlaylistSheet by remember { mutableStateOf(false) }
     val playlistListState = rememberLazyListState()
     val playModeIcon = when (playMode) {
         0 -> Icons.Default.Repeat
@@ -348,7 +353,7 @@ private fun AlbumCoverPage(
                         )
                     }
 
-                    IconButton(onClick = { showPlaylistSheet = true }) {
+                    IconButton(onClick = { onShowPlaylist(true) }) {
                         Icon(
                             imageVector = Icons.Default.PlaylistPlay,
                             contentDescription = "播放列表",
@@ -370,8 +375,8 @@ private fun AlbumCoverPage(
     }
 
     // 播放列表展开时自动滚动到当前歌曲
-    LaunchedEffect(showPlaylistSheet, currentSong) {
-        if (showPlaylistSheet && currentSong != null) {
+    LaunchedEffect(showPlaylist, currentSong) {
+        if (showPlaylist && currentSong != null) {
             val index = currentPlaylist.indexOfFirst { it.rid == currentSong.rid }
             if (index >= 0) {
                 playlistListState.animateScrollToItem(
@@ -383,9 +388,9 @@ private fun AlbumCoverPage(
     }
 
     // 播放列表底部弹出面板
-    if (showPlaylistSheet) {
+    if (showPlaylist) {
         ModalBottomSheet(
-            onDismissRequest = { showPlaylistSheet = false },
+            onDismissRequest = { onShowPlaylist(false) },
             sheetState = rememberModalBottomSheetState()
         ) {
             Column(
@@ -484,7 +489,9 @@ fun LyricPage(
     onToggleFavorite: () -> Unit,
     isFavorite: Boolean,
     playMode: Int,
-    onTogglePlayMode: () -> Unit
+    onTogglePlayMode: () -> Unit,
+    showPlaylist: Boolean,
+    onShowPlaylist: (Boolean) -> Unit
 ) {
     val lazyListState = rememberLazyListState()
     var isUserScrolling by remember { mutableStateOf(false) }
@@ -649,10 +656,9 @@ fun LyricPage(
                     .fillMaxWidth()
                     .align(Alignment.BottomCenter),
                 shape = RoundedCornerShape(topStart = 12.dp, topEnd = 12.dp),
-                color = MaterialTheme.colorScheme.surface,
-                tonalElevation = 2.dp
+                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
             ) {
-                Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
+                Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 2.dp)) {
                     // 上一首 / 播放暂停 / 下一首
                     Row(
                         modifier = Modifier.fillMaxWidth(),
@@ -690,9 +696,11 @@ fun LyricPage(
 
                     Spacer(modifier = Modifier.height(2.dp))
 
-                    // 播放模式 / 收藏 按钮行
+                    // 附加功能按钮（播放模式/播放列表/收藏）
                     Row(
-                        modifier = Modifier.fillMaxWidth(),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 2.dp),
                         horizontalArrangement = Arrangement.SpaceEvenly
                     ) {
                         val playModeIcon = when (playMode) {
@@ -702,8 +710,16 @@ fun LyricPage(
                         }
                         IconButton(onClick = onTogglePlayMode) {
                             Icon(
-                                playModeIcon,
+                                imageVector = playModeIcon,
                                 contentDescription = "播放模式",
+                                modifier = Modifier.size(24.dp)
+                            )
+                        }
+
+                        IconButton(onClick = { onShowPlaylist(true) }) {
+                            Icon(
+                                imageVector = Icons.Default.PlaylistPlay,
+                                contentDescription = "播放列表",
                                 modifier = Modifier.size(24.dp)
                             )
                         }
@@ -722,7 +738,6 @@ fun LyricPage(
         }
     }
 }
-
 fun formatDuration(millis: Long): String {
     val totalSeconds = millis / 1000
     val minutes = totalSeconds / 60
