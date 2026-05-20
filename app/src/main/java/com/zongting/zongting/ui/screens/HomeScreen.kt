@@ -22,6 +22,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import coil.compose.AsyncImage
+import android.util.Log
 import com.zongting.zongting.data.model.Banner
 import com.zongting.zongting.data.model.Playlist
 import com.zongting.zongting.data.model.Song
@@ -39,8 +40,10 @@ fun HomeScreen(
 ) {
     val uiState by viewModel.uiState.collectAsState()
 
+    // 直接调用加载，ViewModel 层已有防重复守卫
     LaunchedEffect(Unit) {
-        viewModel.loadHomeData()
+        Log.d("HomeDebug", "HomeScreen: LaunchedEffect fired, calling loadHomeDataIfNeeded")
+        viewModel.loadHomeDataIfNeeded()
     }
 
     Column(
@@ -62,6 +65,7 @@ fun HomeScreen(
         )
 
         if (uiState.isLoading) {
+            Log.d("HomeDebug", "HomeScreen: showing spinner, playlists=${uiState.playlists.size}")
             Box(
                 modifier = Modifier.fillMaxSize(),
                 contentAlignment = Alignment.Center
@@ -69,6 +73,7 @@ fun HomeScreen(
                 CircularProgressIndicator()
             }
         } else {
+            Log.d("HomeDebug", "HomeScreen: showing LazyColumn, isLoading=${uiState.isLoading}, playlists=${uiState.playlists.size}, banners=${uiState.banners.size}")
             LazyColumn(
                 modifier = Modifier.fillMaxSize(),
                 contentPadding = PaddingValues(bottom = 165.dp)

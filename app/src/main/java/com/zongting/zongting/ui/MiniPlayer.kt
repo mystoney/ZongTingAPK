@@ -32,10 +32,11 @@ fun MiniPlayer(
     onToggleFavorite: () -> Unit,
     onPrevious: () -> Unit,
     onNext: () -> Unit,
-    onClick: () -> Unit
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
 ) {
     Surface(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
             .clickable(onClick = onClick),
         color = Color(0xFF1B5E20),

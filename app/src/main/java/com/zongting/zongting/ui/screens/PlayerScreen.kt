@@ -1,5 +1,6 @@
 package com.zongting.zongting.ui.screens
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.combinedClickable
@@ -62,6 +63,17 @@ fun PlayerScreen(
         }
     }
 
+    // 系统返回键优先关闭播放列表面板，再退出播放界面
+    BackHandler {
+        android.util.Log.d("PlayerDebug", "BackHandler triggered, showPlaylist=$showPlaylistSheet")
+        if (showPlaylistSheet) {
+            showPlaylistSheet = false
+        } else {
+            android.util.Log.d("PlayerDebug", "BackHandler calling onBackClick")
+            onBackClick()
+        }
+    }
+
     // 定期同步播放进度（每秒更新一次 position 和 duration）
     // seek 后的 2 秒内跳过更新，等待 ExoPlayer 真正 seek 到目标位置
     var isSeeking by remember { mutableStateOf(false) }
@@ -87,7 +99,16 @@ fun PlayerScreen(
         TopAppBar(
             title = { Text("正在播放") },
             navigationIcon = {
-                IconButton(onClick = onBackClick) {
+                IconButton(
+                    onClick = {
+                        // 优先关闭播放列表面板，再退出
+                        if (showPlaylistSheet) {
+                            showPlaylistSheet = false
+                        } else {
+                            onBackClick()
+                        }
+                    }
+                ) {
                     Icon(Icons.Default.KeyboardArrowDown, contentDescription = "收起")
                 }
             },

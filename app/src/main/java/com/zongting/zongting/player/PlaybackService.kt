@@ -231,11 +231,10 @@ object PlayerManager {
                     // ★ 修复：预加载所有歌曲 URL，避免 ExoPlayer 缓冲区用空 URI 导致 FileNotFoundException
                     val urls = mutableMapOf<Int, String>()
                     urls[idx] = playUrl  // 当前歌曲 URL 一定有效
+                    // 补充已缓存的 URL，未缓存的先填空，由后台异步填充
                     playlist.forEachIndexed { i, s ->
                         if (i != idx) {
-                            urls[i] = urlCache[s.rid] ?: runBlocking {
-                                withContext(Dispatchers.IO) { urlFetcher?.invoke(s) }
-                            } ?: ""
+                            urls[i] = urlCache[s.rid] ?: ""
                         }
                     }
                     playlist.forEachIndexed { i, s ->

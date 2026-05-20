@@ -6,6 +6,7 @@ import com.zongting.zongting.data.model.Banner
 import com.zongting.zongting.data.model.Playlist
 import com.zongting.zongting.data.model.Song
 import com.zongting.zongting.data.repository.MusicRepository
+import android.util.Log
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -20,10 +21,34 @@ class HomeViewModel @Inject constructor(
 
     private val _uiState = MutableStateFlow(HomeUiState())
     val uiState: StateFlow<HomeUiState> = _uiState.asStateFlow()
+    private var loadingJob: kotlinx.coroutines.Job? = null
+
+    init {
+        // 在 init 中启动加载，确保 ViewModel 创建时自动加载，不依赖任何 Composable 生命周期
+        Log.d("HomeDebug", "HomeViewModel.init: starting load (this means VM was CREATED)")
+        loadHomeData()
+    }
+
+    fun loadHomeDataIfNeeded() {
+        Log.d("HomeDebug", "loadHomeDataIfNeeded: loadingJob.active=${loadingJob?.isActive}, banners=${_uiState.value.banners.size}, playlists=${_uiState.value.playlists.size}")
+        if (loadingJob?.isActive == true) {
+            Log.d("HomeDebug", "loadHomeDataIfNeeded: SKIP - already loading")
+            return
+        }
+        if (_uiState.value.banners.isNotEmpty() || _uiState.value.playlists.isNotEmpty()) {
+            Log.d("HomeDebug", "loadHomeDataIfNeeded: SKIP - has data")
+            return
+        }
+        Log.d("HomeDebug", "loadHomeDataIfNeeded: CALLING loadHomeData")
+        loadHomeData()
+    }
 
     fun loadHomeData() {
-        viewModelScope.launch {
+        if (loadingJob?.isActive == true) return  // 防止重复加载
+        Log.d("HomeDebug", "loadHomeData: START")
+        loadingJob = viewModelScope.launch {
             _uiState.value = _uiState.value.copy(isLoading = true)
+            Log.d("HomeDebug", "loadHomeData: isLoading=true")
 
             // 并行加载数据
             val bannersJob = launch { loadBanners() }
@@ -35,6 +60,7 @@ class HomeViewModel @Inject constructor(
             hotSongsJob.join()
 
             _uiState.value = _uiState.value.copy(isLoading = false)
+            Log.d("HomeDebug", "loadHomeData: DONE isLoading=false, banners=${_uiState.value.banners.size}, playlists=${_uiState.value.playlists.size}")
         }
     }
 
@@ -59,11 +85,14 @@ class HomeViewModel @Inject constructor(
     }
 
     private suspend fun loadPlaylists() {
+        Log.d("HomeDebug", "loadPlaylists: START")
         repository.getRecommendPlaylists(pn = 1, rn = 20)
             .onSuccess { playlists ->
+                Log.d("HomeDebug", "loadPlaylists: SUCCESS playlists.size=${playlists.size}")
                 _uiState.value = _uiState.value.copy(playlists = playlists)
             }
             .onFailure { error ->
+                Log.d("HomeDebug", "loadPlaylists: FAIL ${error.message}")
                 _uiState.value = _uiState.value.copy(error = error.message)
             }
     }
@@ -81,7 +110,7 @@ class HomeViewModel @Inject constructor(
 }
 
 data class HomeUiState(
-    val isLoading: Boolean = false,
+    val isLoading: Boolean = true,
     val banners: List<Banner> = emptyList(),
     val playlists: List<Playlist> = emptyList(),
     val hotSongs: List<Song> = emptyList(),
