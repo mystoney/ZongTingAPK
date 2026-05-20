@@ -202,6 +202,43 @@ class MainViewModel @Inject constructor(
         }
     }
 
+    /** 点击歌曲：如果已在当前播放列表中则直接播放，否则追加到队列并播放 */
+    fun playOrAppendSong(song: Song) {
+        val idx = _currentPlaylist.value.indexOfFirst { it.rid == song.rid }
+        if (idx >= 0) {
+            viewModelScope.launch {
+                _playbackState.value = PlaybackState(isLoading = true)
+                val url = getPlayUrl(song.rid, song.source)
+                if (url != null) {
+                    _playbackState.value = PlaybackState(playUrl = url, isLoading = false)
+                    PlayerManager.playSong(song, url, _currentPlaylist.value)
+                } else {
+                    _playbackState.value = PlaybackState(error = "无法获取播放地址", isLoading = false)
+                }
+            }
+        } else {
+            appendToQueueAndPlay(song)
+        }
+    }
+
+    /** 播放整个列表（用于"播放全部"按钮） */
+    fun playSongs(songs: List<Song>, startIndex: Int = 0) {
+        if (songs.isEmpty()) return
+        val index = startIndex.coerceIn(0, songs.size - 1)
+        _currentPlaylist.value = songs
+        val song = songs[index]
+        viewModelScope.launch {
+            _playbackState.value = PlaybackState(isLoading = true)
+            val url = getPlayUrl(song.rid, song.source)
+            if (url != null) {
+                _playbackState.value = PlaybackState(playUrl = url, isLoading = false)
+                PlayerManager.playSong(song, url, songs)
+            } else {
+                _playbackState.value = PlaybackState(error = "无法获取播放地址", isLoading = false)
+            }
+        }
+    }
+
     /**
      * 播放整个歌单：替换当前播放列表并从第一首开始播放
      */

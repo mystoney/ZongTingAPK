@@ -124,12 +124,17 @@ fun MainNavigation(
                         favoriteSongs = favoriteSongList.value,
                         recentlyPlayed = recentlyPlayed.value,
                         userPlaylists = userPlaylists.value,
-                        onSongClick = { song, playlist ->
-                            mainViewModel.appendToQueueAndPlay(song)
+                        currentPlaylist = mainViewModel.currentPlaylist.value,
+                        onSongClick = { song ->
+                            mainViewModel.playOrAppendSong(song)
                         },
                         onSongLongPress = { song ->
-                            mainViewModel.appendToQueueAndPlay(song)
-                            // 对话框由 LibraryScreen 内部状态控制
+                            mainViewModel.playOrAppendSong(song)
+                        },
+                        onPlayAll = { songs, startIndex ->
+                            if (songs.isNotEmpty()) {
+                                mainViewModel.playSongs(songs, startIndex)
+                            }
                         },
                         onToggleFavorite = { song ->
                             mainViewModel.toggleFavorite(song)

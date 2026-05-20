@@ -29,8 +29,10 @@ fun LibraryScreen(
     favoriteSongs: List<Song>,
     recentlyPlayed: List<Song>,
     userPlaylists: List<UserPlaylist>,
-    onSongClick: (song: Song, playlist: List<Song>) -> Unit,
+    currentPlaylist: List<Song>,
+    onSongClick: (song: Song) -> Unit,
     onSongLongPress: (song: Song) -> Unit,
+    onPlayAll: (songs: List<Song>, startIndex: Int) -> Unit,
     onToggleFavorite: (Song) -> Unit,
     onCreatePlaylist: (String) -> Unit,
     onRenamePlaylist: (id: String, name: String) -> Unit,
@@ -102,7 +104,6 @@ fun LibraryScreen(
             },
             onCreateAndAdd = { name ->
                 onCreatePlaylist(name)
-                // 延迟获取新歌单ID后添加
                 songForDialog = null
             },
             onDismiss = { songForDialog = null }
@@ -134,26 +135,30 @@ fun LibraryScreen(
         when (selectedTab) {
             0 -> FavoriteTab(
                 songs = favoriteSongs,
+                currentPlaylist = currentPlaylist,
                 onSongClick = onSongClick,
                 onSongLongPress = { song ->
                     onSongLongPress(song)
                     songForDialog = song
                 },
-                onToggleFavorite = onToggleFavorite
+                onToggleFavorite = onToggleFavorite,
+                onPlayAll = { onPlayAll(favoriteSongs, 0) }
             )
             1 -> RecentlyPlayedTab(
                 songs = recentlyPlayed,
+                currentPlaylist = currentPlaylist,
                 onSongClick = onSongClick,
                 onSongLongPress = { song ->
                     onSongLongPress(song)
                     songForDialog = song
-                }
+                },
+                onPlayAll = { onPlayAll(recentlyPlayed, 0) }
             )
             2 -> MyPlaylistsTab(
                 playlists = userPlaylists,
                 onPlaylistClick = { playlist ->
                     if (playlist.songs.isNotEmpty()) {
-                        onSongClick(playlist.songs.first(), playlist.songs)
+                        onPlayAll(playlist.songs, 0)
                     }
                 },
                 onPlaylistLongPress = { playlist ->
@@ -169,6 +174,11 @@ fun LibraryScreen(
                 onSongLongPress = { song ->
                     onSongLongPress(song)
                     songForDialog = song
+                },
+                onPlayAll = { playlist ->
+                    if (playlist.songs.isNotEmpty()) {
+                        onPlayAll(playlist.songs, 0)
+                    }
                 }
             )
             3 -> EmptyState(
@@ -197,14 +207,32 @@ fun LibraryScreen(
 }
 
 @Composable
+private fun PlayAllButton(onClick: () -> Unit) {
+    Button(
+        onClick = onClick,
+        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 0.dp)
+    ) {
+        Icon(
+            Icons.Default.PlayArrow,
+            contentDescription = null,
+            modifier = Modifier.size(18.dp)
+        )
+        Spacer(modifier = Modifier.width(4.dp))
+        Text("播放全部")
+    }
+}
+
+@Composable
 private fun MyPlaylistsTab(
     playlists: List<UserPlaylist>,
     onPlaylistClick: (UserPlaylist) -> Unit,
     onPlaylistLongPress: (UserPlaylist) -> Unit,
     onPlaylistDelete: (UserPlaylist) -> Unit,
     onRemoveSong: (playlistId: String, songRid: Long) -> Unit,
-    onSongClick: (Song, List<Song>) -> Unit,
-    onSongLongPress: (Song) -> Unit
+    onSongClick: (Song) -> Unit,
+    onSongLongPress: (Song) -> Unit,
+    onPlayAll: (UserPlaylist) -> Unit
 ) {
     var expandedPlaylist by remember { mutableStateOf<UserPlaylist?>(null) }
 
@@ -213,8 +241,9 @@ private fun MyPlaylistsTab(
             playlist = playlist,
             onDismiss = { expandedPlaylist = null },
             onRemoveSong = { songRid -> onRemoveSong(playlist.id, songRid) },
-            onSongClick = { song -> onSongClick(song, playlist.songs) },
-            onSongLongPress = { song -> onSongLongPress(song) }
+            onSongClick = onSongClick,
+            onSongLongPress = onSongLongPress,
+            onPlayAll = { onPlayAll(playlist) }
         )
         return
     }
@@ -301,6 +330,14 @@ private fun PlaylistListItem(
                 onDismissRequest = { showMenu = false }
             ) {
                 DropdownMenuItem(
+                    text = { Text("播放全部") },
+                    leadingIcon = { Icon(Icons.Default.PlayArrow, null) },
+                    onClick = {
+                        showMenu = false
+                        onClick()
+                    }
+                )
+                DropdownMenuItem(
                     text = { Text("重命名") },
                     leadingIcon = { Icon(Icons.Default.Edit, null) },
                     onClick = {
@@ -329,7 +366,8 @@ private fun PlaylistDetailSheet(
     onDismiss: () -> Unit,
     onRemoveSong: (Long) -> Unit,
     onSongClick: (Song) -> Unit,
-    onSongLongPress: (Song) -> Unit
+    onSongLongPress: (Song) -> Unit,
+    onPlayAll: () -> Unit
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
@@ -364,6 +402,19 @@ private fun PlaylistDetailSheet(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)
             )
+
+            // 播放全部按钮
+            if (playlist.songs.isNotEmpty()) {
+                Button(
+                    onClick = onPlayAll,
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                    contentPadding = PaddingValues(horizontal = 16.dp, vertical = 0.dp)
+                ) {
+                    Icon(Icons.Default.PlayArrow, null, modifier = Modifier.size(18.dp))
+                    Spacer(Modifier.width(4.dp))
+                    Text("播放全部")
+                }
+            }
 
             HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
 
@@ -435,9 +486,11 @@ private fun SongItemWithRemove(
 @Composable
 private fun FavoriteTab(
     songs: List<Song>,
-    onSongClick: (Song, List<Song>) -> Unit,
+    currentPlaylist: List<Song>,
+    onSongClick: (Song) -> Unit,
     onSongLongPress: (Song) -> Unit,
-    onToggleFavorite: (Song) -> Unit
+    onToggleFavorite: (Song) -> Unit,
+    onPlayAll: () -> Unit
 ) {
     if (songs.isEmpty()) {
         EmptyState(
@@ -446,21 +499,27 @@ private fun FavoriteTab(
             subtitle = "点击心形图标收藏喜欢的歌曲"
         )
     } else {
-        SongList(
-            songs = songs,
-            onSongClick = onSongClick,
-            onSongLongPress = onSongLongPress,
-            showFavorite = true,
-            onToggleFavorite = onToggleFavorite
-        )
+        Column {
+            PlayAllButton(onClick = onPlayAll)
+            SongList(
+                songs = songs,
+                currentPlaylist = currentPlaylist,
+                onSongClick = onSongClick,
+                onSongLongPress = onSongLongPress,
+                showFavorite = true,
+                onToggleFavorite = onToggleFavorite
+            )
+        }
     }
 }
 
 @Composable
 private fun RecentlyPlayedTab(
     songs: List<Song>,
-    onSongClick: (Song, List<Song>) -> Unit,
-    onSongLongPress: (Song) -> Unit
+    currentPlaylist: List<Song>,
+    onSongClick: (Song) -> Unit,
+    onSongLongPress: (Song) -> Unit,
+    onPlayAll: () -> Unit
 ) {
     if (songs.isEmpty()) {
         EmptyState(
@@ -469,13 +528,17 @@ private fun RecentlyPlayedTab(
             subtitle = "播放的歌曲会显示在这里"
         )
     } else {
-        SongList(
-            songs = songs,
-            onSongClick = onSongClick,
-            onSongLongPress = onSongLongPress,
-            showFavorite = false,
-            onToggleFavorite = {}
-        )
+        Column {
+            PlayAllButton(onClick = onPlayAll)
+            SongList(
+                songs = songs,
+                currentPlaylist = currentPlaylist,
+                onSongClick = onSongClick,
+                onSongLongPress = onSongLongPress,
+                showFavorite = false,
+                onToggleFavorite = {}
+            )
+        }
     }
 }
 
@@ -483,7 +546,8 @@ private fun RecentlyPlayedTab(
 @Composable
 private fun SongList(
     songs: List<Song>,
-    onSongClick: (Song, List<Song>) -> Unit,
+    currentPlaylist: List<Song>,
+    onSongClick: (Song) -> Unit,
     onSongLongPress: (Song) -> Unit,
     showFavorite: Boolean,
     onToggleFavorite: (Song) -> Unit
@@ -496,7 +560,7 @@ private fun SongList(
             SongItem(
                 song = song,
                 isFavorite = showFavorite,
-                onClick = { onSongClick(song, songs) },
+                onClick = { onSongClick(song) },
                 onLongClick = { onSongLongPress(song) },
                 onFavoriteClick = if (showFavorite) {{ onToggleFavorite(song) }} else null
             )
@@ -608,7 +672,6 @@ private fun AddToPlaylistDialog(
                 )
                 HorizontalDivider(modifier = Modifier.padding(bottom = 8.dp))
 
-                // 新建歌单选项
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
