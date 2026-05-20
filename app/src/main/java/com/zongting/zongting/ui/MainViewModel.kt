@@ -180,10 +180,13 @@ class MainViewModel @Inject constructor(
 
     private suspend fun getPlayUrl(rid: Long, source: String = "kuwo"): String? {
         val cacheKey = "${source}_$rid"
-        _playUrlCache[cacheKey]?.let { return it }
+        val cached = _playUrlCache[cacheKey]
+        android.util.Log.d("KuwoDebug", "MainViewModel.getPlayUrl cacheKey=$cacheKey cached=$cached")
+        cached?.let { return it }
 
         // 获取播放地址
         val result = repository.getPlayUrl(rid, source = source)
+        android.util.Log.d("KuwoDebug", "MainViewModel.getPlayUrl result=$result")
         return result.getOrNull()?.also { _playUrlCache[cacheKey] = it }
     }
 

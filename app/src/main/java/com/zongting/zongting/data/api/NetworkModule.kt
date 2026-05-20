@@ -10,6 +10,15 @@ import java.util.concurrent.TimeUnit
 
 object NetworkModule {
 
+    // nmobi 专用 OkHttpClient（无 referer 拦截器，保持原始 headers）
+    val nmobiOkHttpClient: OkHttpClient = OkHttpClient.Builder()
+        .connectTimeout(30, TimeUnit.SECONDS)
+        .readTimeout(30, TimeUnit.SECONDS)
+        .writeTimeout(30, TimeUnit.SECONDS)
+        .followRedirects(true)
+        .followSslRedirects(true)
+        .build()
+
     // Referer 拦截器 - 酷我所有接口都需要
     private val refererInterceptor = Interceptor { chain ->
         val request = chain.request().newBuilder()

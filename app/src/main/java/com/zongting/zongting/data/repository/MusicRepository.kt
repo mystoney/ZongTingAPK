@@ -1,5 +1,6 @@
 package com.zongting.zongting.data.repository
 
+import com.zongting.zongting.data.api.KuwoService
 import com.zongting.zongting.data.api.KuwoApi
 import com.zongting.zongting.data.api.NetworkModule
 import com.zongting.zongting.data.model.*
@@ -9,6 +10,7 @@ import com.google.gson.JsonElement
 import kotlinx.coroutines.withContext
 import okhttp3.Request
 import java.net.URLEncoder
+import kotlin.text.Regex
 import java.nio.charset.Charset
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -335,6 +337,7 @@ class MusicRepository @Inject constructor() {
 
     /** 获取播放地址 - 支持酷我和网易云音乐 */
     suspend fun getPlayUrl(rid: Long, br: String = "320kmp3", source: String = "kuwo"): Result<String> = withContext(Dispatchers.IO) {
+        android.util.Log.d("KuwoDebug", "MusicRepository.getPlayUrl ENTER: rid=$rid source=$source br=$br")
         try {
             // 网易云音乐歌曲
             if (source == "netease") {
@@ -366,24 +369,16 @@ class MusicRepository @Inject constructor() {
                 return@withContext Result.failure(Exception("无法获取播放地址"))
             }
 
-            // 酷我歌曲
-            android.util.Log.d("KuwoDebug", "getPlayUrl: rid=$rid br=$br")
-            val nmobiApi = nmobiRetrofit.create(KuwoApi::class.java)
-            val response = nmobiApi.getPlayUrl(rid = rid, br = br)
-            android.util.Log.d("KuwoDebug", "getPlayUrl response: code=${response.code} msg=${response.msg} locationid=${response.locationid} data=${response.data}")
-            when (response.code) {
-                200 -> {
-                    val url = response.data?.url
-                    android.util.Log.d("KuwoDebug", "getPlayUrl url=$url")
-                    if (!url.isNullOrEmpty()) {
-                        Result.success(url)
-                    } else {
-                        Result.failure(Exception("播放地址为空"))
-                    }
-                }
-                407 -> Result.failure(Exception("该歌曲在您所在的地区不可用"))
-                500 -> Result.failure(Exception("服务器繁忙，请稍后重试"))
-                else -> Result.failure(Exception("获取播放地址失败: ${response.msg}"))
+            // 酷我歌曲 - 使用 KuwoService.getPlayUrl（原始工作代码）
+            val musicId = rid.toString()
+            android.util.Log.d("KuwoDebug", "getPlayUrl kuwo: rid=$musicId")
+            val songUrl = KuwoService().getPlayUrl(musicId)
+            if (songUrl != null && songUrl.startsWith("http")) {
+                android.util.Log.d("KuwoDebug", "getPlayUrl success: $songUrl")
+                Result.success(songUrl)
+            } else {
+                android.util.Log.d("KuwoDebug", "getPlayUrl failed: url=$songUrl")
+                Result.failure(Exception("获取播放地址失败（酷我nmobi返回为空）"))
             }
         } catch (e: Exception) {
             Result.failure(e)

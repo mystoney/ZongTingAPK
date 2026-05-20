@@ -44,7 +44,8 @@ data class Playlist(
     @SerializedName("userName") val userName: String,
     @SerializedName("total") val total: Int,
     @SerializedName("listencnt") val listencnt: Long,
-    @SerializedName("info") val info: String
+    @SerializedName("info") val info: String,
+    @SerializedName("musicList") val musicList: List<Song> = emptyList()
 )
 
 // ==================== 歌曲相关 ====================
