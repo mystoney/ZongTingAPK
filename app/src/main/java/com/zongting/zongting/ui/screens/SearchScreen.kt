@@ -26,7 +26,8 @@ import kotlinx.coroutines.delay
 @Composable
 fun SearchScreen(
     viewModel: SearchViewModel = hiltViewModel(),
-    onSongClick: (Song, List<Song>) -> Unit
+    onSongClick: (Song, List<Song>) -> Unit,
+    onPlayAll: (List<Song>) -> Unit
 ) {
     val uiState by viewModel.uiState.collectAsState()
     var searchText by remember { mutableStateOf("") }
@@ -161,10 +162,9 @@ fun SearchScreen(
                 )
                 FilledTonalButton(
                     onClick = {
-                        // 只播放可播放的歌曲
-                        val playableSongs = uiState.displayedResults.filter { it.playable }
-                        if (playableSongs.isNotEmpty()) {
-                            onSongClick(playableSongs.first(), playableSongs)
+                        val allSongs = uiState.displayedResults.filter { it.playable }
+                        if (allSongs.isNotEmpty()) {
+                            onPlayAll(allSongs)
                         }
                     },
                     contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp),
@@ -172,7 +172,7 @@ fun SearchScreen(
                 ) {
                     Icon(Icons.Default.PlayArrow, contentDescription = null, modifier = Modifier.size(14.dp))
                     Spacer(modifier = Modifier.width(2.dp))
-                    Text("播放", style = MaterialTheme.typography.labelMedium)
+                    Text("全部播放", style = MaterialTheme.typography.labelMedium)
                 }
             }
 

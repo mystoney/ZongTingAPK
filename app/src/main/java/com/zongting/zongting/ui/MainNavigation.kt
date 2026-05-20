@@ -116,6 +116,9 @@ fun MainNavigation(
                     SearchScreen(
                         onSongClick = { song, playlist ->
                             mainViewModel.playSong(song, playlist)
+                        },
+                        onPlayAll = { songs ->
+                            mainViewModel.playSongs(songs, 0)
                         }
                     )
                 }
