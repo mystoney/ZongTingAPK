@@ -43,6 +43,14 @@ class HomeViewModel @Inject constructor(
         loadHomeData()
     }
 
+    fun refreshHomeData() {
+        Log.d("HomeDebug", "refreshHomeData: force reload")
+        // 清空现有数据，强制重新加载
+        _uiState.value = HomeUiState()
+        loadingJob?.cancel()
+        loadHomeData()
+    }
+
     fun loadHomeData() {
         if (loadingJob?.isActive == true) return  // 防止重复加载
         Log.d("HomeDebug", "loadHomeData: START")
