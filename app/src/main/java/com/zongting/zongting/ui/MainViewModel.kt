@@ -4,10 +4,13 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.media3.common.Player
 import com.zongting.zongting.data.model.Song
+import com.zongting.zongting.data.model.UserPlaylist
 import com.zongting.zongting.data.repository.FavoriteRepository
 import com.zongting.zongting.data.repository.MusicRepository
+import com.zongting.zongting.data.repository.PlaylistRepository
 import com.zongting.zongting.player.PlayerManager
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -18,7 +21,8 @@ import javax.inject.Inject
 @HiltViewModel
 class MainViewModel @Inject constructor(
     private val repository: MusicRepository,
-    private val favoriteRepository: FavoriteRepository
+    private val favoriteRepository: FavoriteRepository,
+    private val playlistRepository: PlaylistRepository
 ) : ViewModel() {
 
     private val _currentSong = MutableStateFlow<Song?>(null)
@@ -58,6 +62,9 @@ class MainViewModel @Inject constructor(
     private val _recentlyPlayed = MutableStateFlow<List<Song>>(emptyList())
     val recentlyPlayed: StateFlow<List<Song>> = _recentlyPlayed.asStateFlow()
 
+    // 用户自定义歌单
+    val userPlaylists: Flow<List<UserPlaylist>> = playlistRepository.playlists
+
     init {
         // 设置 PlayerManager 的 URL 获取器（用于切歌时动态获取播放 URL）
         PlayerManager.setUrlFetcher { song ->
@@ -72,6 +79,33 @@ class MainViewModel @Inject constructor(
     }
 
     fun isFavorite(rid: Long): Boolean = _favoriteSongs.value.contains(rid)
+
+    fun createPlaylist(name: String) {
+        viewModelScope.launch { playlistRepository.createPlaylist(name) }
+    }
+
+    fun createPlaylistAndAddSong(name: String, song: Song) {
+        viewModelScope.launch {
+            val id = playlistRepository.createPlaylistAndGetId(name)
+            playlistRepository.addSongToPlaylist(id, song)
+        }
+    }
+
+    fun renamePlaylist(id: String, newName: String) {
+        viewModelScope.launch { playlistRepository.renamePlaylist(id, newName) }
+    }
+
+    fun deletePlaylist(id: String) {
+        viewModelScope.launch { playlistRepository.deletePlaylist(id) }
+    }
+
+    fun addSongToPlaylist(playlistId: String, song: Song) {
+        viewModelScope.launch { playlistRepository.addSongToPlaylist(playlistId, song) }
+    }
+
+    fun removeSongFromPlaylist(playlistId: String, songRid: Long) {
+        viewModelScope.launch { playlistRepository.removeSongFromPlaylist(playlistId, songRid) }
+    }
 
     fun toggleFavorite(song: Song) {
         val current = _favoriteSongs.value.toMutableSet()
@@ -143,6 +177,28 @@ class MainViewModel @Inject constructor(
                 _playbackState.value = PlaybackState(error = "无法获取播放地址", isLoading = false)
             }
             // seq != _playUrlFetchSeq → 期间有新歌曲被点击，静默丢弃此结果
+        }
+    }
+
+    /** 将歌曲添加到队列末尾并立即播放 */
+    fun appendToQueueAndPlay(song: Song) {
+        val newPlaylist = _currentPlaylist.value + song
+        _currentPlaylist.value = newPlaylist
+        val recent = _recentlyPlayed.value.toMutableList()
+        recent.removeAll { it.rid == song.rid }
+        recent.add(0, song)
+        if (recent.size > 50) recent.removeAt(recent.lastIndex)
+        _recentlyPlayed.value = recent
+        val seq = ++_playUrlFetchSeq
+        viewModelScope.launch {
+            _playbackState.value = PlaybackState(isLoading = true)
+            val url = getPlayUrl(song.rid, song.source)
+            if (seq == _playUrlFetchSeq && url != null) {
+                _playbackState.value = PlaybackState(playUrl = url, isLoading = false)
+                PlayerManager.appendToQueueAndPlay(song, url)
+            } else if (seq == _playUrlFetchSeq) {
+                _playbackState.value = PlaybackState(error = "无法获取播放地址", isLoading = false)
+            }
         }
     }
 

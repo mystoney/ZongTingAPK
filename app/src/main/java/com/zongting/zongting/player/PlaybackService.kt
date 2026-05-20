@@ -261,6 +261,29 @@ object PlayerManager {
         }
     }
 
+    /** 将歌曲添加到当前播放列表末尾（不立即播放） */
+    fun addToQueue(song: Song, playUrl: String) {
+        urlCache[song.rid] = playUrl
+        currentPlaylist = currentPlaylist + song
+        player?.let { p ->
+            p.addMediaItem(buildMediaItem(song, playUrl))
+        }
+    }
+
+    /** 将歌曲添加到队列末尾并立即播放 */
+    fun appendToQueueAndPlay(song: Song, playUrl: String) {
+        urlCache[song.rid] = playUrl
+        currentPlaylist = currentPlaylist + song
+        val newIndex = currentPlaylist.size - 1
+        player?.let { p ->
+            p.addMediaItem(buildMediaItem(song, playUrl))
+            if (!p.isPlaying) {
+                p.seekTo(newIndex, 0)
+                p.play()
+            }
+        }
+    }
+
     private fun buildMediaItem(song: Song, url: String): MediaItem {
         return MediaItem.Builder()
             .setUri(url)

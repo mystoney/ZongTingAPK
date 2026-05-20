@@ -299,3 +299,12 @@ data class FeeType(
     @SerializedName("song") val song: String,
     @SerializedName("vip") val vip: String
 )
+
+// ==================== 用户自定义歌单 ====================
+
+data class UserPlaylist(
+    val id: String,           // UUID
+    val name: String,
+    val songs: List<Song> = emptyList(),
+    val createdAt: Long = System.currentTimeMillis()
+)

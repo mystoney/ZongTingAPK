@@ -52,6 +52,7 @@ fun MainNavigation(
     val favoriteSongs = mainViewModel.favoriteSongs.collectAsState()
     val favoriteSongList = mainViewModel.favoriteSongList.collectAsState()
     val recentlyPlayed = mainViewModel.recentlyPlayed.collectAsState()
+    val userPlaylists = mainViewModel.userPlaylists.collectAsState(initial = emptyList())
 
     LaunchedEffect(Unit) {
         com.zongting.zongting.player.PlayerManager.onPlayingChanged = { playing ->
@@ -122,11 +123,31 @@ fun MainNavigation(
                     LibraryScreen(
                         favoriteSongs = favoriteSongList.value,
                         recentlyPlayed = recentlyPlayed.value,
+                        userPlaylists = userPlaylists.value,
                         onSongClick = { song, playlist ->
-                            mainViewModel.playSong(song, playlist)
+                            mainViewModel.appendToQueueAndPlay(song)
+                        },
+                        onSongLongPress = { song ->
+                            mainViewModel.appendToQueueAndPlay(song)
+                            // 对话框由 LibraryScreen 内部状态控制
                         },
                         onToggleFavorite = { song ->
                             mainViewModel.toggleFavorite(song)
+                        },
+                        onCreatePlaylist = { name ->
+                            mainViewModel.createPlaylist(name)
+                        },
+                        onRenamePlaylist = { id, name ->
+                            mainViewModel.renamePlaylist(id, name)
+                        },
+                        onDeletePlaylist = { id ->
+                            mainViewModel.deletePlaylist(id)
+                        },
+                        onAddSongToPlaylist = { playlistId, song ->
+                            mainViewModel.addSongToPlaylist(playlistId, song)
+                        },
+                        onRemoveSongFromPlaylist = { playlistId, songRid ->
+                            mainViewModel.removeSongFromPlaylist(playlistId, songRid)
                         }
                     )
                 }
