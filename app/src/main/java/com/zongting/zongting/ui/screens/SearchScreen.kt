@@ -1,7 +1,9 @@
 package com.zongting.zongting.ui.screens
 
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -9,25 +11,37 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Clear
+import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import coil.compose.AsyncImage
 import com.zongting.zongting.data.model.Song
+import com.zongting.zongting.data.model.UserPlaylist
 import kotlinx.coroutines.delay
+import androidx.compose.ui.text.style.TextOverflow
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SearchScreen(
     viewModel: SearchViewModel = hiltViewModel(),
+    userPlaylists: List<UserPlaylist>,
     onSongClick: (Song, List<Song>) -> Unit,
-    onPlayAll: (List<Song>) -> Unit
+    onPlayAll: (List<Song>) -> Unit,
+    onAddToPlaylist: (playlistId: String, song: Song) -> Unit,
+    onCreateAndAdd: (name: String, song: Song) -> Unit
 ) {
     val uiState by viewModel.uiState.collectAsState()
     var searchText by remember { mutableStateOf("") }
@@ -182,9 +196,13 @@ fun SearchScreen(
                 contentPadding = PaddingValues(bottom = 165.dp)
             ) {
                 items(uiState.displayedResults) { song ->
-                    SongListItem(
+                    SongListItemWithLongPress(
                         song = song,
-                        onClick = { onSongClick(song, uiState.displayedResults) }
+                        playlists = userPlaylists,
+                        onClick = { onSongClick(song, uiState.displayedResults) },
+                        onLongPress = { },
+                        onAddToPlaylist = { playlistId, s -> onAddToPlaylist(playlistId, s) },
+                        onCreateAndAdd = { name, s -> onCreateAndAdd(name, s) }
                     )
                 }
             }
@@ -256,4 +274,142 @@ fun SearchScreen(
             }
         }
     }
+}
+
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+private fun SongListItemWithLongPress(
+    song: Song,
+    playlists: List<UserPlaylist>,
+    onClick: () -> Unit,
+    onLongPress: (Song) -> Unit,
+    onAddToPlaylist: (String, Song) -> Unit,
+    onCreateAndAdd: (String, Song) -> Unit
+) {
+    var showDialog by remember { mutableStateOf(false) }
+
+    ListItem(
+        modifier = Modifier.combinedClickable(
+            onClick = onClick,
+            onLongClick = { showDialog = true }
+        ),
+        headlineContent = {
+            Text(
+                text = song.name,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+        },
+        supportingContent = {
+            Text(
+                text = "${song.artist} - ${song.album}",
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        },
+        leadingContent = {
+            Box {
+                AsyncImage(
+                    model = song.pic120,
+                    contentDescription = null,
+                    modifier = Modifier
+                        .size(48.dp)
+                        .clip(RoundedCornerShape(4.dp)),
+                    contentScale = ContentScale.Crop
+                )
+                if (!song.playable) {
+                    Box(
+                        modifier = Modifier
+                            .align(Alignment.BottomEnd)
+                            .size(15.dp)
+                            .background(
+                                if (song.fee == 1) Color(0xFFFF6B35).copy(alpha = 0.9f)
+                                else MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.9f),
+                                RoundedCornerShape(2.dp)
+                            ),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = if (song.fee == 1) Icons.Default.Star else Icons.Default.Lock,
+                            contentDescription = null,
+                            modifier = Modifier.size(10.dp),
+                            tint = Color.White
+                        )
+                    }
+                }
+            }
+        }
+    )
+
+    if (showDialog) {
+        AddToPlaylistDialogInline(
+            song = song,
+            playlists = playlists,
+            onSelect = { playlistId -> onAddToPlaylist(playlistId, song); showDialog = false },
+            onCreateAndAdd = { name -> onCreateAndAdd(name, song); showDialog = false },
+            onDismiss = { showDialog = false }
+        )
+    }
+}
+
+@Composable
+private fun AddToPlaylistDialogInline(
+    song: Song,
+    playlists: List<UserPlaylist>,
+    onSelect: (String) -> Unit,
+    onCreateAndAdd: (String) -> Unit,
+    onDismiss: () -> Unit
+) {
+    var showCreate by remember { mutableStateOf(false) }
+    var newPlaylistName by remember { mutableStateOf("") }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("《${song.name}》添加到歌单") },
+        text = {
+            Column {
+                if (playlists.isEmpty()) {
+                    Text("还没有歌单，创建一个吧", style = MaterialTheme.typography.bodyMedium)
+                } else {
+                    playlists.forEach { playlist ->
+                        ListItem(
+                            headlineContent = { Text(playlist.name) },
+                            supportingContent = { Text("${playlist.songs.size} 首") },
+                            modifier = Modifier.clickable { onSelect(playlist.id) }
+                        )
+                    }
+                }
+                Spacer(modifier = Modifier.height(8.dp))
+                OutlinedButton(
+                    onClick = { showCreate = true },
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Icon(Icons.Default.Add, null)
+                    Spacer(Modifier.width(4.dp))
+                    Text("新建歌单")
+                }
+                if (showCreate) {
+                    Spacer(modifier = Modifier.height(8.dp))
+                    OutlinedTextField(
+                        value = newPlaylistName,
+                        onValueChange = { newPlaylistName = it },
+                        label = { Text("歌单名称") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+            }
+        },
+        confirmButton = {
+            if (showCreate && newPlaylistName.isNotBlank()) {
+                TextButton(onClick = { onCreateAndAdd(newPlaylistName.trim()) }) {
+                    Text("创建并添加")
+                }
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("取消") }
+        }
+    )
 }

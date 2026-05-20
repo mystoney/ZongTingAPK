@@ -114,11 +114,18 @@ fun MainNavigation(
                 }
                 composable(Screen.Search.route) {
                     SearchScreen(
+                        userPlaylists = userPlaylists.value,
                         onSongClick = { song, playlist ->
-                            mainViewModel.playSong(song, playlist)
+                            mainViewModel.playOrAppendSong(song)
                         },
                         onPlayAll = { songs ->
                             mainViewModel.playSongs(songs, 0)
+                        },
+                        onAddToPlaylist = { playlistId, song ->
+                            mainViewModel.addSongToPlaylist(playlistId, song)
+                        },
+                        onCreateAndAdd = { name, song ->
+                            mainViewModel.createPlaylistAndAddSong(name, song)
                         }
                     )
                 }
