@@ -184,6 +184,7 @@ class MainViewModel @Inject constructor(
     fun appendToQueueAndPlay(song: Song) {
         val newPlaylist = _currentPlaylist.value + song
         _currentPlaylist.value = newPlaylist
+        _currentSong.value = song
         val recent = _recentlyPlayed.value.toMutableList()
         recent.removeAll { it.rid == song.rid }
         recent.add(0, song)
@@ -205,6 +206,7 @@ class MainViewModel @Inject constructor(
     /** 点击歌曲：如果已在当前播放列表中则直接播放，否则追加到队列并播放 */
     fun playOrAppendSong(song: Song) {
         val idx = _currentPlaylist.value.indexOfFirst { it.rid == song.rid }
+        _currentSong.value = song
         if (idx >= 0) {
             viewModelScope.launch {
                 _playbackState.value = PlaybackState(isLoading = true)
@@ -227,6 +229,7 @@ class MainViewModel @Inject constructor(
         val index = startIndex.coerceIn(0, songs.size - 1)
         _currentPlaylist.value = songs
         val song = songs[index]
+        _currentSong.value = song
         viewModelScope.launch {
             _playbackState.value = PlaybackState(isLoading = true)
             val url = getPlayUrl(song.rid, song.source)
