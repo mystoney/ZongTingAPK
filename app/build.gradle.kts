@@ -161,5 +161,5 @@ val incrBuildNum by tasks.registering {
 }
 
 tasks.matching { it.name.startsWith("assemble") }.configureEach {
-    dependsOn(incrBuildNum)
+    finalizedBy(incrBuildNum)
 }
