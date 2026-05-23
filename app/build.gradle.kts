@@ -14,7 +14,6 @@ val verFile = file("version.properties")
 val verProps = Properties()
 if (verFile.exists()) verFile.inputStream().use { verProps.load(it) }
 val buildNumber: Int = (verProps["buildNumber"]?.toString()?.toIntOrNull() ?: 0) + 1
-val versionName: String = verProps["versionName"]?.toString() ?: "1.0.0"
 val buildDate: String = providers.exec { commandLine("date", "+%Ym%d") }.standardOutput.asText.get().trim()
 
 android {
@@ -26,7 +25,7 @@ android {
         minSdk = 26
         targetSdk = 34
         versionCode = buildNumber
-        versionName = versionName
+        versionName = "1.0.$buildNumber"
 
         vectorDrawables {
             useSupportLibrary = true
@@ -141,7 +140,7 @@ kapt {
     correctErrorTypes = true
 }
 
-// ── Auto-increment build number & versionName after each assemble ──────────────
+// ── Auto-increment buildNumber after each assemble + push to GitHub ─────────────
 val incrBuildNum by tasks.registering {
     doLast {
         val pf = file("version.properties")
@@ -149,20 +148,14 @@ val incrBuildNum by tasks.registering {
         if (pf.exists()) pf.inputStream().use { p.load(it) }
         val nextBuild = (p["buildNumber"]?.toString()?.toIntOrNull() ?: 0) + 1
         p["buildNumber"] = nextBuild.toString()
-        // Increment versionName patch (e.g. 1.1.0 -> 1.1.1)
-        val vn = p["versionName"]?.toString() ?: "1.0.0"
-        val parts = vn.split(".")
-        val newVn = if (parts.size == 3) {
-            "${parts[0]}.${parts[1]}.${parts[2].toIntOrNull()?.plus(1) ?: 1}"
-        } else vn
-        p["versionName"] = newVn
-        pf.outputStream().use { p.store(it, "Auto-increment: buildNumber + versionName") }
+        p["versionName"] = "1.0.$nextBuild"
+        pf.outputStream().use { p.store(it, "Auto-increment buildNumber + versionName") }
         // Auto-commit & push to GitHub
         val projDir = pf.parentFile
         exec { commandLine("git", "-C", projDir.absolutePath, "add", "-A") }
         exec { commandLine("git", "-C", projDir.absolutePath, "config", "user.email", "hermes@local") }
         exec { commandLine("git", "-C", projDir.absolutePath, "config", "user.name", "Hermes") }
-        exec { commandLine("git", "-C", projDir.absolutePath, "commit", "-m", "chore: v$newVn (auto-build)") }
+        exec { commandLine("git", "-C", projDir.absolutePath, "commit", "-m", "chore: v1.0.$nextBuild (auto-build)") }
         exec { commandLine("git", "-C", projDir.absolutePath, "push") }
     }
 }

@@ -28,13 +28,13 @@ fun SplashScreen(
     val versionName = remember {
         try {
             if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
-                context.packageManager.getPackageInfo(context.packageName, 0).versionName ?: "1.1.0"
+                context.packageManager.getPackageInfo(context.packageName, 0).versionName ?: "1.0.0"
             } else {
                 @Suppress("DEPRECATION")
-                context.packageManager.getPackageInfo(context.packageName, 0).versionName ?: "1.1.0"
+                context.packageManager.getPackageInfo(context.packageName, 0).versionName ?: "1.0.0"
             }
         } catch (e: PackageManager.NameNotFoundException) {
-            "1.1.0"
+            "1.0.0"
         }
     }
 
