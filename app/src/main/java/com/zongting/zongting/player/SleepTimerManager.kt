@@ -50,7 +50,7 @@ object SleepTimerManager {
         // 立即显示通知
         showNotification(context, minutes)
 
-        countDownTimer = object : CountDownTimer(totalMs, 60_000L) { // 每分钟更新一次
+        countDownTimer = object : CountDownTimer(totalMs, 1_000L) { // 每秒更新一次
             override fun onTick(millisUntilFinished: Long) {
                 val secs = millisUntilFinished / 1000
                 _remainingSeconds.value = secs
