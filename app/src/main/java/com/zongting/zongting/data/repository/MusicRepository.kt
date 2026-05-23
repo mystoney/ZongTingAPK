@@ -249,7 +249,8 @@ class MusicRepository @Inject constructor() {
                 }
             }
             android.util.Log.d("KuwoSearch", "songs parsed=${songs.size}")
-            Result.success(songs)
+            val withArtwork = enrichWithItunesArtwork(songs)
+            Result.success(withArtwork)
         } catch (e: Exception) {
             android.util.Log.e("KuwoSearch", "SEARCH FAILED: ${e.javaClass.simpleName} ${e.message}")
             Result.failure(e)
@@ -377,7 +378,8 @@ class MusicRepository @Inject constructor() {
                 song.copy(playable = songFee != 1 && songFee != 8, fee = songFee)
             }
 
-            Result.success(finalSongs)
+            val withArtwork = enrichWithItunesArtwork(finalSongs)
+            Result.success(withArtwork)
         } catch (e: Exception) {
             Result.failure(e)
         }
@@ -760,5 +762,56 @@ class MusicRepository @Inject constructor() {
         } catch (e: Exception) {
             Result.failure(e)
         }
+    }
+
+    // ==================== iTunes 封面搜索（优先级：iTunes > 网易云 > 酷我） ====================
+
+    /**
+     * 通过 iTunes Search API 获取歌曲封面（600x600高清图）
+     * @return iTunes高清封面URL，失败返回null
+     */
+    private fun fetchItunesArtwork(songName: String, artist: String): String? {
+        return try {
+            val encoded = URLEncoder.encode("$songName $artist", "UTF-8")
+            val url = "https://itunes.apple.com/search?term=$encoded&entity=song&limit=1&country=CN"
+            val request = Request.Builder()
+                .url(url)
+                .header("User-Agent", "Mozilla/5.0")
+                .build()
+            val response = httpClient.newCall(request).execute()
+            val body = response.body?.string() ?: return null
+            val json = JsonParser().parse(body).asJsonObject
+            val results = json.getAsJsonArray("results") ?: return null
+            if (results.size() == 0) return null
+            val artworkUrl = results[0].asJsonObject.get("artworkUrl100")?.asString ?: return null
+            // 100x100 -> 600x600 高清封面
+            artworkUrl.replace("100x100", "600x600")
+        } catch (e: Exception) {
+            null
+        }
+    }
+
+    /**
+     * 批量从 iTunes 获取封面，优先覆盖 songs 列表中每首歌的 coverUrl
+     * 优先级：iTunes > 原有封面（网易云/酷我）
+     * @param songs 歌曲列表
+     * @param batchSize 每批请求数量（避免限流）
+     * @return 封面已更新的歌曲列表
+     */
+    private suspend fun enrichWithItunesArtwork(songs: List<Song>, batchSize: Int = 10): List<Song> {
+        if (songs.isEmpty()) return songs
+        val result = songs.toMutableList()
+        for (batch in result.chunked(batchSize)) {
+            batch.forEach { song ->
+                if (song.coverUrl.isNullOrBlank()) {
+                    val artwork = fetchItunesArtwork(song.name, song.artist)
+                    if (artwork != null) {
+                        result[result.indexOf(song)] = song.copy(coverUrl = artwork)
+                    }
+                }
+            }
+            kotlinx.coroutines.delay(200) // 避免iTunes限流
+        }
+        return result
     }
 }
