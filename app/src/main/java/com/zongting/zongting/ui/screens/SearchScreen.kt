@@ -32,6 +32,8 @@ import com.zongting.zongting.data.model.Song
 import com.zongting.zongting.data.model.UserPlaylist
 import kotlinx.coroutines.delay
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.sp
+import androidx.compose.material3.LocalTextStyle
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -113,14 +115,14 @@ fun SearchScreen(
             FilterChip(
                 selected = uiState.source == "kuwo",
                 onClick = { viewModel.setSource("kuwo") },
-                label = { Text("酷我", style = MaterialTheme.typography.labelMedium) },
-                modifier = Modifier.height(20.dp)
+                label = { Text("酷我", style = LocalTextStyle.current.copy(fontSize = 15.sp)) },
+                modifier = Modifier.height(32.dp)
             )
             FilterChip(
                 selected = uiState.source == "netease",
                 onClick = { viewModel.setSource("netease") },
-                label = { Text("网易云", style = MaterialTheme.typography.labelMedium) },
-                modifier = Modifier.height(20.dp)
+                label = { Text("网易云", style = LocalTextStyle.current.copy(fontSize = 15.sp)) },
+                modifier = Modifier.height(32.dp)
             )
         }
 
@@ -135,20 +137,20 @@ fun SearchScreen(
                 FilterChip(
                     selected = uiState.filters.contains("free"),
                     onClick = { viewModel.setFilter("free", !uiState.filters.contains("free")) },
-                    label = { Text("免费", style = MaterialTheme.typography.labelMedium) },
-                    modifier = Modifier.height(20.dp)
+                    label = { Text("免费", style = LocalTextStyle.current.copy(fontSize = 15.sp)) },
+                    modifier = Modifier.height(32.dp)
                 )
                 FilterChip(
                     selected = uiState.filters.contains("vip"),
                     onClick = { viewModel.setFilter("vip", !uiState.filters.contains("vip")) },
-                    label = { Text("VIP", style = MaterialTheme.typography.labelMedium) },
-                    modifier = Modifier.height(20.dp)
+                    label = { Text("VIP", style = LocalTextStyle.current.copy(fontSize = 15.sp)) },
+                    modifier = Modifier.height(32.dp)
                 )
                 FilterChip(
                     selected = uiState.filters.contains("lock"),
                     onClick = { viewModel.setFilter("lock", !uiState.filters.contains("lock")) },
-                    label = { Text("付费", style = MaterialTheme.typography.labelMedium) },
-                    modifier = Modifier.height(20.dp)
+                    label = { Text("付费", style = LocalTextStyle.current.copy(fontSize = 15.sp)) },
+                    modifier = Modifier.height(32.dp)
                 )
             }
         }
@@ -181,19 +183,21 @@ fun SearchScreen(
                             onPlayAll(allSongs)
                         }
                     },
-                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp),
-                    modifier = Modifier.height(20.dp)
+                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 0.dp),
+                    modifier = Modifier.height(32.dp),
+                    shape = RoundedCornerShape(16.dp)
                 ) {
-                    Icon(Icons.Default.PlayArrow, contentDescription = null, modifier = Modifier.size(14.dp))
-                    Spacer(modifier = Modifier.width(2.dp))
-                    Text("全部播放", style = MaterialTheme.typography.labelMedium)
+                    Icon(Icons.Default.PlayArrow, contentDescription = null, modifier = Modifier.size(16.dp))
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text("全部播放", style = LocalTextStyle.current.copy(fontSize = 15.sp))
                 }
             }
 
             // 搜索结果列表
             LazyColumn(
                 modifier = Modifier.fillMaxSize(),
-                contentPadding = PaddingValues(bottom = 165.dp)
+                contentPadding = PaddingValues(start = 10.dp, top = 4.dp, end = 10.dp, bottom = 165.dp),
+                verticalArrangement = Arrangement.spacedBy(6.dp)
             ) {
                 items(uiState.displayedResults) { song ->
                     SongListItemWithLongPress(
@@ -288,34 +292,31 @@ private fun SongListItemWithLongPress(
 ) {
     var showDialog by remember { mutableStateOf(false) }
 
-    ListItem(
-        modifier = Modifier.combinedClickable(
-            onClick = onClick,
-            onLongClick = { showDialog = true }
-        ),
-        headlineContent = {
-            Text(
-                text = song.name,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(
+                color = Color(0xFFEEEEEE).copy(alpha = 0.1f),
+                shape = RoundedCornerShape(10.dp)
             )
-        },
-        supportingContent = {
-            Text(
-                text = "${song.artist} - ${song.album}",
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
+            .combinedClickable(
+                onClick = onClick,
+                onLongClick = { showDialog = true }
             )
-        },
-        leadingContent = {
+            .padding(12.dp)
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            // 专辑封面
             Box {
                 AsyncImage(
-                    model = song.pic120,
+                    model = song.coverUrl ?: song.pic120,
                     contentDescription = null,
                     modifier = Modifier
                         .size(48.dp)
-                        .clip(RoundedCornerShape(4.dp)),
+                        .clip(RoundedCornerShape(6.dp)),
                     contentScale = ContentScale.Crop
                 )
                 if (!song.playable) {
@@ -339,8 +340,27 @@ private fun SongListItemWithLongPress(
                     }
                 }
             }
+
+            Spacer(modifier = Modifier.width(10.dp))
+
+            // 歌曲信息
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = song.name,
+                    style = MaterialTheme.typography.bodyMedium,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Text(
+                    text = "${song.artist} - ${song.album}",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
         }
-    )
+    }
 
     if (showDialog) {
         AddToPlaylistDialogInline(

@@ -30,13 +30,25 @@ fun PlaylistScreen(
     viewModel: PlaylistViewModel = hiltViewModel(),
     onBackClick: () -> Unit,
     onSongClick: (Song, List<Song>) -> Unit,
+    currentPlaylist: List<Song> = emptyList(),  // 当前播放列表，用于判断是否为空
     onPlayAll: () -> Unit = {}
 ) {
     val uiState by viewModel.uiState.collectAsState()
+    var hasAutoPlayed by remember { mutableStateOf(false) }
 
     LaunchedEffect(playlistId) {
         Log.d("HomeDebug", "PlaylistScreen: LaunchedEffect fired for playlistId=$playlistId")
         viewModel.loadPlaylist(playlistId)
+        hasAutoPlayed = false
+    }
+
+    // ★ 新逻辑：歌单加载完成后，若当前播放列表为空，自动播放第一首
+    LaunchedEffect(uiState.songs, currentPlaylist) {
+        if (!hasAutoPlayed && uiState.songs.isNotEmpty() && currentPlaylist.isEmpty()) {
+            Log.d("HomeDebug", "PlaylistScreen: current playlist empty, auto-playing first song")
+            onSongClick(uiState.songs.first(), uiState.songs)
+            hasAutoPlayed = true
+        }
     }
 
     Log.d("HomeDebug", "PlaylistScreen: COMPOSING isLoading=${uiState.isLoading} playlist=${uiState.playlist?.name} songs=${uiState.songs.size}")

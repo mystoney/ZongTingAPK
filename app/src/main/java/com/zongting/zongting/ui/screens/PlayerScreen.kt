@@ -3,6 +3,7 @@ package com.zongting.zongting.ui.screens
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -13,6 +14,7 @@ import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.PlaylistPlay
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material.icons.outlined.FavoriteBorder
 import androidx.compose.material3.*
@@ -37,6 +39,7 @@ import com.zongting.zongting.ui.LyricState
 import com.zongting.zongting.ui.MainViewModel
 import com.zongting.zongting.ui.PlaybackState
 import com.zongting.zongting.data.model.Song
+import com.zongting.zongting.data.model.UserPlaylist
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
@@ -55,6 +58,8 @@ fun PlayerScreen(
     val pagerState = rememberPagerState(pageCount = { 2 })
     val coroutineScope = rememberCoroutineScope()
     var showPlaylistSheet by remember { mutableStateOf(false) }
+    var showSavePlaylistDialog by remember { mutableStateOf(false) }
+    var isSeeking by remember { mutableStateOf(false) }
 
     // 当前歌曲变化时自动获取歌词
     LaunchedEffect(currentSong?.rid) {
@@ -65,23 +70,23 @@ fun PlayerScreen(
 
     // 系统返回键优先关闭播放列表面板，再退出播放界面
     BackHandler {
-        android.util.Log.d("PlayerDebug", "BackHandler triggered, showPlaylist=$showPlaylistSheet")
         if (showPlaylistSheet) {
             showPlaylistSheet = false
         } else {
-            android.util.Log.d("PlayerDebug", "BackHandler calling onBackClick")
             onBackClick()
         }
     }
 
     // 定期同步播放进度（每秒更新一次 position 和 duration）
-    // seek 后的 2 秒内跳过更新，等待 ExoPlayer 真正 seek 到目标位置
-    var isSeeking by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) {
         while (true) {
             if (!isSeeking) {
                 val pos = PlayerManager.currentPosition
-                val dur = PlayerManager.duration
+                // PlayerManager.duration 在媒体刚开始播放时可能为0，
+                // 用 currentSong.duration（秒转毫秒）作为兜底
+                val pmDur = PlayerManager.duration
+                val songDur = ((currentSong?.duration ?: 0) * 1000L)
+                val dur = if (pmDur > 0) pmDur else songDur
                 if (dur > 0) {
                     viewModel.updateProgress(pos, dur)
                 }
@@ -101,7 +106,6 @@ fun PlayerScreen(
             navigationIcon = {
                 IconButton(
                     onClick = {
-                        // 优先关闭播放列表面板，再退出
                         if (showPlaylistSheet) {
                             showPlaylistSheet = false
                         } else {
@@ -138,7 +142,7 @@ fun PlayerScreen(
             }
         }
 
-        // 左右滑动页面
+        // 页面内容区域（左右滑动切换）
         HorizontalPager(
             state = pagerState,
             modifier = Modifier
@@ -148,12 +152,10 @@ fun PlayerScreen(
             when (page) {
                 0 -> AlbumCoverPage(
                     currentSong = currentSong,
-                    currentPlaylist = currentPlaylist,
                     isPlaying = isPlaying,
                     playbackState = playbackState,
-                    onTogglePlay = { viewModel.togglePlayPause() },
                     playMode = viewModel.playMode.value,
-                    onTogglePlayMode = { viewModel.togglePlayMode() },
+                    onTogglePlay = { viewModel.togglePlayPause() },
                     onSeek = { pos ->
                         isSeeking = true
                         viewModel.seekTo(pos)
@@ -164,14 +166,7 @@ fun PlayerScreen(
                     },
                     onDrag = { pos -> viewModel.updateProgress(pos, playbackState.duration) },
                     onPrevious = { viewModel.playPrevious() },
-                    onNext = { viewModel.playNext() },
-                    onToggleFavorite = {
-                        currentSong?.let { viewModel.toggleFavorite(it) }
-                    },
-                    isFavorite = currentSong?.let { viewModel.isFavorite(it.rid) } ?: false,
-                    onPlaySong = { song -> viewModel.playSong(song, currentPlaylist) },
-                    showPlaylist = showPlaylistSheet,
-                    onShowPlaylist = { showPlaylistSheet = it }
+                    onNext = { viewModel.playNext() }
                 )
                 1 -> LyricPage(
                     currentSong = currentSong,
@@ -181,44 +176,75 @@ fun PlayerScreen(
                     onTogglePlay = { viewModel.togglePlayPause() },
                     onPrevious = { viewModel.playPrevious() },
                     onNext = { viewModel.playNext() },
-                    onToggleFavorite = {
-                        currentSong?.let { viewModel.toggleFavorite(it) }
-                    },
-                    isFavorite = currentSong?.let { viewModel.isFavorite(it.rid) } ?: false,
-                    playMode = viewModel.playMode.value,
-                    onTogglePlayMode = { viewModel.togglePlayMode() },
-                    showPlaylist = showPlaylistSheet,
-                    onShowPlaylist = { showPlaylistSheet = it }
+                    onSeek = { viewModel.seekTo(it) }
                 )
             }
+        }
+
+        // ===== 统一的底部播放控制栏 =====
+        PlayerBottomBar(
+            currentSong = currentSong,
+            isPlaying = isPlaying,
+            playbackState = playbackState,
+            playMode = viewModel.playMode.value,
+            isFavorite = currentSong?.let { viewModel.isFavorite(it.rid) } ?: false,
+            showPlaylist = showPlaylistSheet,
+            onTogglePlay = { viewModel.togglePlayPause() },
+            onTogglePlayMode = { viewModel.togglePlayMode() },
+            onShowPlaylist = { showPlaylistSheet = it },
+            onToggleFavorite = { currentSong?.let { viewModel.toggleFavorite(it) } },
+            onToggleSavePlaylist = { showSavePlaylistDialog = true },
+            onPrevious = { viewModel.playPrevious() },
+            onNext = { viewModel.playNext() },
+            currentPlaylist = currentPlaylist,
+            onPlaySong = { song -> viewModel.playSong(song, currentPlaylist) },
+            playlistListState = rememberLazyListState()
+        )
+
+        // 添加到歌单弹窗
+        if (showSavePlaylistDialog) {
+            SavePlaylistDialog(
+                songCount = 1,
+                playlists = viewModel.userPlaylists.value,
+                onSelectPlaylist = { playlistId ->
+                    currentSong?.let { song -> viewModel.addSongToPlaylist(playlistId, song) {} }
+                },
+                onCreatePlaylist = { name ->
+                    currentSong?.let { song ->
+                        viewModel.createPlaylistAndAddSong(name, song)
+                    } ?: viewModel.createPlaylist(name)
+                },
+                onDismiss = { showSavePlaylistDialog = false }
+            )
         }
     }
 }
 
+// ===== 统一的底部播放控制栏 =====
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun AlbumCoverPage(
+private fun PlayerBottomBar(
     currentSong: Song?,
-    currentPlaylist: List<Song>,
     isPlaying: Boolean,
     playbackState: PlaybackState,
     playMode: Int,
+    isFavorite: Boolean,
+    showPlaylist: Boolean,
     onTogglePlay: () -> Unit,
-    onSeek: (Long) -> Unit,
-    onDrag: (Long) -> Unit,
+    onTogglePlayMode: () -> Unit,
+    onShowPlaylist: (Boolean) -> Unit,
+    onToggleFavorite: () -> Unit,
+    onToggleSavePlaylist: () -> Unit,
     onPrevious: () -> Unit,
     onNext: () -> Unit,
-    onToggleFavorite: () -> Unit,
-    onTogglePlayMode: () -> Unit,
-    isFavorite: Boolean,
+    currentPlaylist: List<Song>,
     onPlaySong: (Song) -> Unit,
-    showPlaylist: Boolean,
-    onShowPlaylist: (Boolean) -> Unit
+    playlistListState: androidx.compose.foundation.lazy.LazyListState
 ) {
-    val playlistListState = rememberLazyListState()
     val playModeIcon = when (playMode) {
-        0 -> Icons.Default.Repeat
         1 -> Icons.Default.RepeatOne
-        else -> Icons.Default.Shuffle
+        2 -> Icons.Default.Shuffle
+        else -> Icons.Default.Repeat
     }
     val playModeDesc = when (playMode) {
         0 -> "顺序播放"
@@ -226,116 +252,24 @@ private fun AlbumCoverPage(
         else -> "随机播放"
     }
 
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(horizontal = 16.dp),
-        horizontalAlignment = Alignment.CenterHorizontally
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp),
+        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.7f),
+        tonalElevation = 4.dp
     ) {
-        Spacer(modifier = Modifier.height(4.dp))
-
-        if (currentSong != null) {
-            val song = currentSong
-
-            // 专辑封面 — 自适应中间空间，填满可用区域
-            Box(
-                modifier = Modifier
-                    .weight(1f)
-                    .fillMaxWidth(),
-                contentAlignment = Alignment.Center
-            ) {
-                AsyncImage(
-                    model = song.pic,
-                    contentDescription = null,
-                    modifier = Modifier
-                        .fillMaxWidth(0.75f)
-                        .aspectRatio(1f)
-                        .clip(RoundedCornerShape(12.dp)),
-                    contentScale = ContentScale.Crop
-                )
-            }
-
-            // 歌曲信息
-            Text(
-                text = song.name,
-                style = MaterialTheme.typography.titleMedium,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                textAlign = TextAlign.Center
-            )
-
-            Text(
-                text = "${song.artist} - ${song.album}",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
-
-            Spacer(modifier = Modifier.height(4.dp))
-
-            // 进度条（支持拖拽，拖拽时实时更新歌词位置）
-            var isDragging by remember { mutableStateOf(false) }
-            var dragProgress by remember { mutableFloatStateOf(0f) }
-
-            Slider(
-                value = if (isDragging) dragProgress else {
-                    if (playbackState.duration > 0) {
-                        playbackState.position.toFloat() / playbackState.duration.toFloat()
-                    } else 0f
-                },
-                onValueChange = { newProgress ->
-                    if (!isDragging) isDragging = true
-                    dragProgress = newProgress
-                    // 实时更新歌词位置（不 seek 播放器，避免播放跳变）
-                    onDrag((newProgress * playbackState.duration).toLong())
-                },
-                onValueChangeFinished = {
-                    // 松手时才真正 seek 播放器
-                    onSeek((dragProgress * playbackState.duration).toLong())
-                    isDragging = false
-                },
-                valueRange = 0f..1f,
-            )
-
-            // 时间显示（拖拽时实时显示目标时间）
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                Text(
-                    text = formatDuration((if (isDragging) dragProgress * playbackState.duration else playbackState.position).toLong()),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                Text(
-                    text = formatDuration(playbackState.duration),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-
-            Spacer(modifier = Modifier.height(12.dp))
-
-            // 播放控制
+        Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)) {
+            // 上一首 / 播放暂停 / 下一首
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceEvenly,
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 IconButton(onClick = onPrevious, modifier = Modifier.size(48.dp)) {
-                    Icon(
-                        Icons.Default.SkipPrevious,
-                        contentDescription = "上一首",
-                        modifier = Modifier.size(28.dp)
-                    )
+                    Icon(Icons.Default.SkipPrevious, contentDescription = "上一首", modifier = Modifier.size(28.dp))
                 }
 
-                FilledIconButton(
-                    onClick = onTogglePlay,
-                    modifier = Modifier.size(56.dp),
-                    shape = CircleShape
-                ) {
+                FilledIconButton(onClick = onTogglePlay, modifier = Modifier.size(56.dp), shape = CircleShape) {
                     Icon(
                         if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
                         contentDescription = if (isPlaying) "暂停" else "播放",
@@ -344,66 +278,37 @@ private fun AlbumCoverPage(
                 }
 
                 IconButton(onClick = onNext, modifier = Modifier.size(48.dp)) {
+                    Icon(Icons.Default.SkipNext, contentDescription = "下一首", modifier = Modifier.size(28.dp))
+                }
+            }
+
+            // 附加功能按钮（播放模式 / 播放列表 / 添加到歌单 / 收藏）
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 2.dp),
+                horizontalArrangement = Arrangement.SpaceEvenly
+            ) {
+                IconButton(onClick = onTogglePlayMode) {
+                    Icon(imageVector = playModeIcon, contentDescription = playModeDesc, modifier = Modifier.size(24.dp))
+                }
+
+                IconButton(onClick = { onShowPlaylist(true) }) {
+                    Icon(imageVector = Icons.AutoMirrored.Filled.PlaylistPlay, contentDescription = "播放列表", modifier = Modifier.size(24.dp))
+                }
+
+                IconButton(onClick = onToggleSavePlaylist) {
+                    Icon(imageVector = Icons.Default.PlaylistAdd, contentDescription = "保存到歌单", modifier = Modifier.size(24.dp))
+                }
+
+                IconButton(onClick = onToggleFavorite) {
                     Icon(
-                        Icons.Default.SkipNext,
-                        contentDescription = "下一首",
-                        modifier = Modifier.size(28.dp)
+                        imageVector = if (isFavorite) Icons.Filled.Favorite else Icons.Outlined.FavoriteBorder,
+                        contentDescription = if (isFavorite) "取消喜欢" else "我喜欢",
+                        tint = if (isFavorite) Color(0xFFFF5252) else MaterialTheme.colorScheme.onSurface,
+                        modifier = Modifier.size(24.dp)
                     )
                 }
-            }
-
-            Spacer(modifier = Modifier.height(2.dp))
-
-            // 附加功能按钮（播放模式/播放列表/收藏）
-            Surface(
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(12.dp),
-                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
-            ) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(vertical = 2.dp),
-                    horizontalArrangement = Arrangement.SpaceEvenly
-                ) {
-                    IconButton(onClick = onTogglePlayMode) {
-                        Icon(
-                            imageVector = playModeIcon,
-                            contentDescription = playModeDesc,
-                            modifier = Modifier.size(24.dp)
-                        )
-                    }
-
-                    IconButton(onClick = { onShowPlaylist(true) }) {
-                        Icon(
-                            imageVector = Icons.Default.PlaylistPlay,
-                            contentDescription = "播放列表",
-                            modifier = Modifier.size(24.dp)
-                        )
-                    }
-
-                    IconButton(onClick = onToggleFavorite) {
-                        Icon(
-                            imageVector = if (isFavorite) Icons.Filled.Favorite else Icons.Outlined.FavoriteBorder,
-                            contentDescription = if (isFavorite) "取消喜欢" else "我喜欢",
-                            tint = if (isFavorite) Color(0xFFFF5252) else MaterialTheme.colorScheme.onSurface,
-                            modifier = Modifier.size(24.dp)
-                        )
-                    }
-                }
-            }
-        }
-    }
-
-    // 播放列表展开时自动滚动到当前歌曲
-    LaunchedEffect(showPlaylist, currentSong) {
-        if (showPlaylist && currentSong != null) {
-            val index = currentPlaylist.indexOfFirst { it.rid == currentSong.rid }
-            if (index >= 0) {
-                playlistListState.animateScrollToItem(
-                    index = (index - 1).coerceAtLeast(0),
-                    scrollOffset = 0
-                )
             }
         }
     }
@@ -457,9 +362,7 @@ private fun AlbumCoverPage(
                                     color = if (isCurrentSong) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
                                     modifier = Modifier.width(32.dp)
                                 )
-                                Column(
-                                    modifier = Modifier.weight(1f)
-                                ) {
+                                Column(modifier = Modifier.weight(1f)) {
                                     Text(
                                         text = song.name,
                                         style = MaterialTheme.typography.bodyMedium,
@@ -498,8 +401,114 @@ private fun AlbumCoverPage(
     }
 }
 
+// ===== 专辑封面页面（内容区） =====
 @Composable
-fun LyricPage(
+private fun AlbumCoverPage(
+    currentSong: Song?,
+    isPlaying: Boolean,
+    playbackState: PlaybackState,
+    playMode: Int,
+    onTogglePlay: () -> Unit,
+    onSeek: (Long) -> Unit,
+    onDrag: (Long) -> Unit,
+    onPrevious: () -> Unit,
+    onNext: () -> Unit
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(horizontal = 16.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Spacer(modifier = Modifier.height(4.dp))
+
+        if (currentSong != null) {
+            val song = currentSong
+
+            // 专辑封面
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxWidth(),
+                contentAlignment = Alignment.Center
+            ) {
+                AsyncImage(
+                    model = song.pic,
+                    contentDescription = null,
+                    modifier = Modifier
+                        .fillMaxWidth(0.75f)
+                        .aspectRatio(1f)
+                        .clip(RoundedCornerShape(12.dp)),
+                    contentScale = ContentScale.Crop
+                )
+            }
+
+            // 歌曲信息
+            Text(
+                text = song.name,
+                style = MaterialTheme.typography.titleMedium,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                textAlign = TextAlign.Center
+            )
+
+            Text(
+                text = "${song.artist} - ${song.album}",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+
+            Spacer(modifier = Modifier.height(4.dp))
+
+            // 进度条
+            var isDragging by remember { mutableStateOf(false) }
+            var dragProgress by remember { mutableFloatStateOf(0f) }
+
+            Slider(
+                value = if (isDragging) dragProgress else {
+                    if (playbackState.duration > 0) {
+                        playbackState.position.toFloat() / playbackState.duration.toFloat()
+                    } else 0f
+                },
+                onValueChange = { newProgress ->
+                    if (!isDragging) isDragging = true
+                    dragProgress = newProgress
+                    onDrag((newProgress * playbackState.duration).toLong())
+                },
+                onValueChangeFinished = {
+                    onSeek((dragProgress * playbackState.duration).toLong())
+                    isDragging = false
+                },
+                valueRange = 0f..1f,
+            )
+
+            // 时间显示
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Text(
+                    text = formatDuration((if (isDragging) dragProgress * playbackState.duration else playbackState.position).toLong()),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Text(
+                    text = formatDuration(playbackState.duration),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+
+            Spacer(modifier = Modifier.height(8.dp))
+        }
+    }
+}
+
+// ===== 歌词页面（内容区） =====
+@Composable
+private fun LyricPage(
     currentSong: Song?,
     lyricState: LyricState,
     playbackState: PlaybackState,
@@ -507,12 +516,7 @@ fun LyricPage(
     onTogglePlay: () -> Unit,
     onPrevious: () -> Unit,
     onNext: () -> Unit,
-    onToggleFavorite: () -> Unit,
-    isFavorite: Boolean,
-    playMode: Int,
-    onTogglePlayMode: () -> Unit,
-    showPlaylist: Boolean,
-    onShowPlaylist: (Boolean) -> Unit
+    onSeek: (Long) -> Unit
 ) {
     val lazyListState = rememberLazyListState()
     var isUserScrolling by remember { mutableStateOf(false) }
@@ -522,246 +526,249 @@ fun LyricPage(
         color = MaterialTheme.colorScheme.background
     ) {
         Box(modifier = Modifier.fillMaxSize()) {
-            // 歌词内容区域
-            Box(modifier = Modifier.fillMaxSize()) {
-                when (lyricState) {
-                    is LyricState.Loading -> {
-                        Box(
-                            modifier = Modifier.fillMaxSize(),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                CircularProgressIndicator()
-                                Spacer(modifier = Modifier.height(12.dp))
-                                Text("正在加载歌词...", color = MaterialTheme.colorScheme.onSurfaceVariant)
-                            }
-                        }
-                    }
-                    is LyricState.Success -> {
-                        val lines = lyricState.lyrics
-                        val position = playbackState.position
-
-                        val currentLineIndex = remember(lines, position) {
-                            var idx = 0
-                            for ((i, line) in lines.withIndex()) {
-                                if (position >= line.timestamp) idx = i
-                            }
-                            idx
-                        }
-
-                        val lineHeightDp = 40.dp
-                        val estimatedLineHeightPx = with(LocalDensity.current) { lineHeightDp.toPx().toInt() }
-
-                        BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
-                            val boxHeightPx = with(LocalDensity.current) { maxHeight.toPx().toInt() }
-                            val topPaddingPx = boxHeightPx / 2 - estimatedLineHeightPx / 2
-
-                            LaunchedEffect(currentLineIndex) {
-                                if (lines.isNotEmpty() && currentLineIndex in lines.indices) {
-                                    lazyListState.animateScrollToItem(index = currentLineIndex)
-                                }
-                            }
-
-                            LaunchedEffect(lazyListState) {
-                                snapshotFlow { lazyListState.isScrollInProgress }
-                                    .collect { isScrolling ->
-                                        if (isScrolling) isUserScrolling = true
-                                        else if (isUserScrolling) {
-                                            kotlinx.coroutines.delay(500)
-                                            if (!lazyListState.isScrollInProgress) isUserScrolling = false
-                                        }
-                                    }
-                            }
-
-                            Box(modifier = Modifier.fillMaxSize()) {
-                                LazyColumn(
-                                    state = lazyListState,
-                                    modifier = Modifier
-                                        .fillMaxSize()
-                                        .padding(horizontal = 24.dp),
-                                    horizontalAlignment = Alignment.CenterHorizontally,
-                                    contentPadding = PaddingValues(
-                                        top = with(LocalDensity.current) { topPaddingPx.toDp() },
-                                        bottom = with(LocalDensity.current) { topPaddingPx.toDp() }
-                                    )
-                                ) {
-                                    itemsIndexed(lines) { index, lyricLine ->
-                                        val isCurrentLine = index == currentLineIndex
-                                        Text(
-                                            text = lyricLine.text,
-                                            fontSize = if (isCurrentLine) 18.sp else 14.sp,
-                                            fontWeight = if (isCurrentLine) FontWeight.Bold else FontWeight.Normal,
-                                            color = if (isCurrentLine)
-                                                MaterialTheme.colorScheme.primary
-                                            else
-                                                MaterialTheme.colorScheme.onSurfaceVariant,
-                                            textAlign = TextAlign.Center,
-                                            modifier = Modifier
-                                                .fillMaxWidth()
-                                                .padding(vertical = 6.dp)
-                                        )
-                                    }
-                                }
-
-                                Box(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .height(with(LocalDensity.current) { (boxHeightPx / 2).toDp() })
-                                        .align(Alignment.TopCenter)
-                                        .background(
-                                            brush = Brush.verticalGradient(
-                                                colors = listOf(
-                                                    MaterialTheme.colorScheme.surface.copy(alpha = 0.85f),
-                                                    Color.Transparent
-                                                )
-                                            )
-                                        )
-                                )
-                                Box(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .height(with(LocalDensity.current) { (boxHeightPx / 2).toDp() })
-                                        .align(Alignment.BottomCenter)
-                                        .background(
-                                            brush = Brush.verticalGradient(
-                                                colors = listOf(
-                                                    Color.Transparent,
-                                                    MaterialTheme.colorScheme.surface.copy(alpha = 0.85f)
-                                                )
-                                            )
-                                        )
-                                )
-
-                                LaunchedEffect(isUserScrolling, currentLineIndex) {
-                                    if (!isUserScrolling && lines.isNotEmpty()) {
-                                        kotlinx.coroutines.delay(5000)
-                                        if (!lazyListState.isScrollInProgress) {
-                                            lazyListState.animateScrollToItem(
-                                                index = currentLineIndex,
-                                                scrollOffset = -topPaddingPx
-                                            )
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                    is LyricState.Error -> {
-                        Box(
-                            modifier = Modifier.fillMaxSize(),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Text(
-                                text = lyricState.message,
-                                color = MaterialTheme.colorScheme.error
-                            )
-                        }
-                    }
-                    is LyricState.Idle -> {
-                        Box(
-                            modifier = Modifier.fillMaxSize(),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Text(
-                                text = "正在加载歌词...",
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
+            when (lyricState) {
+                is LyricState.Loading -> {
+                    Box(
+                        modifier = Modifier.fillMaxSize(),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            CircularProgressIndicator()
+                            Spacer(modifier = Modifier.height(12.dp))
+                            Text("正在加载歌词...", color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
                     }
                 }
-            }
+                is LyricState.Success -> {
+                    val lines = lyricState.lyrics
+                    val position = playbackState.position
 
-            // 底部播放控制栏（固定在页面最下方）
-            Surface(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .align(Alignment.BottomCenter),
-                shape = RoundedCornerShape(topStart = 12.dp, topEnd = 12.dp),
-                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
-            ) {
-                Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 2.dp)) {
-                    // 上一首 / 播放暂停 / 下一首
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceEvenly,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        IconButton(onClick = onPrevious, modifier = Modifier.size(48.dp)) {
-                            Icon(
-                                Icons.Default.SkipPrevious,
-                                contentDescription = "上一首",
-                                modifier = Modifier.size(28.dp)
-                            )
+                    val currentLineIndex = remember(lines, position) {
+                        var idx = 0
+                        for ((i, line) in lines.withIndex()) {
+                            if (position >= line.timestamp) idx = i
                         }
-
-                        FilledIconButton(
-                            onClick = onTogglePlay,
-                            modifier = Modifier.size(56.dp),
-                            shape = CircleShape
-                        ) {
-                            Icon(
-                                if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
-                                contentDescription = if (isPlaying) "暂停" else "播放",
-                                modifier = Modifier.size(32.dp)
-                            )
-                        }
-
-                        IconButton(onClick = onNext, modifier = Modifier.size(48.dp)) {
-                            Icon(
-                                Icons.Default.SkipNext,
-                                contentDescription = "下一首",
-                                modifier = Modifier.size(28.dp)
-                            )
-                        }
+                        idx
                     }
 
-                    Spacer(modifier = Modifier.height(2.dp))
+                    val lineHeightDp = 40.dp
+                    val estimatedLineHeightPx = with(LocalDensity.current) { lineHeightDp.toPx().toInt() }
 
-                    // 附加功能按钮（播放模式/播放列表/收藏）
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(vertical = 2.dp),
-                        horizontalArrangement = Arrangement.SpaceEvenly
+                    BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
+                        val boxHeightPx = with(LocalDensity.current) { maxHeight.toPx().toInt() }
+                        val topPaddingPx = boxHeightPx / 2 - estimatedLineHeightPx / 2
+
+                        LaunchedEffect(currentLineIndex) {
+                            if (lines.isNotEmpty() && currentLineIndex in lines.indices) {
+                                lazyListState.animateScrollToItem(index = currentLineIndex)
+                            }
+                        }
+
+                        LaunchedEffect(lazyListState) {
+                            snapshotFlow { lazyListState.isScrollInProgress }
+                                .collect { isScrolling ->
+                                    if (isScrolling) isUserScrolling = true
+                                    else if (isUserScrolling) {
+                                        kotlinx.coroutines.delay(500)
+                                        if (!lazyListState.isScrollInProgress) isUserScrolling = false
+                                    }
+                                }
+                        }
+
+                        Box(modifier = Modifier.fillMaxSize()) {
+                            LazyColumn(
+                                state = lazyListState,
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .padding(horizontal = 24.dp),
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                contentPadding = PaddingValues(
+                                    top = with(LocalDensity.current) { topPaddingPx.toDp() },
+                                    bottom = with(LocalDensity.current) { topPaddingPx.toDp() }
+                                )
+                            ) {
+                                itemsIndexed(lines) { index, lyricLine ->
+                                    val isCurrentLine = index == currentLineIndex
+                                    Text(
+                                        text = lyricLine.text,
+                                        fontSize = if (isCurrentLine) 18.sp else 14.sp,
+                                        fontWeight = if (isCurrentLine) FontWeight.Bold else FontWeight.Normal,
+                                        color = if (isCurrentLine)
+                                            MaterialTheme.colorScheme.primary
+                                        else
+                                            MaterialTheme.colorScheme.onSurfaceVariant,
+                                        textAlign = TextAlign.Center,
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(vertical = 6.dp)
+                                            .clickable { onSeek(lyricLine.timestamp) }
+                                    )
+                                }
+                            }
+
+                            // 顶部渐变遮罩
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(with(LocalDensity.current) { (boxHeightPx / 2).toDp() })
+                                    .align(Alignment.TopCenter)
+                                    .background(
+                                        brush = Brush.verticalGradient(
+                                            colors = listOf(
+                                                MaterialTheme.colorScheme.surface.copy(alpha = 0.85f),
+                                                Color.Transparent
+                                            )
+                                        )
+                                    )
+                            )
+                            // 底部渐变遮罩
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(with(LocalDensity.current) { (boxHeightPx / 2).toDp() })
+                                    .align(Alignment.BottomCenter)
+                                    .background(
+                                        brush = Brush.verticalGradient(
+                                            colors = listOf(
+                                                Color.Transparent,
+                                                MaterialTheme.colorScheme.surface.copy(alpha = 0.85f)
+                                            )
+                                        )
+                                    )
+                            )
+
+                            LaunchedEffect(isUserScrolling, currentLineIndex) {
+                                if (!isUserScrolling && lines.isNotEmpty()) {
+                                    kotlinx.coroutines.delay(5000)
+                                    if (!lazyListState.isScrollInProgress) {
+                                        lazyListState.animateScrollToItem(
+                                            index = currentLineIndex,
+                                            scrollOffset = -topPaddingPx
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                is LyricState.Error -> {
+                    Box(
+                        modifier = Modifier.fillMaxSize(),
+                        contentAlignment = Alignment.Center
                     ) {
-                        val playModeIcon = when (playMode) {
-                            1 -> Icons.Default.RepeatOne
-                            2 -> Icons.Default.Shuffle
-                            else -> Icons.Default.Repeat
-                        }
-                        IconButton(onClick = onTogglePlayMode) {
-                            Icon(
-                                imageVector = playModeIcon,
-                                contentDescription = "播放模式",
-                                modifier = Modifier.size(24.dp)
-                            )
-                        }
-
-                        IconButton(onClick = { onShowPlaylist(true) }) {
-                            Icon(
-                                imageVector = Icons.Default.PlaylistPlay,
-                                contentDescription = "播放列表",
-                                modifier = Modifier.size(24.dp)
-                            )
-                        }
-
-                        IconButton(onClick = onToggleFavorite) {
-                            Icon(
-                                imageVector = if (isFavorite) Icons.Filled.Favorite else Icons.Outlined.FavoriteBorder,
-                                contentDescription = if (isFavorite) "取消喜欢" else "我喜欢",
-                                tint = if (isFavorite) Color(0xFFFF5252) else MaterialTheme.colorScheme.onSurface,
-                                modifier = Modifier.size(24.dp)
-                            )
-                        }
+                        Text(text = lyricState.message, color = MaterialTheme.colorScheme.error)
+                    }
+                }
+                is LyricState.Idle -> {
+                    Box(
+                        modifier = Modifier.fillMaxSize(),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(text = "正在加载歌词...", color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                 }
             }
         }
     }
 }
+
+// ===== 辅助函数 =====
 fun formatDuration(millis: Long): String {
     val totalSeconds = millis / 1000
     val minutes = totalSeconds / 60
     val seconds = totalSeconds % 60
     return "%d:%02d".format(minutes, seconds)
+}
+
+// ===== 添加到歌单弹窗 =====
+@Composable
+private fun SavePlaylistDialog(
+    songCount: Int,
+    playlists: List<UserPlaylist>,
+    onSelectPlaylist: (String) -> Unit,
+    onCreatePlaylist: (String) -> Unit,
+    onDismiss: () -> Unit
+) {
+    var newPlaylistName by remember { mutableStateOf("") }
+    var showNewPlaylistInput by remember { mutableStateOf(false) }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("保存到歌单") },
+        text = {
+            Column {
+                if (songCount > 0) {
+                    Text("将 $songCount 首歌曲保存到歌单", style = MaterialTheme.typography.bodyMedium)
+                    Spacer(modifier = Modifier.height(12.dp))
+                }
+                if (showNewPlaylistInput) {
+                    OutlinedTextField(
+                        value = newPlaylistName,
+                        onValueChange = { newPlaylistName = it },
+                        label = { Text("歌单名称") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.End
+                    ) {
+                        TextButton(onClick = { showNewPlaylistInput = false }) { Text("取消") }
+                        TextButton(
+                            onClick = {
+                                if (newPlaylistName.isNotBlank()) {
+                                    onCreatePlaylist(newPlaylistName.trim())
+                                    newPlaylistName = ""
+                                    showNewPlaylistInput = false
+                                    onDismiss()
+                                }
+                            }
+                        ) { Text("创建") }
+                    }
+                } else {
+                    if (playlists.isEmpty()) {
+                        Text("暂无歌单，请先创建", style = MaterialTheme.typography.bodyMedium)
+                    } else {
+                        playlists.forEach { playlist ->
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable {
+                                        onSelectPlaylist(playlist.id)
+                                        onDismiss()
+                                    }
+                                    .padding(vertical = 12.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(
+                                    imageVector = Icons.AutoMirrored.Filled.PlaylistPlay,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                                Spacer(modifier = Modifier.width(12.dp))
+                                Column {
+                                    Text(playlist.name, style = MaterialTheme.typography.bodyLarge)
+                                    Text("${playlist.songs.size}首", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                }
+                            }
+                        }
+                    }
+                    Spacer(modifier = Modifier.height(8.dp))
+                    TextButton(
+                        onClick = { showNewPlaylistInput = true },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Icon(Icons.Default.Add, contentDescription = null)
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text("创建新歌单")
+                    }
+                }
+            }
+        },
+        confirmButton = {},
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("关闭") }
+        }
+    )
 }

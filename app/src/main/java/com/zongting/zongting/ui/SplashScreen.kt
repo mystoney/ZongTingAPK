@@ -10,24 +10,29 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.zongting.zongting.ui.theme.Primary
-import com.zongting.zongting.ui.theme.Secondary
 import com.zongting.zongting.ui.theme.Background
+import dagger.hilt.android.EntryPointAccessors
 import kotlinx.coroutines.delay
 
 @Composable
 fun SplashScreen(
     onNavigateToMain: () -> Unit
 ) {
-    val context = LocalContext.current
+    val context = androidx.compose.ui.platform.LocalContext.current
+
     val versionName = remember {
         try {
-            context.packageManager.getPackageInfo(context.packageName, 0).versionName ?: "1.0.0"
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
+                context.packageManager.getPackageInfo(context.packageName, 0).versionName ?: "1.0.0"
+            } else {
+                @Suppress("DEPRECATION")
+                context.packageManager.getPackageInfo(context.packageName, 0).versionName ?: "1.0.0"
+            }
         } catch (e: PackageManager.NameNotFoundException) {
             "1.0.0"
         }
@@ -40,9 +45,9 @@ fun SplashScreen(
         label = "alpha"
     )
 
-    // 1.5 秒后自动跳转
+    // 2秒后自动进入主页（更新检测在 MainActivity 后台进行）
     LaunchedEffect(Unit) {
-        delay(1500)
+        delay(2000)
         onNavigateToMain()
     }
 
@@ -80,4 +85,11 @@ fun SplashScreen(
             )
         }
     }
+}
+
+// EntryPoint for accessing Hilt-managed UpdateRepository without ViewModel
+@dagger.hilt.EntryPoint
+@dagger.hilt.InstallIn(dagger.hilt.components.SingletonComponent::class)
+interface UpdateRepositoryEntryPoint {
+    fun updateRepository(): com.zongting.zongting.data.repository.UpdateRepository
 }

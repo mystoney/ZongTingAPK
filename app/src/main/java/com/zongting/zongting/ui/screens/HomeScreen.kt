@@ -3,13 +3,17 @@ package com.zongting.zongting.ui.screens
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.lazy.*
+import androidx.compose.foundation.lazy.grid.*
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -18,16 +22,24 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import kotlin.math.ceil
+import kotlin.collections.chunked
 import androidx.hilt.navigation.compose.hiltViewModel
 import coil.compose.AsyncImage
 import android.util.Log
 import com.zongting.zongting.data.model.Banner
+import com.zongting.zongting.data.model.Bang
 import com.zongting.zongting.data.model.Playlist
 import com.zongting.zongting.data.model.Song
 import com.zongting.zongting.ui.MainViewModel
+import com.zongting.zongting.data.repository.UpdatePhase
+import com.zongting.zongting.data.repository.UpdateEvent
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
@@ -35,11 +47,20 @@ import kotlinx.coroutines.launch
 @Composable
 fun HomeScreen(
     viewModel: HomeViewModel = hiltViewModel(),
+    updateViewModel: UpdateViewModel = hiltViewModel(),
     onPlaylistClick: (Long) -> Unit,
     onSongClick: (Song, List<Song>) -> Unit,
-    onPlaylistPlay: (Long) -> Unit = {}
+    onPlaylistPlay: (Long) -> Unit,
+    onSongPlay: (Song) -> Unit,
+    onBangClick: (String) -> Unit  // 热门榜单点击 → 跳转排行榜
 ) {
     val uiState by viewModel.uiState.collectAsState()
+    val updatePhase by updateViewModel.updatePhase.collectAsState()
+    val updateEvent by updateViewModel.updateEvent.collectAsState()
+
+    // 进度条尺寸
+    val barWidthDp = 90.dp
+    val barHeightDp = 22.dp
 
     // 直接调用加载，ViewModel 层已有防重复守卫
     LaunchedEffect(Unit) {
@@ -55,10 +76,93 @@ fun HomeScreen(
         // 顶部标题
         TopAppBar(
             title = {
-                Text(
-                    "纵听",
-                    style = MaterialTheme.typography.titleLarge
-                )
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    Text(
+                        "纵听",
+                        style = MaterialTheme.typography.titleLarge
+                    )
+
+                    // 根据阶段显示进度条/按钮
+                    when (updatePhase) {
+                        UpdatePhase.Idle -> { /* 不显示 */ }
+
+                        UpdatePhase.UpdateAvailable -> {
+                            Box(
+                                modifier = Modifier
+                                    .width(barWidthDp)
+                                    .height(barHeightDp)
+                                    .clip(RoundedCornerShape(4.dp))
+                                    .background(MaterialTheme.colorScheme.primary)
+                                    .clickable(
+                                        interactionSource = remember { MutableInteractionSource() },
+                                        indication = null
+                                    ) {
+                                        updateViewModel.onConfirmDownload()
+                                    },
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    text = "下载更新",
+                                    color = MaterialTheme.colorScheme.onPrimary,
+                                    fontSize = 11.sp
+                                )
+                            }
+                        }
+
+                        UpdatePhase.Downloading -> {
+                            val progress = (updateEvent as? UpdateEvent.Downloading)?.progress ?: 0
+                            val fraction = (progress / 100f).coerceIn(0f, 1f)
+                            Box(
+                                modifier = Modifier
+                                    .width(barWidthDp)
+                                    .height(barHeightDp)
+                                    .clip(RoundedCornerShape(4.dp))
+                                    .background(MaterialTheme.colorScheme.surfaceVariant),
+                                contentAlignment = Alignment.CenterStart
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxHeight()
+                                        .fillMaxWidth(fraction = fraction)
+                                        .clip(RoundedCornerShape(4.dp))
+                                        .background(MaterialTheme.colorScheme.primary)
+                                )
+                                Text(
+                                    text = "正在下载",
+                                    color = MaterialTheme.colorScheme.onPrimary,
+                                    fontSize = 11.sp,
+                                    modifier = Modifier.align(Alignment.Center)
+                                )
+                            }
+                        }
+
+                        UpdatePhase.Downloaded -> {
+                            Box(
+                                modifier = Modifier
+                                    .width(barWidthDp)
+                                    .height(barHeightDp)
+                                    .clip(RoundedCornerShape(4.dp))
+                                    .background(MaterialTheme.colorScheme.tertiary)
+                                    .clickable(
+                                        interactionSource = remember { MutableInteractionSource() },
+                                        indication = null
+                                    ) {
+                                        updateViewModel.onConfirmInstall()
+                                    },
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    text = "等待安装",
+                                    color = MaterialTheme.colorScheme.onTertiary,
+                                    fontSize = 11.sp
+                                )
+                            }
+                        }
+                    }
+                }
             },
             actions = {
                 IconButton(
@@ -85,9 +189,10 @@ fun HomeScreen(
                 CircularProgressIndicator()
             }
         } else {
-            Log.d("HomeDebug", "HomeScreen: showing LazyColumn, isLoading=${uiState.isLoading}, playlists=${uiState.playlists.size}, banners=${uiState.banners.size}")
             LazyColumn(
-                modifier = Modifier.fillMaxSize(),
+                modifier = Modifier
+                    .fillMaxSize()
+                    .weight(1f),
                 contentPadding = PaddingValues(bottom = 165.dp)
             ) {
                 // 轮播图
@@ -97,40 +202,16 @@ fun HomeScreen(
                     }
                 }
 
-                // 推荐歌单
+                // 推荐内容横向翻页（每日推荐 / 推荐歌单 / 热门歌曲）
                 item {
-                    SectionHeader(title = "推荐歌单")
-                }
-
-                item {
-                    LazyRow(
-                        contentPadding = PaddingValues(horizontal = 16.dp),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        items(uiState.playlists) { playlist ->
-                            PlaylistCard(
-                                playlist = playlist,
-                                onClick = {
-                                    onPlaylistPlay(playlist.id)
-                                    onPlaylistClick(playlist.id)
-                                }
-                            )
-                        }
-                    }
-                }
-
-                // 热门歌曲
-                if (uiState.hotSongs.isNotEmpty()) {
-                    item {
-                        SectionHeader(title = "热门歌曲")
-                    }
-
-                    items(uiState.hotSongs.take(10)) { song ->
-                        SongListItem(
-                            song = song,
-                            onClick = { onSongClick(song, uiState.hotSongs) }
-                        )
-                    }
+                    RecommendPager(
+                        playlists = uiState.playlists,
+                        hotSongs = uiState.hotSongs,
+                        onPlaylistClick = onPlaylistClick,
+                        onPlaylistPlay = onPlaylistPlay,
+                        onSongClick = onSongClick,
+                        onSongPlay = onSongPlay
+                    )
                 }
 
                 // 错误提示
@@ -226,30 +307,123 @@ fun SectionHeader(title: String) {
 @Composable
 fun PlaylistCard(
     playlist: Playlist,
-    onClick: () -> Unit
+    onClick: () -> Unit,
+    onPlayClick: () -> Unit,
+    cardWidth: Int,
+    iconWidth: Int
 ) {
     Column(
         modifier = Modifier
-            .width(110.dp)
+            .width(cardWidth.dp)
             .clickable(onClick = onClick)
     ) {
-        AsyncImage(
-            model = playlist.img300,
-            contentDescription = playlist.name,
+        Box(
             modifier = Modifier
-                .fillMaxWidth()
-                .aspectRatio(1f)
-                .clip(RoundedCornerShape(8.dp)),
-            contentScale = ContentScale.Crop
-        )
+                .size(iconWidth.dp)
+        ) {
+            val iconDpWidth: Dp = iconWidth.dp
+            // 按钮：直径=图标宽×30%，三角形=按钮×80%，offset=80%
+            val btnSizeDp: Dp = iconDpWidth * 0.30f      // 按钮=图标×30%
+            val icSizeDp: Dp = btnSizeDp * 0.80f        // 三角=按钮×80%
+            val xOffset = (iconDpWidth.value * 0.80f - btnSizeDp.value / 2).dp
+            val yOffset = xOffset
 
+            // 图标区域：独立Box包裹并裁剪
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .clip(RoundedCornerShape(8.dp))
+            ) {
+                AsyncImage(
+                    model = playlist.img300,
+                    contentDescription = playlist.name,
+                    modifier = Modifier.fillMaxSize(),
+                    contentScale = ContentScale.Crop
+                )
+            }
+            // 播放按钮覆盖层：圆心对齐图标右下角，完全在图标内
+            // 按钮=图标×8%，三角形=按钮×80%，offset=75%
+            Box(
+                modifier = Modifier
+                    .align(Alignment.TopStart)
+                    .offset(x = xOffset, y = yOffset)
+                    .size(btnSizeDp)
+                    .background(Color.White.copy(alpha = 0.5f), RoundedCornerShape(btnSizeDp / 2))
+                    .clickable(onClick = onPlayClick),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(
+                    imageVector = Icons.Filled.PlayArrow,
+                    contentDescription = "播放全部",
+                    tint = Color.White,
+                    modifier = Modifier.size(icSizeDp),
+                )
+            }
+        }
         Text(
             text = playlist.name,
-            style = MaterialTheme.typography.bodySmall,
+            style = MaterialTheme.typography.bodyMedium,
             maxLines = 2,
             overflow = TextOverflow.Ellipsis,
             modifier = Modifier.padding(top = 4.dp)
         )
+    }
+}
+
+/** 热门榜单 — 横向滚动卡片 */
+@Composable
+fun HotBangsRow(bangs: List<Bang>, onBangClick: (String) -> Unit) {
+    LazyRow(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 8.dp),
+        contentPadding = PaddingValues(horizontal = 16.dp),
+        horizontalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        items(bangs) { bang ->
+            BangCard(bang = bang, onClick = { onBangClick(bang.id) })
+        }
+    }
+}
+
+/** 每日推荐 — 横向滚动小卡片（2列一行 x3行） */
+@Composable
+fun DailyRecommendRow(
+    playlists: List<Playlist>,
+    onPlaylistClick: (Long) -> Unit,
+    onPlaylistPlay: (Long) -> Unit
+) {
+    val screenWidth = LocalConfiguration.current.screenWidthDp
+    val cardWidth = (screenWidth - 32 - 16) / 3
+    val rows = playlists.chunked(3)
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 8.dp)
+    ) {
+        rows.forEachIndexed { rowIndex, rowItems ->
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                rowItems.forEach { playlist ->
+                    PlaylistCard(
+                        playlist,
+                        { onPlaylistClick(playlist.id) },
+                        { onPlaylistPlay(playlist.id) },
+                        cardWidth,
+                        cardWidth
+                    )
+                }
+                repeat(3 - rowItems.size) {
+                    Spacer(Modifier.weight(1f))
+                }
+            }
+            if (rowIndex < rows.lastIndex) {
+                Spacer(Modifier.height(12.dp))
+            }
+        }
     }
 }
 
@@ -319,11 +493,272 @@ fun SongListItem(
         },
         trailingContent = {
             Text(
-                text = song.songTimeMinutes,
+                text = song.displayDuration,
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         },
         modifier = Modifier.clickable(onClick = onClick)
     )
+}
+
+/** 三页横向翻页：每日推荐 / 推荐歌单 / 热门歌曲 */
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+fun RecommendPager(
+    playlists: List<Playlist>,
+    hotSongs: List<Song>,
+    onPlaylistClick: (Long) -> Unit,
+    onPlaylistPlay: (Long) -> Unit,
+    onSongClick: (Song, List<Song>) -> Unit,
+    onSongPlay: (Song) -> Unit
+) {
+    // 顺序：热门歌曲(0) / 每日推荐(1) / 推荐歌单(2)，默认显示每日推荐
+    val pagerState = rememberPagerState(initialPage = 1, pageCount = { 3 })
+    val scope = rememberCoroutineScope()
+
+    Column {
+        // Tab 标题行
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 8.dp),
+            horizontalArrangement = Arrangement.spacedBy(0.dp)
+        ) {
+            // 顺序：热门歌曲(0) / 每日推荐(1) / 推荐歌单(2)
+            val titles = listOf("热门歌曲", "每日推荐", "推荐歌单")
+            titles.forEachIndexed { index, title ->
+                val isSelected = pagerState.currentPage == index
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .clickable {
+                            scope.launch { pagerState.animateScrollToPage(index) }
+                        }
+                        .padding(vertical = 8.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = title,
+                        style = MaterialTheme.typography.titleMedium,
+                        color = if (isSelected)
+                            MaterialTheme.colorScheme.primary
+                        else
+                            MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
+                    )
+                }
+            }
+        }
+
+        // Tab 下划线指示器
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp)
+        ) {
+            Row(modifier = Modifier.fillMaxWidth()) {
+                repeat(3) { index ->
+                    val widthFraction = if (pagerState.currentPage == index) 1f / 3 else 0f
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(2.dp)
+                            .background(
+                                if (pagerState.currentPage == index)
+                                    MaterialTheme.colorScheme.primary
+                                else
+                                    Color.Transparent
+                            )
+                    )
+                }
+            }
+        }
+
+        // 横向翻页内容
+        HorizontalPager(
+            state = pagerState,
+            modifier = Modifier.fillMaxWidth(),
+            beyondBoundsPageCount = 0
+        ) { page ->
+            when (page) {
+                // 顺序：热门歌曲(0) / 每日推荐(1) / 推荐歌单(2)
+                // 左滑←：0→1→2→0
+                0 -> RecommendPage(
+                    playlists = emptyList(),
+                    hotSongs = hotSongs,
+                    onPlaylistClick = onPlaylistClick,
+                    onPlaylistPlay = onPlaylistPlay,
+                    onSongClick = onSongClick,
+                    onSongPlay = onSongPlay,
+                    pageType = PageType.HOT_SONG
+                )
+                1 -> RecommendPage(
+                    playlists = playlists.take(6),
+                    hotSongs = emptyList(),
+                    onPlaylistClick = onPlaylistClick,
+                    onPlaylistPlay = onPlaylistPlay,
+                    onSongClick = onSongClick,
+                    onSongPlay = onSongPlay,
+                    pageType = PageType.DAILY
+                )
+                2 -> RecommendPage(
+                    playlists = playlists.drop(6),
+                    hotSongs = emptyList(),
+                    onPlaylistClick = onPlaylistClick,
+                    onPlaylistPlay = onPlaylistPlay,
+                    onSongClick = onSongClick,
+                    onSongPlay = onSongPlay,
+                    pageType = PageType.PLAYLIST
+                )
+            }
+        }
+    }
+}
+
+enum class PageType { DAILY, PLAYLIST, HOT_SONG }
+
+/** 单页推荐内容（复用现有 PlaylistCard 样式） */
+@Composable
+private fun RecommendPage(
+    playlists: List<Playlist>,
+    hotSongs: List<Song>,
+    onPlaylistClick: (Long) -> Unit,
+    onPlaylistPlay: (Long) -> Unit,
+    onSongClick: (Song, List<Song>) -> Unit,
+    onSongPlay: (Song) -> Unit,
+    pageType: PageType
+) {
+    val screenWidth = LocalConfiguration.current.screenWidthDp
+    val cardWidth = (screenWidth - 32 - 16) / 3
+    // 估算每行卡片高度（图片+文字），用于约束 LazyColumn 高度避免无限约束
+    val cardHeight = (cardWidth + 48).dp
+    val rowHeight = cardHeight + 12.dp
+
+    LazyColumn(
+        modifier = Modifier
+            .fillMaxWidth()
+            .heightIn(max = 700.dp)
+            .padding(horizontal = 16.dp, vertical = 8.dp)
+    ) {
+        when (pageType) {
+            PageType.HOT_SONG -> {
+                // 热门歌曲：3列网格，卡片用 SongCard
+                val rows = hotSongs.chunked(3)
+                rows.forEachIndexed { rowIndex, rowItems ->
+                    item {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            rowItems.forEach { song ->
+                                SongCard(
+                                    song = song,
+                                    allSongs = hotSongs,
+                                    onClick = { onSongClick(song, hotSongs) },
+                                    onPlayClick = { onSongPlay(song) },
+                                    cardWidth = cardWidth
+                                )
+                            }
+                            repeat(3 - rowItems.size) {
+                                Spacer(Modifier.weight(1f))
+                            }
+                        }
+                        if (rowIndex < rows.lastIndex) {
+                            Spacer(Modifier.height(12.dp))
+                        }
+                    }
+                }
+            }
+            else -> {
+                // 每日推荐 / 推荐歌单：3列网格，PlaylistCard
+                val rows = playlists.chunked(3)
+                rows.forEachIndexed { rowIndex, rowItems ->
+                    item {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            rowItems.forEach { playlist ->
+                                PlaylistCard(
+                                    playlist,
+                                    { onPlaylistClick(playlist.id) },
+                                    { onPlaylistPlay(playlist.id) },
+                                    cardWidth,
+                                    cardWidth
+                                )
+                            }
+                            repeat(3 - rowItems.size) {
+                                Spacer(Modifier.weight(1f))
+                            }
+                        }
+                        if (rowIndex < rows.lastIndex) {
+                            Spacer(Modifier.height(12.dp))
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+/** 歌曲卡片 — 样式与 PlaylistCard 完全一致，仅数据源为 Song */
+@Composable
+fun SongCard(
+    song: Song,
+    allSongs: List<Song>,
+    onClick: () -> Unit,
+    onPlayClick: () -> Unit,
+    cardWidth: Int
+) {
+    Column(
+        modifier = Modifier
+            .width(cardWidth.dp)
+            .clickable(onClick = onClick)
+    ) {
+        Box(
+            modifier = Modifier.size(cardWidth.dp)
+        ) {
+            val iconDpWidth: Dp = cardWidth.dp
+            val btnSizeDp: Dp = iconDpWidth * 0.30f
+            val icSizeDp: Dp = btnSizeDp * 0.80f
+            val xOffset = (iconDpWidth.value * 0.80f - btnSizeDp.value / 2).dp
+            val yOffset = xOffset
+
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .clip(RoundedCornerShape(8.dp))
+            ) {
+                AsyncImage(
+                    model = song.pic120,
+                    contentDescription = song.name,
+                    modifier = Modifier.fillMaxSize(),
+                    contentScale = ContentScale.Crop
+                )
+            }
+            Box(
+                modifier = Modifier
+                    .align(Alignment.TopStart)
+                    .offset(x = xOffset, y = yOffset)
+                    .size(btnSizeDp)
+                    .background(Color.White.copy(alpha = 0.5f), RoundedCornerShape(btnSizeDp / 2))
+                    .clickable(onClick = onPlayClick),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(
+                    imageVector = Icons.Filled.PlayArrow,
+                    contentDescription = "播放",
+                    tint = Color.White,
+                    modifier = Modifier.size(icSizeDp),
+                )
+            }
+        }
+        Text(
+            text = song.name,
+            style = MaterialTheme.typography.bodyMedium,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.padding(top = 4.dp)
+        )
+    }
 }

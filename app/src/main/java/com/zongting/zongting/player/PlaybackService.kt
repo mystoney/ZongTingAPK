@@ -73,6 +73,14 @@ object PlayerManager {
     var onPlayingChanged: ((Boolean) -> Unit)? = null
     var onPositionChanged: ((Long, Long) -> Unit)? = null
     var onSongChanged: ((Song?, Int) -> Unit)? = null
+    /** 歌曲播放超过10秒后触发，用于"最近播放"延迟添加 */
+    var onSongBecameRecent: ((Song) -> Unit)? = null
+
+    // 最近播放10秒计时器
+    private var recentTimerJob: Job? = null
+    private var recentTimerSong: Song? = null
+    private var recentTimerStartMs: Long = 0L
+    private var recentTimerFired: Boolean = false
 
     // URL 获取回调（由 MainViewModel 设置）
     private var urlFetcher: (suspend (Song) -> String?)? = null
@@ -106,6 +114,33 @@ object PlayerManager {
         player.addListener(object : Player.Listener {
             override fun onIsPlayingChanged(playing: Boolean) {
                 onPlayingChanged?.invoke(playing)
+                // 管理最近播放10秒计时器
+                if (playing) {
+                    // 开始播放：启动/恢复计时器
+                    val song = currentSong
+                    if (song != null && !recentTimerFired) {
+                        if (recentTimerSong?.rid != song.rid) {
+                            // 换了新歌，重置计时器
+                            recentTimerJob?.cancel()
+                            recentTimerSong = song
+                            recentTimerStartMs = System.currentTimeMillis()
+                            recentTimerFired = false
+                            recentTimerJob = scope.launch {
+                                delay(10_000L)  // 等待10秒
+                                val current = currentSong
+                                if (current?.rid == song.rid && !recentTimerFired) {
+                                    recentTimerFired = true
+                                    onSongBecameRecent?.invoke(song)
+                                }
+                            }
+                        }
+                        // else: 同一首歌恢复播放，计时器继续
+                    }
+                } else {
+                    // 暂停：取消计时器（暂停期间不计时）
+                    recentTimerJob?.cancel()
+                    recentTimerJob = null
+                }
             }
 
             override fun onPlaybackStateChanged(state: Int) {
@@ -113,6 +148,18 @@ object PlayerManager {
                     val pos = player?.currentPosition ?: 0L
                     val dur = player?.duration ?: 0L
                     if (dur > 0) onPositionChanged?.invoke(pos, dur)
+                } else if (state == Player.STATE_ENDED) {
+                    Log.d("ZongTing", "onPlaybackStateChanged: STATE_ENDED, triggering playNext")
+                    val p = player ?: return
+                    if (p.hasNextMediaItem()) {
+                        p.playWhenReady = false
+                        p.seekToNextMediaItem()
+                    } else {
+                        Log.d("ZongTing", "  -> no next item, looping to index 0")
+                        p.seekTo(0, 0)
+                        p.playWhenReady = true
+                        p.play()
+                    }
                 }
             }
 
@@ -120,7 +167,6 @@ object PlayerManager {
             override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
                 val p = player ?: return
                 val newIndex = p.currentMediaItemIndex
-                // ★ 修复：playlist 为空时直接跳过，避免 getMediaItemAt crash
                 if (p.mediaItemCount == 0 || newIndex < 0) {
                     Log.d("ZongTing", "onMediaItemTransition: playlist empty or invalid index, skipping")
                     return
@@ -131,39 +177,40 @@ object PlayerManager {
                     return
                 }
                 val newSong = currentPlaylist[newIndex]
-                // 跳过同一首（playlist 重设时也会触发）
                 if (newSong.rid == currentPlaylist.getOrNull(currentIndex)?.rid) {
                     Log.d("ZongTing", "  -> same song, skipping")
                     return
                 }
 
+                // ★ 新歌切换：重置最近播放计时器
+                recentTimerJob?.cancel()
+                recentTimerJob = null
+                recentTimerSong = newSong
+                recentTimerStartMs = System.currentTimeMillis()
+                recentTimerFired = false
+
                 currentIndex = newIndex
                 onSongChanged?.invoke(newSong, newIndex)
                 Log.d("ZongTing", "  -> switching to song: ${newSong.name}, rid=${newSong.rid}")
-                // 如果 URL 已缓存，直接更新 MediaItem 的 URI
                 val cachedUrl = urlCache[newSong.rid]
                 val currentUri = p.getMediaItemAt(newIndex).localConfiguration?.uri?.toString() ?: ""
                 if (!cachedUrl.isNullOrEmpty() && currentUri.isNotEmpty() && currentUri != cachedUrl) {
-                    // ★ 修复：ExoPlayer 缓冲了空 URI 的 MediaItem，先暂停再 replace，避免播放失败
                     Log.d("ZongTing", "  -> URL cached, replacing media item (currentUri was empty=$currentUri)")
-                    p.pause()
                     val updatedItem = p.getMediaItemAt(newIndex).buildUpon().setUri(cachedUrl).build()
                     p.replaceMediaItem(newIndex, updatedItem)
+                    p.playWhenReady = true
                     p.play()
                 } else if (!cachedUrl.isNullOrEmpty() && currentUri.isNotEmpty()) {
                     Log.d("ZongTing", "  -> URL cached and URI already valid, skipping replace")
                 } else if (!cachedUrl.isNullOrEmpty() && currentUri.isEmpty()) {
-                    // URI 为空但有缓存：直接 replace + play
                     Log.d("ZongTing", "  -> URL cached but URI empty, replacing media item")
-                    p.pause()
                     val updatedItem = p.getMediaItemAt(newIndex).buildUpon().setUri(cachedUrl).build()
                     p.replaceMediaItem(newIndex, updatedItem)
+                    p.playWhenReady = true
                     p.play()
                 } else if (isFetchingUrlForIndex != newIndex) {
-                    // URL 未缓存，暂停，异步获取，获取后更新并继续
                     isFetchingUrlForIndex = newIndex
-                    Log.d("ZongTing", "  -> URL not cached, fetching async, player state before pause: ${p.playbackState}")
-                    p.pause()
+                    Log.d("ZongTing", "  -> URL not cached, fetching async")
                     scope.launch {
                         val url = urlFetcher?.invoke(newSong)
                         if (url != null) {
@@ -171,6 +218,7 @@ object PlayerManager {
                             urlCache[newSong.rid] = url
                             val updatedItem = p.getMediaItemAt(newIndex).buildUpon().setUri(url).build()
                             p.replaceMediaItem(newIndex, updatedItem)
+                            p.playWhenReady = true
                             p.play()
                         } else {
                             Log.d("ZongTing", "  -> URL fetch failed")
@@ -227,33 +275,31 @@ object PlayerManager {
                     p.play()
                 } else {
                     // 不在列表中或列表不一致：重建整个列表
-                    p.clearMediaItems()
-                    // ★ 修复：预加载所有歌曲 URL，避免 ExoPlayer 缓冲区用空 URI 导致 FileNotFoundException
-                    val urls = mutableMapOf<Int, String>()
-                    urls[idx] = playUrl  // 当前歌曲 URL 一定有效
-                    // 补充已缓存的 URL，未缓存的先填空，由后台异步填充
-                    playlist.forEachIndexed { i, s ->
-                        if (i != idx) {
-                            urls[i] = urlCache[s.rid] ?: ""
-                        }
-                    }
-                    playlist.forEachIndexed { i, s ->
-                        p.addMediaItem(buildMediaItem(s, urls[i] ?: ""))
-                    }
+                    // ★ 优化：先预取所有歌曲 URL，全部就绪后再 prepare，避免 ExoPlayer 拿空 URI 崩溃
                     p.playWhenReady = false
-                    p.prepare()
-                    p.seekTo(idx, 0)
-                    currentIndex = idx
-                    p.playWhenReady = true
-                    p.play()
-
-                    // 预取后续几首歌的 URL（后台更新缓存，供下次使用）
-                    playlist.forEachIndexed { i, s ->
-                        if (i != idx && !urlCache.containsKey(s.rid)) {
-                            scope.launch {
-                                val u = urlFetcher?.invoke(s)
-                                if (u != null) urlCache[s.rid] = u
+                    scope.launch {
+                        val fetchedUrls = playlist.mapIndexed { i, s ->
+                            async {
+                                if (urlCache.containsKey(s.rid)) {
+                                    urlCache[s.rid]!!
+                                } else {
+                                    urlFetcher?.invoke(s)?.also { urlCache[s.rid] = it }
+                                }
                             }
+                        }.awaitAll().mapIndexed { i, url -> i to (url ?: "") }
+                        val urlMap = fetchedUrls.toMap().toMutableMap()
+                        urlMap[idx] = playUrl  // 当前歌曲一定用传入的有效 URL
+
+                        withContext(Dispatchers.Main) {
+                            p.clearMediaItems()
+                            playlist.forEachIndexed { i, s ->
+                                p.addMediaItem(buildMediaItem(s, urlMap[i] ?: ""))
+                            }
+                            p.prepare()
+                            p.seekTo(idx, 0)
+                            currentIndex = idx
+                            p.playWhenReady = true
+                            p.play()
                         }
                     }
                 }
@@ -302,7 +348,15 @@ object PlayerManager {
     fun pause() { player?.pause() }
 
     fun togglePlayPause() {
-        player?.let { if (it.isPlaying) it.pause() else it.play() }
+        player?.let {
+            if (it.isPlaying) {
+                it.pause()
+            } else {
+                // ★ 修复：ENDED 状态后 playWhenReady 可能为 false，显式设为 true 再播放
+                it.playWhenReady = true
+                it.play()
+            }
+        }
     }
 
     fun seekTo(position: Long) { player?.seekTo(position) }

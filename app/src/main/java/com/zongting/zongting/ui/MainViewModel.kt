@@ -7,12 +7,15 @@ import com.zongting.zongting.data.model.Song
 import com.zongting.zongting.data.model.UserPlaylist
 import com.zongting.zongting.data.repository.FavoriteRepository
 import com.zongting.zongting.data.repository.MusicRepository
+import com.zongting.zongting.data.repository.PlaybackStateRepository
 import com.zongting.zongting.data.repository.PlaylistRepository
 import com.zongting.zongting.player.PlayerManager
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
@@ -22,7 +25,8 @@ import javax.inject.Inject
 class MainViewModel @Inject constructor(
     private val repository: MusicRepository,
     private val favoriteRepository: FavoriteRepository,
-    private val playlistRepository: PlaylistRepository
+    private val playlistRepository: PlaylistRepository,
+    private val playbackStateRepository: PlaybackStateRepository
 ) : ViewModel() {
 
     private val _currentSong = MutableStateFlow<Song?>(null)
@@ -63,7 +67,7 @@ class MainViewModel @Inject constructor(
     val recentlyPlayed: StateFlow<List<Song>> = _recentlyPlayed.asStateFlow()
 
     // 用户自定义歌单
-    val userPlaylists: Flow<List<UserPlaylist>> = playlistRepository.playlists
+    val userPlaylists: StateFlow<List<UserPlaylist>> = playlistRepository.playlists.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
     init {
         // 设置 PlayerManager 的 URL 获取器（用于切歌时动态获取播放 URL）
@@ -76,6 +80,38 @@ class MainViewModel @Inject constructor(
             _favoriteSongList.value = songs
             _favoriteSongs.value = songs.map { it.rid }.toSet()
         }
+        // 恢复上次播放状态
+        viewModelScope.launch {
+            val state = playbackStateRepository.playbackStateFlow.first()
+            if (state.playlist.isNotEmpty()) {
+                _currentPlaylist.value = state.playlist
+                _currentIndex.value = state.currentIndex
+                _currentSong.value = state.playlist.getOrNull(state.currentIndex)
+                // 同步到 PlayerManager，使下一首/上一首按钮在重启后可用
+                PlayerManager.setPlaylist(state.playlist, state.currentIndex)
+                // 自动恢复播放
+                state.playlist.getOrNull(state.currentIndex)?.let { song ->
+                    val url = getPlayUrl(song.rid, song.source)
+                    if (url != null) {
+                        PlayerManager.playSong(song, url, state.playlist)
+                    }
+                }
+            }
+        }
+
+        // 注册最近播放计时器回调：歌曲播放超过10秒后加入最近播放
+        PlayerManager.onSongBecameRecent = { song ->
+            addToRecentlyPlayed(song)
+        }
+    }
+
+    /** 将歌曲加入最近播放（最大100首，去重，由 PlayerManager 10秒计时器调用） */
+    private fun addToRecentlyPlayed(song: Song) {
+        val recent = _recentlyPlayed.value.toMutableList()
+        recent.removeAll { it.rid == song.rid }
+        recent.add(0, song)
+        if (recent.size > 100) recent.removeAt(recent.lastIndex)
+        _recentlyPlayed.value = recent
     }
 
     fun isFavorite(rid: Long): Boolean = _favoriteSongs.value.contains(rid)
@@ -99,8 +135,20 @@ class MainViewModel @Inject constructor(
         viewModelScope.launch { playlistRepository.deletePlaylist(id) }
     }
 
-    fun addSongToPlaylist(playlistId: String, song: Song) {
-        viewModelScope.launch { playlistRepository.addSongToPlaylist(playlistId, song) }
+    fun addSongToPlaylist(playlistId: String, song: Song, onDone: () -> Unit) {
+        viewModelScope.launch { playlistRepository.addSongToPlaylist(playlistId, song); onDone() }
+    }
+
+    fun addSongsToPlaylist(playlistId: String, songs: List<Song>, onDone: () -> Unit) {
+        viewModelScope.launch { playlistRepository.addSongsToPlaylist(playlistId, songs); onDone() }
+    }
+
+    fun createPlaylistAndAddSongs(name: String, songs: List<Song>, onDone: (String) -> Unit) {
+        viewModelScope.launch {
+            val playlist = playlistRepository.createPlaylist(name)
+            playlistRepository.addSongsToPlaylist(playlist.id, songs)
+            onDone(playlist.id)
+        }
     }
 
     fun removeSongFromPlaylist(playlistId: String, songRid: Long) {
@@ -156,12 +204,7 @@ class MainViewModel @Inject constructor(
         _currentIndex.value = targetIndex
         _isPlaying.value = true
 
-        // 添加到最近播放（最多保留50首，去重）
-        val recent = _recentlyPlayed.value.toMutableList()
-        recent.removeAll { it.rid == song.rid }
-        recent.add(0, song)
-        if (recent.size > 50) recent.removeAt(recent.lastIndex)
-        _recentlyPlayed.value = recent
+        // 最近播放由 PlayerManager 的10秒计时器在播放超过10秒后自动添加
 
         // 异步获取播放地址并开始播放
         val seq = ++_playUrlFetchSeq  // 递增序列号
@@ -185,11 +228,7 @@ class MainViewModel @Inject constructor(
         val newPlaylist = _currentPlaylist.value + song
         _currentPlaylist.value = newPlaylist
         _currentSong.value = song
-        val recent = _recentlyPlayed.value.toMutableList()
-        recent.removeAll { it.rid == song.rid }
-        recent.add(0, song)
-        if (recent.size > 50) recent.removeAt(recent.lastIndex)
-        _recentlyPlayed.value = recent
+        // 最近播放由 PlayerManager 的10秒计时器在播放超过10秒后自动添加
         val seq = ++_playUrlFetchSeq
         viewModelScope.launch {
             _playbackState.value = PlaybackState(isLoading = true)
@@ -197,6 +236,69 @@ class MainViewModel @Inject constructor(
             if (seq == _playUrlFetchSeq && url != null) {
                 _playbackState.value = PlaybackState(playUrl = url, isLoading = false)
                 PlayerManager.appendToQueueAndPlay(song, url)
+            } else if (seq == _playUrlFetchSeq) {
+                _playbackState.value = PlaybackState(error = "无法获取播放地址", isLoading = false)
+            }
+        }
+    }
+
+    /** 只将歌曲添加到队列末尾，不自动播放 */
+    fun addSongsToQueue(songs: List<Song>) {
+        val newPlaylist = (_currentPlaylist.value + songs).take(50)
+        _currentPlaylist.value = newPlaylist
+    }
+
+    /**
+     * 将歌曲插入到当前播放歌曲的上一首位置，并立即播放该歌曲
+     */
+    fun playSongPrev(song: Song) {
+        val currentIdx = _currentIndex.value
+        val existing = _currentPlaylist.value.toMutableList()
+        // 去重：已存在的歌曲先移除
+        existing.removeAll { it.rid == song.rid }
+        // 插入到当前歌曲位置（会把它及之后的所有歌曲往后推）
+        val insertPos = currentIdx.coerceAtMost(existing.size)
+        existing.add(insertPos, song)
+        _currentPlaylist.value = existing.take(50)
+        _currentIndex.value = insertPos
+        _currentSong.value = song
+        _isPlaying.value = true
+        // 最近播放由 PlayerManager 的10秒计时器在播放超过10秒后自动添加
+        val seq = ++_playUrlFetchSeq
+        viewModelScope.launch {
+            _playbackState.value = PlaybackState(isLoading = true)
+            val url = getPlayUrl(song.rid, song.source)
+            if (seq == _playUrlFetchSeq && url != null) {
+                _playbackState.value = PlaybackState(playUrl = url, isLoading = false)
+                PlayerManager.playSong(song, url, existing.take(50))
+            } else if (seq == _playUrlFetchSeq) {
+                _playbackState.value = PlaybackState(error = "无法获取播放地址", isLoading = false)
+            }
+        }
+    }
+
+    /**
+     * 将歌曲插入到当前播放歌曲的下一首位置，并立即播放该歌曲
+     */
+    fun playSongNext(song: Song) {
+        val currentIdx = _currentIndex.value
+        val existing = _currentPlaylist.value.toMutableList()
+        // 去重：已存在的歌曲先移除
+        existing.removeAll { it.rid == song.rid }
+        val insertPos = (currentIdx + 1).coerceAtMost(existing.size)
+        existing.add(insertPos, song)
+        _currentPlaylist.value = existing.take(50)
+        _currentIndex.value = insertPos
+        _currentSong.value = song
+        _isPlaying.value = true
+        // 最近播放由 PlayerManager 的10秒计时器在播放超过10秒后自动添加
+        val seq = ++_playUrlFetchSeq
+        viewModelScope.launch {
+            _playbackState.value = PlaybackState(isLoading = true)
+            val url = getPlayUrl(song.rid, song.source)
+            if (seq == _playUrlFetchSeq && url != null) {
+                _playbackState.value = PlaybackState(playUrl = url, isLoading = false)
+                PlayerManager.playSong(song, url, existing.take(50))
             } else if (seq == _playUrlFetchSeq) {
                 _playbackState.value = PlaybackState(error = "无法获取播放地址", isLoading = false)
             }
@@ -251,7 +353,10 @@ class MainViewModel @Inject constructor(
             val result = repository.getPlaylistDetail(playlistId)
             result.fold(
                 onSuccess = { playlistData ->
-                    val songs = playlistData.musicList.map { it.copy(source = "kuwo", playable = true) }
+                    // 保持歌单歌曲原有 source（酷我歌单为 "kuwo"，网易云歌单为 "netease"）
+                    val songs = playlistData.musicList.map {
+                        it.copy(source = it.source ?: "kuwo", playable = true)
+                    }
                     if (songs.isNotEmpty()) {
                         playSong(songs.first(), songs, replace = true)
                     } else {
@@ -266,11 +371,47 @@ class MainViewModel @Inject constructor(
     }
 
     /**
-     * 仅在播放列表为空时播放歌单，否则不操作
+     * 点击歌单时：队列为空则替换播放，否则插入到当前歌曲下一首并立即播放
      */
     fun playPlaylistIfEmpty(playlistId: Long) {
         if (_currentPlaylist.value.isEmpty()) {
             playPlaylist(playlistId)
+        } else {
+            viewModelScope.launch {
+                val result = repository.getPlaylistDetail(playlistId)
+                result.fold(
+                    onSuccess = { playlistData ->
+                        val songs = playlistData.musicList.map {
+                            it.copy(source = it.source ?: "kuwo", playable = true)
+                        }
+                        if (songs.isNotEmpty()) {
+                            // 插入到当前歌曲的下一首位置，然后立即播放第一首
+                            val currentIdx = _currentIndex.value
+                            val currentSong = _currentSong.value
+                            val existing = _currentPlaylist.value.toMutableList()
+                            // 去除即将插入歌曲中已在队列里的（避免重复）
+                            val existingRids = existing.map { it.rid }.toSet()
+                            val newSongs = songs.filter { it.rid !in existingRids }
+                            val insertPos = (currentIdx + 1).coerceAtMost(existing.size)
+                            existing.addAll(insertPos, newSongs)
+                            _currentPlaylist.value = existing.take(50)
+                            _currentIndex.value = insertPos
+                            _currentSong.value = newSongs.first()
+                            _isPlaying.value = true
+                            val seq = ++_playUrlFetchSeq
+                            _playbackState.value = PlaybackState(isLoading = true)
+                            val url = getPlayUrl(newSongs.first().rid, newSongs.first().source)
+                            if (seq == _playUrlFetchSeq && url != null) {
+                                _playbackState.value = PlaybackState(playUrl = url, isLoading = false)
+                                PlayerManager.playSong(newSongs.first(), url, existing.take(50))
+                            } else if (seq == _playUrlFetchSeq) {
+                                _playbackState.value = PlaybackState(error = "无法获取播放地址", isLoading = false)
+                            }
+                        }
+                    },
+                    onFailure = { /* 静默失败 */ }
+                )
+            }
         }
     }
 
@@ -373,9 +514,12 @@ class MainViewModel @Inject constructor(
     }
 
     fun updateProgress(position: Long, duration: Long) {
+        // ExoPlayer.duration 在媒体未完全加载时可能为0，用歌曲自身时长兜底
+        // 注意：Song.duration 来自 Kuwo API，单位是秒；而 PlaybackState.duration 是毫秒
+        val effectiveDuration = if (duration > 0) duration else ((_currentSong.value?.duration ?: 0) * 1000L)
         _playbackState.value = _playbackState.value.copy(
             position = position,
-            duration = duration
+            duration = effectiveDuration
         )
     }
 
@@ -415,6 +559,13 @@ class MainViewModel @Inject constructor(
             (seconds * 1000).toLong()
         } catch (e: Exception) {
             null
+        }
+    }
+
+    /** 保存当前播放状态到磁盘（供 MainActivity onPause 时调用） */
+    fun savePlaybackState() {
+        viewModelScope.launch {
+            playbackStateRepository.savePlaybackState(_currentPlaylist.value, _currentIndex.value)
         }
     }
 }

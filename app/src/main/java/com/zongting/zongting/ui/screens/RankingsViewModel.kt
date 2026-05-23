@@ -34,7 +34,7 @@ class RankingsViewModel @Inject constructor(
                     )
                     // 默认加载第一个榜单
                     categories.firstOrNull()?.list?.firstOrNull()?.let {
-                        loadBangSongs(it.id)
+                        loadBangSongs(it)
                     }
                 }
                 .onFailure { error ->
@@ -46,23 +46,20 @@ class RankingsViewModel @Inject constructor(
         }
     }
 
-    fun loadBangSongs(bangId: String) {
+    fun loadBangSongs(bang: Bang) {
+        val sourceId = bang.sourceId.ifEmpty { bang.id }
         viewModelScope.launch {
             _uiState.value = _uiState.value.copy(
                 isLoading = true,
-                selectedBangId = bangId
+                selectedBangId = bang.id
             )
 
             val source = _uiState.value.source
-            repository.getBangMusicList(bangId, source)
+            repository.getBangMusicList(bang.id, source, sourceId = sourceId)
                 .onSuccess { songs ->
-                    val selectedBang = _uiState.value.bangCategories
-                        .flatMap { it.list }
-                        .find { it.id == bangId }
-
                     _uiState.value = _uiState.value.copy(
                         bangSongs = songs,
-                        selectedBang = selectedBang,
+                        selectedBang = bang,
                         isLoading = false
                     )
                 }
@@ -76,8 +73,18 @@ class RankingsViewModel @Inject constructor(
         }
     }
 
+    /** 直接选中指定榜单并加载歌曲 */
+    fun selectBang(bangId: String) {
+        val selectedBang = _uiState.value.bangCategories
+            .flatMap { it.list }
+            .find { it.id == bangId } ?: return
+        _uiState.value = _uiState.value.copy(selectedBang = selectedBang)
+        loadBangSongs(selectedBang)
+    }
+
     fun setSource(source: String) {
-        _uiState.value = _uiState.value.copy(source = source, filters = emptySet())
+        val newFilters = if (source == "netease") setOf("free") else emptySet()
+        _uiState.value = _uiState.value.copy(source = source, filters = newFilters)
         loadRankings()
     }
 
@@ -95,8 +102,8 @@ data class RankingsUiState(
     val selectedBang: Bang? = null,
     val bangSongs: List<Song> = emptyList(),
     val error: String? = null,
-    val source: String = "netease", // "kuwo" 或 "netease"
-    val filters: Set<String> = emptySet() // "free", "vip", "lock"
+    val source: String = "kuwo", // "kuwo" 或 "netease"
+    val filters: Set<String> = emptySet() // "free", "vip", "single"
 ) {
     val displayedSongs: List<Song>
         get() = if (filters.isEmpty()) bangSongs
@@ -104,7 +111,7 @@ data class RankingsUiState(
             when {
                 filters.contains("free") && song.fee == 0 -> true
                 filters.contains("vip") && song.fee == 1 -> true
-                filters.contains("lock") && song.fee == 8 -> true
+                filters.contains("single") && song.fee == 8 -> true
                 else -> false
             }
         }

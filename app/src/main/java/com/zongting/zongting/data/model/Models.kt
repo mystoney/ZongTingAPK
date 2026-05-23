@@ -62,6 +62,7 @@ data class Song(
     @SerializedName("songTimeMinutes") val songTimeMinutes: String,
     @SerializedName("pic") val pic: String,
     @SerializedName("pic120") val pic120: String,
+    @SerializedName("coverUrl") val coverUrl: String? = null,  // 搜索结果封面URL（处理过的）
     @SerializedName("releaseDate") val releaseDate: String,
     @SerializedName("hasmv") val hasmv: Int,
     @SerializedName("hasLossless") val hasLossless: Boolean,
@@ -71,6 +72,17 @@ data class Song(
     @SerializedName("fee") val fee: Int = 0  // 0: 免费, 1: VIP, 4: 包月, 8: 需要购买
 ) {
     val id: Long get() = rid
+    // 兼容没有 songTimeMinutes 的情况（某些 Kuwo API 返回空）
+    val displayDuration: String get() {
+        val t = songTimeMinutes
+        if (t.isNotBlank() && t != "0:00") return t
+        if (duration > 0) {
+            val m = duration / 60000
+            val s = (duration % 60000) / 1000
+            return String.format("%d:%02d", m, s)
+        }
+        return "0:00"
+    }
     // 是否为 VIP 歌曲（可播放但需要VIP）
     val isVip: Boolean get() = !playable && fee == 1
     // 是否为需购买的歌曲
@@ -213,7 +225,8 @@ data class Bang(
     @SerializedName("pic") val pic: String,
     @SerializedName("intro") val intro: String,
     @SerializedName("pub") val pub: String,
-    @SerializedName("source") val source: String
+    @SerializedName("source") val source: String,
+    @SerializedName("sourceid") val sourceId: String = ""
 )
 
 data class BangMusicListResponse(
@@ -223,7 +236,7 @@ data class BangMusicListResponse(
 )
 
 data class BangMusicData(
-    @SerializedName("total") val total: Int,
+    @SerializedName("num") val num: String,
     @SerializedName("musicList") val musicList: List<Song>
 )
 

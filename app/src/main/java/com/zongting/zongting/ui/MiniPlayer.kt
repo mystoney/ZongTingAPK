@@ -39,7 +39,7 @@ fun MiniPlayer(
         modifier = modifier
             .fillMaxWidth()
             .clickable(onClick = onClick),
-        color = Color(0xFF1B5E20),
+        color = Color(0xE60B1E10),
         tonalElevation = 4.dp
     ) {
         Row(

@@ -140,6 +140,30 @@ class PlaylistRepository @Inject constructor(
         }
     }
 
+    /** 向歌单添加多首歌曲 */
+    suspend fun addSongsToPlaylist(playlistId: String, songs: List<Song>) {
+        context.playlistDataStore.edit { prefs ->
+            val json = prefs[Keys.PLAYLISTS] ?: "[]"
+            val type = object : TypeToken<MutableList<UserPlaylist>>() {}.type
+            val list: MutableList<UserPlaylist> = try {
+                gson.fromJson(json, type) ?: mutableListOf()
+            } catch (e: Exception) {
+                mutableListOf()
+            }
+            val idx = list.indexOfFirst { it.id == playlistId }
+            if (idx >= 0) {
+                val current = list[idx].songs.toMutableList()
+                songs.forEach { song ->
+                    if (current.none { it.rid == song.rid }) {
+                        current.add(0, song)
+                    }
+                }
+                list[idx] = list[idx].copy(songs = current)
+            }
+            prefs[Keys.PLAYLISTS] = gson.toJson(list)
+        }
+    }
+
     /** 从歌单移除歌曲 */
     suspend fun removeSongFromPlaylist(playlistId: String, songRid: Long) {
         context.playlistDataStore.edit { prefs ->

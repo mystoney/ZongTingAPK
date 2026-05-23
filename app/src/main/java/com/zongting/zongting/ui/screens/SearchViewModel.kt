@@ -112,13 +112,20 @@ data class SearchUiState(
     val currentKeyword: String = "" // 记录当前搜索关键字
 ) {
     val displayedResults: List<Song>
-        get() = if (filters.isEmpty()) searchResults
-        else searchResults.filter { song ->
-            when {
-                filters.contains("free") && song.fee == 0 -> true
-                filters.contains("vip") && song.fee == 1 -> true
-                filters.contains("lock") && song.fee == 8 -> true
-                else -> false
+        get() {
+            val base = if (filters.isEmpty()) {
+                // 默认：过滤单曲购买(fee=4)和需购买(fee=8)，最多显示100条
+                searchResults.filter { it.fee != 4 && it.fee != 8 }.take(100)
+            } else {
+                searchResults.filter { song ->
+                    when {
+                        filters.contains("free") && song.fee == 0 -> true
+                        filters.contains("vip") && song.fee == 1 -> true
+                        filters.contains("lock") && song.fee == 8 -> true
+                        else -> false
+                    }
+                }
             }
+            return base
         }
 }

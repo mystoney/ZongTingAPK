@@ -3,8 +3,8 @@ package com.zongting.zongting.ui.screens
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.zongting.zongting.data.model.Banner
+import com.zongting.zongting.data.model.Bang
 import com.zongting.zongting.data.model.Playlist
-import com.zongting.zongting.data.model.Song
 import com.zongting.zongting.data.repository.MusicRepository
 import android.util.Log
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -12,6 +12,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import com.zongting.zongting.data.model.Song
 import javax.inject.Inject
 
 @HiltViewModel
@@ -61,11 +62,15 @@ class HomeViewModel @Inject constructor(
             // 并行加载数据
             val bannersJob = launch { loadBanners() }
             val playlistsJob = launch { loadPlaylists() }
-            val hotSongsJob = launch { loadHotSongs() }
+            val hotBangsJob = launch {
+                loadHotBangs()
+                // 榜单加载完成后立即加载热门歌曲
+                loadHotSongs()
+            }
 
             bannersJob.join()
             playlistsJob.join()
-            hotSongsJob.join()
+            hotBangsJob.join()
 
             _uiState.value = _uiState.value.copy(isLoading = false)
             Log.d("HomeDebug", "loadHomeData: DONE isLoading=false, banners=${_uiState.value.banners.size}, playlists=${_uiState.value.playlists.size}")
@@ -98,6 +103,12 @@ class HomeViewModel @Inject constructor(
             .onSuccess { playlists ->
                 Log.d("HomeDebug", "loadPlaylists: SUCCESS playlists.size=${playlists.size}")
                 _uiState.value = _uiState.value.copy(playlists = playlists)
+                // 后台预取前6个歌单详情，用户点击时直接命中缓存
+                viewModelScope.launch {
+                    playlists.take(6).forEach { playlist ->
+                        repository.prefetchPlaylistDetail(playlist.id)
+                    }
+                }
             }
             .onFailure { error ->
                 Log.d("HomeDebug", "loadPlaylists: FAIL ${error.message}")
@@ -105,14 +116,31 @@ class HomeViewModel @Inject constructor(
             }
     }
 
+    private suspend fun loadHotBangs() {
+        Log.d("HomeDebug", "loadHotBangs: START")
+        repository.getBangMenu()
+            .onSuccess { categories ->
+                // 取第一个分类（官方榜）的前8个
+                val bangs = categories.firstOrNull()?.list?.take(8) ?: emptyList()
+                Log.d("HomeDebug", "loadHotBangs: SUCCESS bangs.size=${bangs.size}")
+                _uiState.value = _uiState.value.copy(hotBangs = bangs)
+            }
+            .onFailure { error ->
+                Log.d("HomeDebug", "loadHotBangs: FAIL ${error.message}")
+            }
+    }
+
     private suspend fun loadHotSongs() {
-        // 获取网易云音乐热歌榜作为热门歌曲
-        repository.getBangMusicList(bangId = "3778678") // 3778678 是网易云热歌榜
+        // 从"热歌榜"（第一个 hotBang）加载歌曲作为"热门歌曲"
+        val firstBang = _uiState.value.hotBangs.firstOrNull() ?: return
+        Log.d("HomeDebug", "loadHotSongs: START bangId=${firstBang.id}")
+        repository.getBangMusicList(firstBang.id, pn = 1, rn = 30, sourceId = firstBang.sourceId.ifEmpty { firstBang.id })
             .onSuccess { songs ->
+                Log.d("HomeDebug", "loadHotSongs: SUCCESS songs.size=${songs.size}")
                 _uiState.value = _uiState.value.copy(hotSongs = songs)
             }
-            .onFailure {
-                // 热门歌曲失败不影响主功能
+            .onFailure { error ->
+                Log.d("HomeDebug", "loadHotSongs: FAIL ${error.message}")
             }
     }
 }
@@ -121,6 +149,7 @@ data class HomeUiState(
     val isLoading: Boolean = true,
     val banners: List<Banner> = emptyList(),
     val playlists: List<Playlist> = emptyList(),
-    val hotSongs: List<Song> = emptyList(),
+    val hotBangs: List<Bang> = emptyList(),    // 热门榜单
+    val hotSongs: List<Song> = emptyList(),     // 热门歌曲（用于第三页）
     val error: String? = null
 )

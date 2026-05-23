@@ -25,7 +25,7 @@ android {
         minSdk = 26
         targetSdk = 34
         versionCode = buildNumber
-        versionName = "1.0.$buildNumber ($buildDate)"
+        versionName = "1.0.$buildNumber"
 
         vectorDrawables {
             useSupportLibrary = true
@@ -52,8 +52,28 @@ android {
         )
     }
 
+    flavorDimensions += "channel"
+
+    productFlavors {
+        create("beta") {
+            dimension = "channel"
+            applicationIdSuffix = ".beta"
+            versionNameSuffix = "-beta"
+            buildConfigField("String", "VERSION_JSON_URL", "\"http://172.16.1.93:8080/ZongTing/test/version.json\"")
+            buildConfigField("String", "UPDATE_CHANNEL", "\"test\"")
+            resValue("string", "app_name", "纵听测试版")
+        }
+        create("prod") {
+            dimension = "channel"
+            buildConfigField("String", "VERSION_JSON_URL", "\"http://172.16.1.93:8080/ZongTing/release/version.json\"")
+            buildConfigField("String", "UPDATE_CHANNEL", "\"release\"")
+            resValue("string", "app_name", "纵听")
+        }
+    }
+
     buildFeatures {
         compose = true
+        buildConfig = true
     }
 
     composeOptions {

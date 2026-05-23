@@ -12,11 +12,18 @@ import okhttp3.Request
 import java.net.URLEncoder
 import kotlin.text.Regex
 import java.nio.charset.Charset
+import java.util.LinkedHashMap
 import javax.inject.Inject
 import javax.inject.Singleton
 
 @Singleton
 class MusicRepository @Inject constructor() {
+
+    // 歌单详情内存缓存（LRU，最多缓存20个）
+    private val playlistCache = object : LinkedHashMap<Long, PlaylistData>(20, 0.75f, true) {
+        override fun removeEldestEntry(eldest: Map.Entry<Long, PlaylistData>?): Boolean = size > 20
+    }
+    private val cacheLock = Any()
 
     private val api = NetworkModule.kuwoApi
     private val nmobiRetrofit = NetworkModule.nmobiRetrofit
@@ -56,17 +63,51 @@ class MusicRepository @Inject constructor() {
 
     // ==================== 歌单 ====================
 
-    /** 获取歌单详情 */
+    /** 获取歌单详情（带内存缓存） */
     suspend fun getPlaylistDetail(pid: Long, pn: Int = 1, rn: Int = 30): Result<PlaylistData> = withContext(Dispatchers.IO) {
+        // 缓存命中（仅第一页走缓存）
+        if (pn == 1) {
+            synchronized(cacheLock) {
+                playlistCache[pid]?.let { cached ->
+                    android.util.Log.d("HomeDebug", "getPlaylistDetail: CACHE HIT pid=$pid songs=${cached.musicList.size}")
+                    return@withContext Result.success(cached)
+                }
+            }
+        }
         try {
             val response = api.getPlaylistDetail(pid, pn, rn)
             if (response.code == 200) {
-                Result.success(response.data)
+                val data = response.data
+                // 缓存第一页
+                if (pn == 1) {
+                    synchronized(cacheLock) {
+                        playlistCache[pid] = data
+                    }
+                }
+                Result.success(data)
             } else {
                 Result.failure(Exception("获取歌单详情失败: ${response.msg}"))
             }
         } catch (e: Exception) {
             Result.failure(e)
+        }
+    }
+
+    /** 预取歌单详情（后台缓存，不阻塞） */
+    suspend fun prefetchPlaylistDetail(pid: Long) {
+        withContext(Dispatchers.IO) {
+            synchronized(cacheLock) {
+                if (playlistCache.containsKey(pid)) return@withContext
+            }
+            try {
+                val response = api.getPlaylistDetail(pid, 1, 30)
+                if (response.code == 200) {
+                    synchronized(cacheLock) {
+                        playlistCache[pid] = response.data
+                    }
+                    android.util.Log.d("HomeDebug", "prefetchPlaylistDetail: cached pid=$pid songs=${response.data.musicList.size}")
+                }
+            } catch (_: Exception) {}
         }
     }
 
@@ -172,6 +213,16 @@ class MusicRepository @Inject constructor() {
                     val nplay = payInfoJson?.get("nplay")?.asString
                     val playable = nplay != "000000000000"
 
+                    val webAlbumpic = s.get("web_albumpic_short")?.asString?.takeIf { it.isNotBlank() }
+                    val webArtistpic = s.get("web_artistpic_short")?.asString?.takeIf { it.isNotBlank() }
+                    val coverUrl = if (webAlbumpic != null) {
+                        "https://img2.kuwo.cn/star/albumcover/$webAlbumpic"
+                    } else if (webArtistpic != null) {
+                        "https://img2.kuwo.cn/star/starheads/$webArtistpic"
+                    } else {
+                        s.get("pic120")?.asString ?: ""
+                    }
+
                     songs.add(Song(
                         rid = rid,
                         musicrid = s.get("MUSICRID")?.asString ?: "",
@@ -184,6 +235,7 @@ class MusicRepository @Inject constructor() {
                         songTimeMinutes = "",
                         pic = s.get("pic")?.asString ?: "",
                         pic120 = s.get("pic120")?.asString ?: "",
+                        coverUrl = coverUrl,
                         releaseDate = s.get("releaseDate")?.asString ?: "",
                         hasmv = s.get("HAS_MV")?.asInt ?: 0,
                         hasLossless = false,
@@ -335,54 +387,69 @@ class MusicRepository @Inject constructor() {
 
     // ==================== 播放地址 ====================
 
-    /** 获取播放地址 - 支持酷我和网易云音乐 */
+    /** 获取播放地址 - 支持酷我和网易云音乐，失败后重试一次（间隔1秒） */
     suspend fun getPlayUrl(rid: Long, br: String = "320kmp3", source: String = "kuwo"): Result<String> = withContext(Dispatchers.IO) {
         android.util.Log.d("KuwoDebug", "MusicRepository.getPlayUrl ENTER: rid=$rid source=$source br=$br")
-        try {
-            // 网易云音乐歌曲
-            if (source == "netease") {
-                val request = Request.Builder()
-                    .url("http://music.163.com/api/song/enhance/player/url?ids=%5B$rid%5D&br=320000")
-                    .header("Referer", "http://music.163.com/")
-                    .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; WOW64) AppleWebKit/537.36")
-                    .build()
-                val response = httpClient.newCall(request).execute()
-                val body = response.body?.string() ?: return@withContext Result.failure(Exception("空响应"))
-                val json = JsonParser().parse(body).asJsonObject
-                val dataArray = json.getAsJsonArray("data")
-                if (dataArray != null && dataArray.size() > 0) {
-                    val songData = dataArray[0].asJsonObject
-                    val fee = songData.get("fee")?.asInt ?: 0
-                    if (fee == 8) {
-                        return@withContext Result.failure(Exception("需要付费才能播放"))
+        repeat(2) { attempt ->
+            if (attempt > 0) {
+                android.util.Log.d("KuwoDebug", "getPlayUrl retry $attempt/1 rid=$rid source=$source")
+                kotlinx.coroutines.delay(1000)
+            }
+            try {
+                // 网易云音乐歌曲
+                if (source == "netease") {
+                    val request = Request.Builder()
+                        .url("http://music.163.com/api/song/enhance/player/url?ids=%5B$rid%5D&br=320000")
+                        .header("Referer", "http://music.163.com/")
+                        .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; WOW64) AppleWebKit/537.36")
+                        .build()
+                    val response = httpClient.newCall(request).execute()
+                    val body = response.body?.string() ?: run {
+                        if (attempt == 1) return@withContext Result.failure(Exception("空响应"))
+                        return@repeat
                     }
-                    val songUrlElem = songData.get("url")
-                    if (songUrlElem != null && !songUrlElem.isJsonNull) {
-                        val songUrl = songUrlElem.asString
-                        if (songUrl.isNotEmpty()) {
-                            return@withContext Result.success(songUrl)
+                    val json = JsonParser().parse(body).asJsonObject
+                    val dataArray = json.getAsJsonArray("data")
+                    if (dataArray != null && dataArray.size() > 0) {
+                        val songData = dataArray[0].asJsonObject
+                        val fee = songData.get("fee")?.asInt ?: 0
+                        if (fee == 8) {
+                            return@withContext Result.failure(Exception("需要付费才能播放"))
                         }
+                        val songUrlElem = songData.get("url")
+                        if (songUrlElem != null && !songUrlElem.isJsonNull) {
+                            val songUrl = songUrlElem.asString
+                            if (songUrl.isNotEmpty()) {
+                                return@withContext Result.success(songUrl)
+                            }
+                        }
+                        val code = songData.get("code")?.asInt ?: 0
+                        if (attempt == 1) return@withContext Result.failure(Exception("无法获取播放地址 (code=$code)"))
+                        return@repeat
                     }
-                    val code = songData.get("code")?.asInt ?: 0
-                    return@withContext Result.failure(Exception("无法获取播放地址 (code=$code)"))
+                    if (attempt == 1) return@withContext Result.failure(Exception("无法获取播放地址"))
+                    return@repeat
                 }
-                return@withContext Result.failure(Exception("无法获取播放地址"))
-            }
 
-            // 酷我歌曲 - 使用 KuwoService.getPlayUrl（原始工作代码）
-            val musicId = rid.toString()
-            android.util.Log.d("KuwoDebug", "getPlayUrl kuwo: rid=$musicId")
-            val songUrl = KuwoService().getPlayUrl(musicId)
-            if (songUrl != null && songUrl.startsWith("http")) {
-                android.util.Log.d("KuwoDebug", "getPlayUrl success: $songUrl")
-                Result.success(songUrl)
-            } else {
-                android.util.Log.d("KuwoDebug", "getPlayUrl failed: url=$songUrl")
-                Result.failure(Exception("获取播放地址失败（酷我nmobi返回为空）"))
+                // 酷我歌曲 - 使用 KuwoService.getPlayUrl（原始工作代码）
+                val musicId = rid.toString()
+                android.util.Log.d("KuwoDebug", "getPlayUrl kuwo: rid=$musicId attempt=$attempt")
+                val songUrl = KuwoService().getPlayUrl(musicId)
+                if (songUrl != null && songUrl.startsWith("http")) {
+                    android.util.Log.d("KuwoDebug", "getPlayUrl success: $songUrl")
+                    return@withContext Result.success(songUrl)
+                } else {
+                    android.util.Log.d("KuwoDebug", "getPlayUrl failed: url=$songUrl")
+                    if (attempt == 1) return@withContext Result.failure(Exception("获取播放地址失败（酷我nmobi返回为空）"))
+                    // 第一次失败，进入重试
+                }
+            } catch (e: Exception) {
+                android.util.Log.d("KuwoDebug", "getPlayUrl exception: ${e.message}")
+                if (attempt == 1) return@withContext Result.failure(e)
+                // 第一次异常，进入重试
             }
-        } catch (e: Exception) {
-            Result.failure(e)
         }
+        Result.failure(Exception("获取播放地址失败"))
     }
 
     // ==================== 歌词 ====================
@@ -395,67 +462,84 @@ class MusicRepository @Inject constructor() {
         return "$seconds.${cs.toString().padStart(2, '0')}"
     }
 
-    /** 获取歌词 - source=kuwo 失败时自动用 name+artist 搜索网易云取歌词 */
+    /** 获取歌词 - source=kuwo 失败时自动用 name+artist 搜索网易云取歌词，失败后重试一次（间隔1秒） */
     suspend fun getLyric(musicId: Long, source: String = "kuwo", name: String = "", artist: String = ""): Result<List<LyricLineRaw>> = withContext(Dispatchers.IO) {
-        try {
-            // 网易云音乐歌词（直接用 musicId）
-            if (source == "netease") {
-                val result = fetchNeteaseLyric(musicId)
-                if (result.isSuccess) return@withContext result
-                return@withContext Result.failure(result.exceptionOrNull() ?: Exception("暂无歌词"))
+        repeat(2) { attempt ->
+            if (attempt > 0) {
+                android.util.Log.d("KuwoDebug", "getLyric retry $attempt/1 musicId=$musicId")
+                kotlinx.coroutines.delay(1000)
             }
-
-            // 酷我歌词（优先）
-            android.util.Log.d("KuwoDebug", "getLyric kuwo: musicId=$musicId name=$name artist=$artist")
-            val mApi = mRetrofit.create(KuwoApi::class.java)
-            val response = mApi.getLyric(musicId)
-            android.util.Log.d("KuwoDebug", "getLyric kuwo response: status=${response.status} data=${response.data}")
-            if (response.status == 200) {
-                val lyricData = response.data
-                if (lyricData != null) {
-                    val lines = lyricData.lrclist
-                    if (!lines.isNullOrEmpty()) {
-                        return@withContext Result.success(lines)
-                    }
+            try {
+                // 网易云音乐歌词（直接用 musicId）
+                if (source == "netease") {
+                    val result = fetchNeteaseLyric(musicId)
+                    if (result.isSuccess) return@withContext result
+                    if (attempt == 1) return@withContext result  // 重试后仍失败
+                    return@withContext Result.failure(result.exceptionOrNull() ?: Exception("暂无歌词"))
                 }
-            }
 
-            // 酷我歌词为空或失败，尝试用歌名+歌手去网易云搜索取歌词
-            if (name.isNotBlank() && artist.isNotBlank()) {
-                val searchKeyword = "$name $artist".trim()
-                try {
-                    val encodedKey = URLEncoder.encode(searchKeyword, "UTF-8")
-                    val pnOffset = 0
-                    val url = "http://music.163.com/api/search/get/web?s=$encodedKey&type=1&offset=$pnOffset&total=true&limit=3"
-
-                    val request = Request.Builder()
-                        .url(url)
-                        .header("Referer", "http://music.163.com/")
-                        .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; WOW64) AppleWebKit/537.36")
-                        .build()
-
-                    val searchResponse = httpClient.newCall(request).execute()
-                    val searchBody = searchResponse.body?.string()
-                    if (!searchBody.isNullOrBlank()) {
-                        val searchJson = JsonParser().parse(searchBody).asJsonObject
-                        val songsArray = searchJson
-                            .getAsJsonObject("result")
-                            ?.getAsJsonArray("songs")
-
-                        if (songsArray != null && songsArray.size() > 0) {
-                            val firstSong = songsArray[0].asJsonObject
-                            val neteaseId = firstSong.get("id").asLong
-                            val neteaseResult = fetchNeteaseLyric(neteaseId)
-                            if (neteaseResult.isSuccess) return@withContext neteaseResult
+                // 酷我歌词（优先）
+                android.util.Log.d("KuwoDebug", "getLyric kuwo: musicId=$musicId name=$name artist=$artist")
+                val mApi = mRetrofit.create(KuwoApi::class.java)
+                val response = mApi.getLyric(musicId)
+                android.util.Log.d("KuwoDebug", "getLyric kuwo response: status=${response.status} data=${response.data}")
+                if (response.status == 200) {
+                    val lyricData = response.data
+                    if (lyricData != null) {
+                        val lines = lyricData.lrclist
+                        if (!lines.isNullOrEmpty()) {
+                            return@withContext Result.success(lines)
                         }
                     }
-                } catch (_: Exception) {}
-            }
+                }
 
-            Result.failure(Exception("暂无歌词"))
-        } catch (e: Exception) {
-            Result.failure(e)
+                // 酷我歌词为空或失败，尝试用歌名+歌手去网易云搜索取歌词
+                if (name.isNotBlank() && artist.isNotBlank()) {
+                    val searchKeyword = "$name $artist".trim()
+                    try {
+                        val encodedKey = URLEncoder.encode(searchKeyword, "UTF-8")
+                        val pnOffset = 0
+                        val url = "http://music.163.com/api/search/get/web?s=$encodedKey&type=1&offset=$pnOffset&total=true&limit=3"
+
+                        val request = Request.Builder()
+                            .url(url)
+                            .header("Referer", "http://music.163.com/")
+                            .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; WOW64) AppleWebKit/537.36")
+                            .build()
+
+                        val searchResponse = httpClient.newCall(request).execute()
+                        val searchBody = searchResponse.body?.string()
+                        if (!searchBody.isNullOrBlank()) {
+                            val searchJson = JsonParser().parse(searchBody).asJsonObject
+                            val songsArray = searchJson
+                                .getAsJsonObject("result")
+                                ?.getAsJsonArray("songs")
+
+                            if (songsArray != null && songsArray.size() > 0) {
+                                val firstSong = songsArray[0].asJsonObject
+                                val neteaseId = firstSong.get("id").asLong
+                                val neteaseResult = fetchNeteaseLyric(neteaseId)
+                                if (neteaseResult.isSuccess) return@withContext neteaseResult
+                            }
+                        }
+                    } catch (_: Exception) {}
+                }
+
+                if (attempt == 1) {
+                    // 重试后仍失败
+                    return@withContext Result.failure(Exception("暂无歌词"))
+                }
+                // 第一次失败，记录日志后进入重试
+                android.util.Log.d("KuwoDebug", "getLyric attempt 0 failed, will retry musicId=$musicId")
+            } catch (e: Exception) {
+                android.util.Log.d("KuwoDebug", "getLyric exception: ${e.message}")
+                if (attempt == 1) {
+                    return@withContext Result.failure(e)
+                }
+                // 第一次异常，进入重试
+            }
         }
+        Result.failure(Exception("获取歌词失败"))
     }
 
     /** 从网易云获取歌词（给定 songId） */
@@ -545,11 +629,11 @@ class MusicRepository @Inject constructor() {
     )
 
     /** 获取排行榜歌曲 - 支持指定来源 */
-    suspend fun getBangMusicList(bangId: String, source: String = "kuwo", pn: Int = 1, rn: Int = 50): Result<List<Song>> = withContext(Dispatchers.IO) {
+    suspend fun getBangMusicList(bangId: String, source: String = "kuwo", pn: Int = 1, rn: Int = 30, sourceId: String = ""): Result<List<Song>> = withContext(Dispatchers.IO) {
         try {
             when (source) {
                 "netease" -> getBangMusicListNetease(bangId, pn, rn)
-                else -> getBangMusicListKuwo(bangId, pn, rn)
+                else -> getBangMusicListKuwo(bangId, pn, rn, sourceId.ifEmpty { bangId })
             }
         } catch (e: Exception) {
             Result.failure(e)
@@ -557,9 +641,9 @@ class MusicRepository @Inject constructor() {
     }
 
     /** 获取排行榜歌曲 - 酷我音乐 API */
-    private suspend fun getBangMusicListKuwo(bangId: String, pn: Int = 1, rn: Int = 50): Result<List<Song>> = withContext(Dispatchers.IO) {
+    private suspend fun getBangMusicListKuwo(bangId: String, pn: Int = 1, rn: Int = 30, apiBangId: String): Result<List<Song>> = withContext(Dispatchers.IO) {
         try {
-            val response = api.getBangMusicList(bangId, pn, rn)
+            val response = api.getBangMusicList(apiBangId, pn, rn)
             if (response.code == 200) {
                 val songs = response.data.musicList.map { it.copy(source = "kuwo") }
                 Result.success(songs)
