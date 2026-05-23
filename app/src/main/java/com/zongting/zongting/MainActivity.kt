@@ -26,6 +26,7 @@ import androidx.media3.session.SessionToken
 import com.google.common.util.concurrent.MoreExecutors
 import com.zongting.zongting.data.repository.PendingInstallManager
 import com.zongting.zongting.player.PlaybackService
+import com.zongting.zongting.player.SleepTimerManager
 import com.zongting.zongting.ui.MainNavigation
 import com.zongting.zongting.ui.MainViewModel
 import com.zongting.zongting.ui.SplashScreen
@@ -52,6 +53,11 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+
+        // 处理通知栏定时关闭取消按钮
+        if (intent?.action == SleepTimerManager.ACTION_CANCEL) {
+            SleepTimerManager.cancelWithNotification(this)
+        }
 
         // 检查是否有待安装的APK（上次选择"稍后安装"）
         checkAndInstallPendingApk()
@@ -225,6 +231,14 @@ class MainActivity : ComponentActivity() {
     override fun onStart() {
         super.onStart()
         startService(Intent(this, PlaybackService::class.java))
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        this.intent = intent
+        if (intent.action == SleepTimerManager.ACTION_CANCEL) {
+            SleepTimerManager.cancelWithNotification(this)
+        }
     }
 
     override fun onPause() {

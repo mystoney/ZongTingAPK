@@ -32,8 +32,10 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.platform.LocalContext
 import coil.compose.AsyncImage
 import com.zongting.zongting.player.PlayerManager
+import com.zongting.zongting.player.SleepTimerManager
 import com.zongting.zongting.ui.LyricLine
 import com.zongting.zongting.ui.LyricState
 import com.zongting.zongting.ui.MainViewModel
@@ -54,6 +56,11 @@ fun PlayerScreen(
     val playbackState by viewModel.playbackState.collectAsState()
     val lyricState by viewModel.lyricState.collectAsState()
     val currentPlaylist by viewModel.currentPlaylist.collectAsState()
+    var showSleepTimerDialog by remember { mutableStateOf(false) }
+
+    // 定时关闭状态
+    val isTimerActive by SleepTimerManager.isActive.collectAsState()
+    val timerRemaining by SleepTimerManager.remainingSeconds.collectAsState()
 
     val pagerState = rememberPagerState(pageCount = { 2 })
     val coroutineScope = rememberCoroutineScope()
@@ -194,12 +201,31 @@ fun PlayerScreen(
             onShowPlaylist = { showPlaylistSheet = it },
             onToggleFavorite = { currentSong?.let { viewModel.toggleFavorite(it) } },
             onToggleSavePlaylist = { showSavePlaylistDialog = true },
+            onSleepTimerClick = { showSleepTimerDialog = true },
+            isTimerActive = isTimerActive,
+            timerRemaining = timerRemaining,
             onPrevious = { viewModel.playPrevious() },
             onNext = { viewModel.playNext() },
             currentPlaylist = currentPlaylist,
             onPlaySong = { song -> viewModel.playSong(song, currentPlaylist) },
             playlistListState = rememberLazyListState()
         )
+
+        // 定时关闭弹窗
+        val context = LocalContext.current
+        if (showSleepTimerDialog) {
+            SleepTimerDialog(
+                isActive = isTimerActive,
+                remainingSeconds = timerRemaining,
+                onStartTimer = { mins ->
+                    SleepTimerManager.start(context, mins)
+                },
+                onCancelTimer = {
+                    SleepTimerManager.cancelWithNotification(context)
+                },
+                onDismiss = { showSleepTimerDialog = false }
+            )
+        }
 
         // 添加到歌单弹窗
         if (showSavePlaylistDialog) {
@@ -233,8 +259,11 @@ private fun PlayerBottomBar(
     onTogglePlay: () -> Unit,
     onTogglePlayMode: () -> Unit,
     onShowPlaylist: (Boolean) -> Unit,
-    onToggleFavorite: () -> Unit,
     onToggleSavePlaylist: () -> Unit,
+    onToggleFavorite: () -> Unit,
+    onSleepTimerClick: () -> Unit,
+    isTimerActive: Boolean,
+    timerRemaining: Long,
     onPrevious: () -> Unit,
     onNext: () -> Unit,
     currentPlaylist: List<Song>,
@@ -301,12 +330,47 @@ private fun PlayerBottomBar(
                     Icon(imageVector = Icons.Default.PlaylistAdd, contentDescription = "保存到歌单", modifier = Modifier.size(24.dp))
                 }
 
+                IconButton(onClick = onSleepTimerClick) {
+                    Icon(
+                        imageVector = if (isTimerActive) Icons.Default.BedtimeOff else Icons.Default.Bedtime,
+                        contentDescription = "定时关闭",
+                        tint = if (isTimerActive) Color(0xFF7C4DFF) else MaterialTheme.colorScheme.onSurface,
+                        modifier = Modifier.size(24.dp)
+                    )
+                }
+
                 IconButton(onClick = onToggleFavorite) {
                     Icon(
                         imageVector = if (isFavorite) Icons.Filled.Favorite else Icons.Outlined.FavoriteBorder,
                         contentDescription = if (isFavorite) "取消喜欢" else "我喜欢",
                         tint = if (isFavorite) Color(0xFFFF5252) else MaterialTheme.colorScheme.onSurface,
                         modifier = Modifier.size(24.dp)
+                    )
+                }
+            }
+
+            // 定时关闭剩余时间（仅开启时显示）
+            if (isTimerActive && timerRemaining > 0) {
+                val mins = timerRemaining / 60
+                val secs = timerRemaining % 60
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 2.dp),
+                    horizontalArrangement = Arrangement.Center,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Bedtime,
+                        contentDescription = null,
+                        tint = Color(0xFF7C4DFF),
+                        modifier = Modifier.size(14.dp)
+                    )
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text(
+                        text = "🌙 ${mins}分${secs}秒后停止播放",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = Color(0xFF7C4DFF)
                     )
                 }
             }
@@ -770,5 +834,110 @@ private fun SavePlaylistDialog(
         dismissButton = {
             TextButton(onClick = onDismiss) { Text("关闭") }
         }
+    )
+}
+
+// ===== 定时关闭弹窗 =====
+@Composable
+fun SleepTimerDialog(
+    isActive: Boolean,
+    remainingSeconds: Long,
+    onStartTimer: (Int) -> Unit,
+    onCancelTimer: () -> Unit,
+    onDismiss: () -> Unit
+) {
+    var customMinutes by remember { mutableStateOf("") }
+
+    val presetMinutes = listOf(15, 30, 45, 60)
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("定时关闭 🌙") },
+        text = {
+            Column {
+                if (isActive) {
+                    // 定时已开启，显示剩余时间和取消按钮
+                    val mins = remainingSeconds / 60
+                    val secs = remainingSeconds % 60
+                    Text(
+                        text = "距离停止播放还有",
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        text = "${mins}分${secs}秒",
+                        style = MaterialTheme.typography.headlineMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = Color(0xFF7C4DFF),
+                        modifier = Modifier.fillMaxWidth(),
+                        textAlign = TextAlign.Center
+                    )
+                    Spacer(modifier = Modifier.height(16.dp))
+                    TextButton(
+                        onClick = {
+                            onCancelTimer()
+                            onDismiss()
+                        },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text("取消定时", color = MaterialTheme.colorScheme.error)
+                    }
+                } else {
+                    // 未开启，显示预设时间选项
+                    Text(
+                        text = "播放将在以下时间后自动停止：",
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                    Spacer(modifier = Modifier.height(12.dp))
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        presetMinutes.forEach { mins ->
+                            FilterChip(
+                                selected = false,
+                                onClick = {
+                                    onStartTimer(mins)
+                                    onDismiss()
+                                },
+                                label = { Text("${mins}分钟") },
+                                modifier = Modifier.weight(1f)
+                            )
+                        }
+                    }
+                    Spacer(modifier = Modifier.height(12.dp))
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        OutlinedTextField(
+                            value = customMinutes,
+                            onValueChange = { customMinutes = it.filter { c -> c.isDigit() } },
+                            label = { Text("自定义") },
+                            suffix = { Text("分钟") },
+                            singleLine = true,
+                            modifier = Modifier.weight(1f)
+                        )
+                        FilledTonalButton(
+                            onClick = {
+                                val mins = customMinutes.toIntOrNull()
+                                if (mins != null && mins > 0) {
+                                    onStartTimer(mins)
+                                    onDismiss()
+                                }
+                            },
+                            enabled = customMinutes.isNotEmpty() && (customMinutes.toIntOrNull() ?: 0) > 0
+                        ) {
+                            Text("确定")
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) { Text("关闭") }
+        },
+        dismissButton = {}
     )
 }
