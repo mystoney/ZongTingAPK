@@ -172,12 +172,6 @@ class UpdateRepository @Inject constructor(
 
     // ── 更新检测 ───────────────────────────────────────────
     private suspend fun performBackgroundCheck() = withContext(kotlinx.coroutines.Dispatchers.IO) {
-        if (!isOnLocalNetwork()) {
-            Log.d(TAG, "Not on local network, skip update check")
-            _updateEvent.value = null
-            return@withContext
-        }
-
         try {
             Log.d(TAG, "Checking for update at $versionJsonUrl")
             val request = okhttp3.Request.Builder().url(versionJsonUrl).build()
@@ -207,7 +201,7 @@ class UpdateRepository @Inject constructor(
                 versionCode = remoteVersionCode,
                 versionName = json.get("versionName")?.asString ?: "",
                 apkUrl = apkUrl,
-                releaseNotes = json.get("releaseNotes")?.asString ?: "",
+                releaseNotes = json.get("releaseNotes")?.asString ?: json.get("updateContent")?.asString ?: "",
                 forceUpdate = json.get("forceUpdate")?.asBoolean ?: false,
                 channel = json.get("channel")?.asString ?: ""
             )
@@ -221,26 +215,6 @@ class UpdateRepository @Inject constructor(
             Log.e(TAG, "Update check error: ${e.message}")
             _updateEvent.value = UpdateEvent.Error("检查更新失败: ${e.message}")
         }
-    }
-
-    private fun isOnLocalNetwork(): Boolean {
-        return try {
-            val interfaces = NetworkInterface.getNetworkInterfaces()
-            while (interfaces.hasMoreElements()) {
-                val ni = interfaces.nextElement()
-                val addrs = ni.inetAddresses
-                while (addrs.hasMoreElements()) {
-                    val addr = addrs.nextElement()
-                    if (!addr.isLoopbackAddress && addr is Inet4Address) {
-                        val host = addr.hostAddress ?: ""
-                        if (host.startsWith("172.16.") || host.startsWith("192.168.")) {
-                            return true
-                        }
-                    }
-                }
-            }
-            false
-        } catch (e: Exception) { true }
     }
 
     private fun getCurrentVersionCode(): Int {

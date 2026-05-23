@@ -286,6 +286,17 @@ fun MainNavigation(
                     modifier = Modifier.align(Alignment.BottomCenter)
                 )
             }
+            // 更新弹窗（有新版本时自动弹出）
+            pendingVersionInfo.value?.let { versionInfo ->
+                UpdateDialog(
+                    versionInfo = versionInfo,
+                    updateEvent = updateEvent,
+                    onConfirmDownload = { updateViewModel.onConfirmDownload() },
+                    onDismiss = { updateViewModel.onDismiss() },
+                    onConfirmInstall = { updateViewModel.onConfirmInstall() },
+                    onDeferInstall = { updateViewModel.onDeferInstall() }
+                )
+            }
         }
     }
 
