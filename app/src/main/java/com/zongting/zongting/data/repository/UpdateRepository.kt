@@ -386,8 +386,9 @@ object InstallLauncher {
     fun launchInstall(context: Context, apkFile: java.io.File, currentVersionCode: Int) {
         Log.d(TAG, "launchInstall: ${apkFile.absolutePath}, exists=${apkFile.exists()}, size=${apkFile.length()}")
 
-        // 检查是否有安装未知应用权限（Android O+ 需要用户授权）
         val packageManager = context.packageManager
+
+        // ── 权限检查 ───────────────────────────────────────────
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             if (!packageManager.canRequestPackageInstalls()) {
                 Log.d(TAG, "No REQUEST_INSTALL_PACKAGES permission, requesting via Settings")
@@ -410,37 +411,48 @@ object InstallLauncher {
             }
         }
 
-        // ─── 方案一（主）：content:// + FileProvider 触发系统 PackageInstaller UI ──
-        // 适用于所有 Android O+ 设备，无论是否 root
+        // ── 方案一（主）：复制到 /data/local/tmp/ + file:// URI + 显式 ComponentName ──
+        // 解决 Nemu Store 拦截 content:// URI 的问题
+        // /data/local/tmp/ 是系统级目录，PackageInstaller 可直接读取
         try {
-            val authority = "${context.packageName}.updatefileprovider"
-            Log.d(TAG, "FileProvider authority=$authority")
-            Log.d(TAG, "APK file path=${apkFile.absolutePath}, cacheDir=${context.cacheDir.absolutePath}")
-            val contentUri = FileProvider.getUriForFile(
-                context,
-                authority,
-                apkFile
-            )
-            Log.d(TAG, "FileProvider URI created: $contentUri")
-            val installIntent = Intent(Intent.ACTION_VIEW).apply {
-                setDataAndType(contentUri, "application/vnd.android.package-archive")
-                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            val installDir = java.io.File("/data/local/tmp")
+            if (!installDir.exists() || !installDir.canWrite()) {
+                // fallback: 尝试 app 外部存储目录
+                val fallbackDir = java.io.File(context.getExternalFilesDir(null), "apk_install")
+                fallbackDir.mkdirs()
+                val destFile = java.io.File(fallbackDir, "zongting-update.apk")
+                apkFile.copyTo(destFile, overwrite = true)
+                // 确保全局可读
+                Runtime.getRuntime().exec(arrayOf("chmod", "644", destFile.absolutePath)).waitFor()
+                launchWithFileUri(context, destFile)
+                Log.d(TAG, "Using fallback dir: ${destFile.absolutePath}")
+                return
             }
-            Log.d(TAG, "Launching ACTION_VIEW install, checking if activity resolvable...")
-            val resolveInfo = packageManager.resolveActivity(installIntent, android.content.pm.PackageManager.MATCH_DEFAULT_ONLY)
-            Log.d(TAG, "Resolved activity: $resolveInfo")
-            Log.d(TAG, "Calling context.startActivity...")
-            context.startActivity(installIntent)
-            Log.d(TAG, "startActivity returned successfully!")
+
+            val destFile = java.io.File(installDir, "zongting-update.apk")
+            apkFile.copyTo(destFile, overwrite = true)
+            // 确保全局可读（system_server 进程需要能读）
+            Runtime.getRuntime().exec(arrayOf("chmod", "644", destFile.absolutePath)).waitFor()
+            Log.d(TAG, "APK copied to: ${destFile.absolutePath}")
+
+            launchWithFileUri(context, destFile)
             return
         } catch (e: Exception) {
-            Log.e(TAG, "ACTION_VIEW failed: ${e.message}", e)
-            // 继续尝试其他方案
+            Log.e(TAG, "file:// approach failed: ${e.message}", e)
         }
 
-        // ─── 方案二（备）：su + pm install -r 静默安装（root 设备）───
-        // 仅当 FileProvider 方案不可用时尝试
+        // ── 方案二（备）：FileProvider content:// + am start 显式组件 ──
+        try {
+            val authority = "${context.packageName}.updatefileprovider"
+            val contentUri = FileProvider.getUriForFile(context, authority, apkFile)
+            Log.d(TAG, "FileProvider URI: $contentUri")
+            launchWithContentUri(context, contentUri)
+            return
+        } catch (e: Exception) {
+            Log.e(TAG, "FileProvider approach failed: ${e.message}", e)
+        }
+
+        // ── 方案三（最后备）：pm install -r（root 设备）───
         try {
             val process = Runtime.getRuntime().exec(arrayOf("su", "-c", "pm install -r ${apkFile.absolutePath}"))
             val output = process.inputStream.bufferedReader().readText()
@@ -448,13 +460,98 @@ object InstallLauncher {
             val exitCode = process.waitFor()
             Log.d(TAG, "pm install exitCode=$exitCode output=$output error=$error")
             if (exitCode == 0) {
-                Log.d(TAG, "Silent install SUCCESS via pm")
-            } else {
-                Log.e(TAG, "pm install FAILED: $error")
+                Log.d(TAG, "Silent install SUCCESS")
             }
         } catch (e: Exception) {
             Log.e(TAG, "su pm install failed: ${e.message}", e)
         }
+    }
+
+    /**
+     * 使用 file:// URI + 显式 ComponentName 启动系统 PackageInstaller
+     * 显式指定 com.android.packageinstaller 的 activity，绕过 Nemu Store 拦截
+     */
+    private fun launchWithFileUri(context: Context, apkFile: java.io.File) {
+        val uri = Uri.fromFile(apkFile)
+        Log.d(TAG, "launchWithFileUri: $uri")
+
+        // 优先尝试直接指定 PackageInstaller 组件（绕过 Nemu Store 拦截）
+        val components = listOf(
+            // 标准 AOSP PackageInstaller
+            android.content.ComponentName("com.android.packageinstaller",
+                "com.android.packageinstaller.PackageInstallerActivity"),
+            // Nemu/EMUIX 兼容
+            android.content.ComponentName("com.android.packageinstaller",
+                "com.android.packageinstaller.InstallStart")
+        )
+
+        for (component in components) {
+            try {
+                val intent = Intent(Intent.ACTION_VIEW).apply {
+                    setDataAndType(uri, "application/vnd.android.package-archive")
+                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    this.component = component
+                }
+                Log.d(TAG, "Trying component: ${component.flattenToShortString()}")
+                context.startActivity(intent)
+                Log.d(TAG, "startActivity with explicit component succeeded!")
+                return
+            } catch (e: Exception) {
+                Log.d(TAG, "Component $component failed: ${e.message}")
+            }
+        }
+
+        // fallback: 使用 ACTION_VIEW + MATCH_DEFAULT_ONLY + 清除 Nemu Store 默认处理
+        try {
+            val intent = Intent(Intent.ACTION_VIEW).apply {
+                setDataAndType(uri, "application/vnd.android.package-archive")
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP)
+                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                // 不设置 component，依赖系统解析
+            }
+            context.startActivity(intent)
+            Log.d(TAG, "startActivity (no explicit component) succeeded")
+        } catch (e: Exception) {
+            Log.e(TAG, "All install approaches failed: ${e.message}", e)
+        }
+    }
+
+    /**
+     * 使用 content:// URI + am start 方式启动
+     * 在需要跨进程传递 APK 时使用
+     */
+    private fun launchWithContentUri(context: Context, contentUri: Uri) {
+        Log.d(TAG, "launchWithContentUri: $contentUri")
+
+        // 使用 am start 显式指定包名，绕过 Nemu Store
+        try {
+            val apkPath = contentUri.path ?: ""
+            val command = "am start -n com.android.packageinstaller/com.android.packageinstaller.PackageInstallerActivity " +
+                    "-a android.intent.action.VIEW " +
+                    "-d '$apkPath' " +
+                    "-t application/vnd.android.package-archive " +
+                    "--grant-read-uri-permission " +
+                    "--activity-clear-top"
+
+            Log.d(TAG, "Running: $command")
+            val process = Runtime.getRuntime().exec(arrayOf("sh", "-c", command))
+            val exitCode = process.waitFor()
+            val output = process.inputStream.bufferedReader().readText()
+            val error = process.errorStream.bufferedReader().readText()
+            Log.d(TAG, "am start exitCode=$exitCode output=$output error=$error")
+            if (exitCode == 0) return
+        } catch (e: Exception) {
+            Log.e(TAG, "am start failed: ${e.message}", e)
+        }
+
+        // fallback: 常规 Intent
+        val intent = Intent(Intent.ACTION_VIEW).apply {
+            setDataAndType(contentUri, "application/vnd.android.package-archive")
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        }
+        context.startActivity(intent)
     }
 }
 

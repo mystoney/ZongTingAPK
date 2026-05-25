@@ -30,6 +30,7 @@
         android:supportsRtl="true"
         android:theme="@style/Theme.ZongTing"
         android:usesCleartextTraffic="true"
+        android:requestLegacyExternalStorage="true"
         tools:targetApi="34">
 
         <activity
