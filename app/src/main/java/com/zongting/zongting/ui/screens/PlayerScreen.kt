@@ -1,6 +1,7 @@
 package com.zongting.zongting.ui.screens
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -24,9 +25,15 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.blur
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.asComposeRenderEffect
+import androidx.compose.ui.graphics.drawscope.DrawScope
+import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
+import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -114,42 +121,61 @@ fun PlayerScreen(
         // 深色基底
         Box(modifier = Modifier.fillMaxSize().background(Color(0xFF0D0D1A)))
 
-        // 缩小居中的封面图作为背景
+        // 平铺封面：produceState 加载图片，Canvas 画多张缩小后的封面实现真正平铺
         currentSong?.let { song ->
             val coverUrl = song.coverUrl ?: song.pic
             if (coverUrl.isNotBlank()) {
-                AsyncImage(
-                    model = coverUrl,
-                    contentDescription = null,
+                val scale = 0.25f // 每张缩到 25%，4x4 = 16 张铺满
+                val ctx = LocalContext.current
+
+                val loadedBmp: State<android.graphics.Bitmap?> = produceState<android.graphics.Bitmap?>(null, coverUrl) {
+                    val coilImageLoader = coil.ImageLoader(ctx)
+                    val request = coil.request.ImageRequest.Builder(ctx)
+                        .data(coverUrl)
+                        .allowHardware(false)
+                        .build()
+                    val result = coilImageLoader.execute(request)
+                    value = (result.drawable as? android.graphics.drawable.BitmapDrawable)?.bitmap
+                }
+
+                // 画多张缩小封面实现平铺
+                Canvas(
                     modifier = Modifier
                         .fillMaxSize()
-                        .graphicsLayer {
-                            // 缩小到 40% 并居中，产生四周留黑边的效果
-                            scaleX = 0.4f
-                            scaleY = 0.4f
-                            // Android 12+ 使用 RenderEffect 虚化
-                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                                renderEffect = android.graphics.RenderEffect
-                                    .createBlurEffect(25f, 25f, android.graphics.Shader.TileMode.CLAMP)
-                                    .asComposeRenderEffect()
+                        .then(
+                            if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) Modifier.blur(16.dp)
+                            else Modifier
+                        )
+                ) {
+                    val bmp = loadedBmp.value
+                    if (bmp != null && !bmp.isRecycled) {
+                        val tileW = (bmp.width * scale).toInt().coerceAtLeast(1)
+                        val tileH = (bmp.height * scale).toInt().coerceAtLeast(1)
+                        val scaled = android.graphics.Bitmap.createScaledBitmap(bmp, tileW, tileH, true)
+                        val cols = (size.width.toInt() / tileW) + 2
+                        val rows = (size.height.toInt() / tileH) + 2
+                        for (row in 0 until rows) {
+                            for (col in 0 until cols) {
+                                drawContext.canvas.nativeCanvas.drawBitmap(
+                                    scaled, (col * tileW).toFloat(), (row * tileH).toFloat(), null
+                                )
                             }
-                        },
-                    contentScale = ContentScale.FillBounds
-                )
-                // Android 12 以下：用 Modifier.blur() 软件模糊（兼容所有设备）
-                if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) {
-                    AsyncImage(
-                        model = coverUrl,
-                        contentDescription = null,
+                        }
+                        if (scaled !== bmp) scaled.recycle()
+                    }
+                }
+
+                // Android 12+ 用 RenderEffect 虚化（RenderEffect.REPEAT 在缩小的平铺图上效果更好）
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                    Box(
                         modifier = Modifier
                             .fillMaxSize()
                             .graphicsLayer {
-                                scaleX = 0.4f
-                                scaleY = 0.4f
+                                renderEffect = android.graphics.RenderEffect
+                                    .createBlurEffect(20f, 20f, android.graphics.Shader.TileMode.REPEAT)
+                                    .asComposeRenderEffect()
                             }
-                            .blur(20.dp),
-                        contentScale = ContentScale.FillBounds
-                    )
+                    ) { /* 透明子层，RenderEffect 模糊整个平铺背景 */ }
                 }
             }
         }
