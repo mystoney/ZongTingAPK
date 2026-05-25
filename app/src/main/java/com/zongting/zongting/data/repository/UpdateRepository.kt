@@ -237,6 +237,35 @@ class UpdateRepository @Inject constructor(
     fun confirmInstall() {
         if (_updatePhase.value != UpdatePhase.Downloaded) return
         downloadedApkFile?.let { apkFile ->
+            // ── 关键验证：安装前核对 APK 版本号 ──
+            try {
+                val pkgInfo = context.packageManager.getPackageArchiveInfo(apkFile.absolutePath, 0)
+                    ?: throw Exception("无法解析 APK 文件")
+                // 必须设置 sourceDir，PackageManager 才能读取 APK 内容
+                pkgInfo.applicationInfo?.apply {
+                    sourceDir = apkFile.absolutePath
+                    publicSourceDir = apkFile.absolutePath
+                }
+                val apkVersionCode = pkgInfo.versionCode
+                val expectedVersionCode = pendingVersionInfo?.versionCode ?: 0
+                Log.d(TAG, "APK verification: file_version=$apkVersionCode, expected=$expectedVersionCode")
+                if (apkVersionCode != expectedVersionCode) {
+                    Log.e(TAG, "APK version mismatch! File=$apkVersionCode, Expected=$expectedVersionCode")
+                    _updateEvent.value = UpdateEvent.Error("APK 版本号不匹配(${apkVersionCode}≠${expectedVersionCode})，请重新下载")
+                    _updatePhase.value = UpdatePhase.Idle
+                    downloadedApkFile = null
+                    apkFile.delete()
+                    return
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "APK verification failed: ${e.message}")
+                _updateEvent.value = UpdateEvent.Error("APK 文件损坏，请重新下载")
+                _updatePhase.value = UpdatePhase.Idle
+                downloadedApkFile = null
+                apkFile.delete()
+                return
+            }
+
             pendingInstallManager.clearPendingApk()
             installApk(apkFile)
         }

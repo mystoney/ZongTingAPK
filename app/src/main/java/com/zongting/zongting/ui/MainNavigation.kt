@@ -81,7 +81,9 @@ fun MainNavigation(
             is UpdateEvent.UpdateAvailable -> {
                 pendingVersionInfo.value = event.versionInfo
             }
-            else -> { /* do nothing */ }
+            else -> {
+                pendingVersionInfo.value = null
+            }
         }
     }
 

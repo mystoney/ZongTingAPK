@@ -23,6 +23,7 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
+import com.zongting.zongting.BuildConfig
 import com.zongting.zongting.data.model.Song
 import com.zongting.zongting.data.model.UserPlaylist
 
@@ -207,6 +208,17 @@ fun LibraryScreen(
                         }
                     )
                 }
+                item {
+                    LibraryTabItem(
+                        icon = Icons.Default.Info,
+                        title = "关于",
+                        isSelected = selectedTab == 4,
+                        onClick = {
+                            selectedTab = 4
+                            expandedPlaylist = null
+                        }
+                    )
+                }
             }
 
             VerticalDivider()
@@ -272,11 +284,10 @@ fun LibraryScreen(
                         onAddAll = { songsList -> songsPendingAdd = songsList },
                         onBack = { expandedPlaylist = null }
                     )
-                    3 -> EmptyState(
-                        icon = Icons.Default.Download,
-                        title = "暂无下载",
-                        subtitle = "点击下载按钮缓存歌曲"
+                    3 -> DownloadManagerContent(
+                        onAboutClick = { selectedTab = 4 }
                     )
+                    4 -> AboutContent()
                 }
             }
         }
@@ -1084,6 +1095,82 @@ private fun RenamePlaylistDialog(
             }
         }
     )
+}
+
+@Composable
+private fun DownloadManagerContent(
+    onAboutClick: () -> Unit
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(horizontal = 16.dp)
+    ) {
+        Spacer(modifier = Modifier.height(8.dp))
+        Text(
+            text = "0 首下载歌曲",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        Spacer(modifier = Modifier.height(8.dp))
+        HorizontalDivider()
+        // 关于入口
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable(onClick = onAboutClick)
+                .padding(vertical = 16.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    Icons.Default.Info,
+                    contentDescription = null,
+                    modifier = Modifier.size(24.dp),
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Spacer(modifier = Modifier.width(12.dp))
+                Text("关于", style = MaterialTheme.typography.titleMedium)
+            }
+            Icon(
+                Icons.Default.ChevronRight,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+        HorizontalDivider()
+        Spacer(modifier = Modifier.weight(1f))
+    }
+}
+
+@Composable
+private fun AboutContent() {
+    Box(
+        modifier = Modifier.fillMaxSize(),
+        contentAlignment = Alignment.Center
+    ) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Icon(
+                Icons.Default.MusicNote,
+                contentDescription = null,
+                modifier = Modifier.size(80.dp),
+                tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.7f)
+            )
+            Spacer(modifier = Modifier.height(16.dp))
+            Text(
+                text = "纵听",
+                style = MaterialTheme.typography.headlineMedium,
+                color = MaterialTheme.colorScheme.primary
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+            Text(
+                text = "版本 ${BuildConfig.VERSION_NAME}",
+                style = MaterialTheme.typography.bodyLarge,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+    }
 }
 
 @Composable
