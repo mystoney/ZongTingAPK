@@ -408,25 +408,8 @@ object InstallLauncher {
             }
         }
 
-        // ─── 方案：su + pm install -r 静默安装（root 设备）───
-        // Nemu 是 root 设备，直接用 pm 命令静默安装，无需任何弹窗
-        try {
-            val process = Runtime.getRuntime().exec(arrayOf("su", "-c", "pm install -r ${apkFile.absolutePath}"))
-            val output = process.inputStream.bufferedReader().readText()
-            val error = process.errorStream.bufferedReader().readText()
-            val exitCode = process.waitFor()
-            Log.d(TAG, "pm install exitCode=$exitCode output=$output error=$error")
-            if (exitCode == 0) {
-                Log.d(TAG, "Silent install SUCCESS via pm")
-            } else {
-                Log.e(TAG, "pm install FAILED: $error")
-            }
-            return
-        } catch (e: Exception) {
-            Log.e(TAG, "su pm install failed: ${e.message}", e)
-        }
-
-        // ─── 兜底：content:// + FileProvider（最后方案）───
+        // ─── 方案一（主）：content:// + FileProvider 触发系统 PackageInstaller UI ──
+        // 适用于所有 Android O+ 设备，无论是否 root
         try {
             val contentUri = FileProvider.getUriForFile(
                 context,
@@ -438,10 +421,29 @@ object InstallLauncher {
                 addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
                 addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             }
-            Log.d(TAG, "Starting ACTION_VIEW install (content:// fallback): $installIntent")
+            Log.d(TAG, "Launching ACTION_VIEW install (FileProvider): $contentUri")
             context.startActivity(installIntent)
+            return
         } catch (e: Exception) {
-            Log.e(TAG, "All install methods failed: ${e.message}", e)
+            Log.e(TAG, "ACTION_VIEW failed: ${e.message}")
+            // 继续尝试其他方案
+        }
+
+        // ─── 方案二（备）：su + pm install -r 静默安装（root 设备）───
+        // 仅当 FileProvider 方案不可用时尝试
+        try {
+            val process = Runtime.getRuntime().exec(arrayOf("su", "-c", "pm install -r ${apkFile.absolutePath}"))
+            val output = process.inputStream.bufferedReader().readText()
+            val error = process.errorStream.bufferedReader().readText()
+            val exitCode = process.waitFor()
+            Log.d(TAG, "pm install exitCode=$exitCode output=$output error=$error")
+            if (exitCode == 0) {
+                Log.d(TAG, "Silent install SUCCESS via pm")
+            } else {
+                Log.e(TAG, "pm install FAILED: $error")
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "su pm install failed: ${e.message}", e)
         }
     }
 }
