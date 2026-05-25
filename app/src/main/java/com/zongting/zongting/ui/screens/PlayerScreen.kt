@@ -33,6 +33,11 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.platform.LocalContext
+import android.os.Build
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.graphics.asComposeRenderEffect
+import androidx.compose.ui.graphics.graphicsLayer
 import coil.compose.AsyncImage
 import com.zongting.zongting.player.PlayerManager
 import com.zongting.zongting.player.SleepTimerManager
@@ -103,11 +108,44 @@ fun PlayerScreen(
         }
     }
 
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(MaterialTheme.colorScheme.background)
-    ) {
+    // 封面虚化平铺背景（无封面时用深色背景）
+    Box(modifier = Modifier.fillMaxSize()) {
+        // 虚化封面平铺背景
+        currentSong?.let { song ->
+            val coverUrl = song.coverUrl ?: song.pic
+            if (coverUrl.isNotBlank()) {
+                AsyncImage(
+                    model = coverUrl,
+                    contentDescription = null,
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .graphicsLayer {
+                            // Android 12+ (API 31) 支持 RenderEffect 虚化
+                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                                renderEffect = android.graphics.RenderEffect
+                                    .createBlurEffect(25f, 25f, android.graphics.Shader.TileMode.REPEAT)
+                                    .asComposeRenderEffect()
+                            }
+                        },
+                    contentScale = ContentScale.FillBounds
+                )
+            }
+        }
+        // 遮罩确保文字可读
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .drawBehind {
+                    drawRect(Color(0xCC000000)) // 50% 透明黑色
+                }
+        )
+
+        // 主内容 — 放在遮罩层之上
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(Color.Transparent) // 内容区透明，背景是 Box 的虚化封面
+        ) {
         // 顶部导航
         TopAppBar(
             title = { Text("正在播放") },
@@ -125,7 +163,7 @@ fun PlayerScreen(
                 }
             },
             colors = TopAppBarDefaults.topAppBarColors(
-                containerColor = MaterialTheme.colorScheme.background
+                containerColor = Color.Transparent
             )
         )
 
@@ -268,6 +306,7 @@ fun PlayerScreen(
                 lyrics = lyrics
             )
         }
+    }
     }
 }
 
