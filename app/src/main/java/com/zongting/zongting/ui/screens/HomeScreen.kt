@@ -82,7 +82,8 @@ fun HomeScreen(
                 ) {
                     Text(
                         "纵听",
-                        style = MaterialTheme.typography.titleLarge
+                        style = MaterialTheme.typography.titleLarge,
+                        color = Color(0xFFE53935)
                     )
 
                     // 根据阶段显示进度条/按钮
