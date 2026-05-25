@@ -141,10 +141,11 @@ object AudioRingtoneHelper {
             muxer = MediaMuxer(output, MediaMuxer.OutputFormat.MUXER_OUTPUT_MPEG_4)
             var muxerTrackIdx = -1
             var muxerStarted = false
+            var encoderStarted = false
 
             val bufferInfo = MediaCodec.BufferInfo()
 
-            // Decoder callback：将PCM数据直接传给encoder
+            // Decoder callback：将解码后的PCM数据直接传给encoder
             decoder.setCallback(object : MediaCodec.Callback() {
                 override fun onInputBufferAvailable(codec: MediaCodec, index: Int) {
                     val buf = codec.getInputBuffer(index) ?: return
@@ -161,11 +162,15 @@ object AudioRingtoneHelper {
                 override fun onOutputBufferAvailable(
                     codec: MediaCodec, index: Int, info: MediaCodec.BufferInfo
                 ) {
+                    // encoder 尚未start时跳过
+                    if (!encoderStarted || encoder == null) {
+                        codec.releaseOutputBuffer(index, false)
+                        return
+                    }
                     val encoded = codec.getOutputBuffer(index)
                     if (info.size > 0 && encoded != null) {
-                        // 给encoder喂PCM
                         try {
-                            val encInIdx = encoder?.dequeueInputBuffer(5000) ?: -1
+                            val encInIdx = encoder!!.dequeueInputBuffer(5000)
                             if (encInIdx >= 0) {
                                 val encBuf = encoder!!.getInputBuffer(encInIdx)!!
                                 val copyBytes = minOf(info.size, encBuf.remaining())
@@ -182,7 +187,7 @@ object AudioRingtoneHelper {
                     codec.releaseOutputBuffer(index, false)
                     if (info.flags and MediaCodec.BUFFER_FLAG_END_OF_STREAM != 0) {
                         try {
-                            val encInIdx = encoder?.dequeueInputBuffer(5000) ?: -1
+                            val encInIdx = encoder!!.dequeueInputBuffer(5000)
                             if (encInIdx >= 0) {
                                 encoder!!.queueInputBuffer(encInIdx, 0, 0, 0, MediaCodec.BUFFER_FLAG_END_OF_STREAM)
                             }
@@ -226,6 +231,7 @@ object AudioRingtoneHelper {
 
             decoder.start()
             encoder.start()
+            encoderStarted = true
 
             // 等待处理完成（最多30秒）
             val timeout = System.currentTimeMillis() + 30_000

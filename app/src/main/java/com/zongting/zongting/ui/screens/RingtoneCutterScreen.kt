@@ -152,6 +152,7 @@ fun RingtoneCutterScreen(
                 durationMs = state.durationMs,
                 startMs = state.startMs,
                 endMs = state.endMs,
+                playbackPositionMs = state.playbackPositionMs,
                 onStartChange = { viewModel.updateStart(it) },
                 onEndChange = { viewModel.updateEnd(it) },
                 modifier = Modifier
@@ -215,15 +216,16 @@ fun RingtoneCutterScreen(
                 )
             }
 
-            // ===== 歌词时间轴（截取范围内歌词预览）=====
+            // ===== 歌词时间轴 =====
             if (lyrics.isNotEmpty()) {
                 LyricTimelineView(
                     lyrics = lyrics,
                     startMs = state.startMs,
                     endMs = state.endMs,
+                    playbackPositionMs = state.playbackPositionMs,
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(160.dp)
+                        .weight(1f)
                 )
                 Spacer(modifier = Modifier.height(8.dp))
             }
@@ -329,6 +331,7 @@ private fun TimelineEditor(
     durationMs: Long,
     startMs: Long,
     endMs: Long,
+    playbackPositionMs: Long,
     onStartChange: (Long) -> Unit,
     onEndChange: (Long) -> Unit,
     modifier: Modifier = Modifier
@@ -336,7 +339,9 @@ private fun TimelineEditor(
     val density = LocalDensity.current
     val CLIP_DURATION_MS = 60_000L
 
+    // 立即获取轨道宽度（同步方式，避免 LaunchedEffect 延迟）
     var trackWidthPx by remember { mutableFloatStateOf(0f) }
+
     // 纯本地拖动状态，拖完才上报 ViewModel
     var localStartMs by remember(startMs) { mutableLongStateOf(startMs) }
     var isDragging by remember { mutableStateOf(false) }
@@ -359,10 +364,15 @@ private fun TimelineEditor(
     }
 
     BoxWithConstraints(
-        modifier = modifier.height(72.dp)
+        modifier = modifier
+            .height(80.dp)
+            .onSizeChanged { size ->
+                // 同步获取宽度，立即可用
+                if (size.width > 0) trackWidthPx = size.width.toFloat()
+            }
     ) {
         val maxW = constraints.maxWidth.toFloat().coerceAtLeast(1f)
-        LaunchedEffect(maxW) { trackWidthPx = maxW }
+        LaunchedEffect(maxW) { if (trackWidthPx == 0f) trackWidthPx = maxW }
 
         val clipWidthPx = if (trackWidthPx > 0f && durationMs > 0L)
             (CLIP_DURATION_MS.toFloat() / durationMs) * trackWidthPx
@@ -382,29 +392,35 @@ private fun TimelineEditor(
                 )
         )
 
+        // ===== 播放进度覆盖层 =====
+        if (trackWidthPx > 0f && durationMs > 0L && playbackPositionMs > 0L) {
+            Box(
+                modifier = Modifier
+                    .offset(x = with(density) { msToPx(playbackPositionMs).toDp() })
+                    .width(2.dp)
+                    .height(6.dp)
+                    .align(Alignment.Center)
+                    .background(
+                        MaterialTheme.colorScheme.tertiary,
+                        RoundedCornerShape(1.dp)
+                    )
+            )
+        }
+
         // ===== 60秒选中高亮块 =====
         Box(
             modifier = Modifier
                 .offset(x = with(density) { msToPx(localStartMs).toDp() })
-                .width(with(density) { clipWidthPx.toDp() })
-                .height(6.dp)
+                .width(with(density) { maxOf(clipWidthPx.toDp(), 72.dp) })
+                .height(32.dp)
                 .align(Alignment.Center)
                 .background(
-                    MaterialTheme.colorScheme.primary.copy(alpha = 0.85f),
-                    RoundedCornerShape(3.dp)
+                    MaterialTheme.colorScheme.primary.copy(alpha = 0.3f),
+                    RoundedCornerShape(6.dp)
                 )
-        )
-
-        // ===== 整块拖拽区域（触摸热区覆盖在轨道上） =====
-        Box(
-            modifier = Modifier
-                .offset(x = with(density) { msToPx(localStartMs).toDp() })
-                .width(with(density) { maxOf(clipWidthPx.toDp(), 60.dp) })
-                .height(56.dp)
-                .align(Alignment.Center)
                 .pointerInput(Unit) {
                     detectDragGestures(
-                        onDragStart = { _ ->
+                        onDragStart = { offset ->
                             isDragging = true
                         },
                         onDrag = { change, dragAmount ->
@@ -426,8 +442,10 @@ private fun TimelineEditor(
                             isDragging = false
                         }
                     )
-                }
+                },
+            contentAlignment = Alignment.Center
         ) {
+            // 拖动手柄指示（三条横线）
             Column(
                 modifier = Modifier.align(Alignment.Center),
                 horizontalAlignment = Alignment.CenterHorizontally,
@@ -436,10 +454,10 @@ private fun TimelineEditor(
                 repeat(3) { _ ->
                     Box(
                         modifier = Modifier
-                            .padding(vertical = 2.dp)
+                            .padding(vertical = 1.dp)
                             .size(width = 32.dp, height = 2.dp)
                             .background(
-                                Color.White.copy(alpha = 0.6f),
+                                Color.White.copy(alpha = 0.7f),
                                 RoundedCornerShape(1.dp)
                             )
                     )
@@ -447,33 +465,44 @@ private fun TimelineEditor(
             }
         }
 
-        // ===== 时间标签 =====
+        // ===== 固定时间标签：轨道左端 =====
+        Text(
+            text = formatTime(0L),
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier
+                .offset(x = 0.dp)
+                .align(Alignment.BottomStart)
+        )
+
+        // ===== 固定时间标签：轨道右端 =====
+        Text(
+            text = formatTime(durationMs),
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier
+                .align(Alignment.BottomEnd)
+        )
+
+        // ===== 选中块起点时间 =====
         Text(
             text = formatTime(localStartMs),
             style = MaterialTheme.typography.labelSmall,
             color = MaterialTheme.colorScheme.primary,
             modifier = Modifier
-                .offset(x = with(density) { msToPx(localStartMs).toDp() })
+                .offset(x = with(density) { (msToPx(localStartMs) - 2f).toDp() })
                 .align(Alignment.TopStart)
         )
-        Text(
-            text = formatTime((localStartMs + CLIP_DURATION_MS).coerceAtMost(durationMs)),
-            style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.primary,
-            modifier = Modifier
-                .offset(x = with(density) { (msToPx((localStartMs + CLIP_DURATION_MS).coerceAtMost(durationMs)) - 40f).toDp() })
-                .align(Alignment.TopStart)
-        )
-
     }
 }
 
 // ===== 歌词时间轴视图（拖动时显示对应歌词）=====
 @Composable
-fun LyricTimelineView(
+private fun LyricTimelineView(
     lyrics: List<LyricLine>,
     startMs: Long,
     endMs: Long,
+    playbackPositionMs: Long,
     modifier: Modifier = Modifier
 ) {
     val lazyListState = rememberLazyListState()
@@ -482,9 +511,9 @@ fun LyricTimelineView(
     val onSurface = MaterialTheme.colorScheme.onSurface
     val onSurfaceVariant = MaterialTheme.colorScheme.onSurfaceVariant
 
-    // 找到截取范围内的歌词行
-    val visibleLines = lyrics.filter { it.timestamp in startMs..endMs }
-    val currentLine = lyrics.findLast { it.timestamp <= (startMs + endMs) / 2 }
+    // 找到播放进度对应的歌词行
+    val effectivePos = if (playbackPositionMs > 0L) playbackPositionMs else (startMs + endMs) / 2
+    val currentLine = lyrics.findLast { it.timestamp <= effectivePos }
 
     LaunchedEffect(currentLine, lyrics) {
         currentLine?.let { line ->

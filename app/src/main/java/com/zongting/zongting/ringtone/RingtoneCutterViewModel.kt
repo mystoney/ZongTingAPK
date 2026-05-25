@@ -21,6 +21,7 @@ data class RingtoneCutterState(
     val startMs: Long = 0L,              // 截取起点
     val endMs: Long = 30_000L,           // 截取终点（默认30秒）
     val isPlaying: Boolean = false,      // 是否正在预览播放
+    val playbackPositionMs: Long = 0L,  // 当前播放位置（毫秒）
     val isProcessing: Boolean = false,   // 是否正在裁剪/保存
     val processingMessage: String = "",  // 处理中的提示
     val resultMessage: String = "",       // 结果消息
@@ -68,23 +69,43 @@ class RingtoneCutterViewModel @Inject constructor(
         )
     }
 
+    private var positionJob: kotlinx.coroutines.Job? = null
+
     /** 预览播放截取片段 */
     fun previewClip() {
         val s = _state.value
         if (s.isPlaying) {
             PlayerManager.pause()
-            _state.value = s.copy(isPlaying = false)
+            positionJob?.cancel()
+            _state.value = s.copy(isPlaying = false, playbackPositionMs = 0L)
         } else {
             PlayerManager.seekTo(s.startMs)
             PlayerManager.play()
-            _state.value = s.copy(isPlaying = true)
+            // 轮询播放进度
+            positionJob?.cancel()
+            positionJob = viewModelScope.launch {
+                while (true) {
+                    val pos = PlayerManager.currentPosition
+                    val end = _state.value.endMs
+                    _state.value = _state.value.copy(playbackPositionMs = pos)
+                    // 播放到截取终点自动停止
+                    if (pos >= end) {
+                        PlayerManager.pause()
+                        _state.value = _state.value.copy(isPlaying = false, playbackPositionMs = 0L)
+                        break
+                    }
+                    kotlinx.coroutines.delay(100L)
+                }
+            }
+            _state.value = s.copy(isPlaying = true, playbackPositionMs = s.startMs)
         }
     }
 
     /** 停止预览 */
     fun stopPreview() {
+        positionJob?.cancel()
         PlayerManager.pause()
-        _state.value = _state.value.copy(isPlaying = false)
+        _state.value = _state.value.copy(isPlaying = false, playbackPositionMs = 0L)
     }
 
     /** 导出音频文件（保存到下载目录） */
