@@ -61,7 +61,7 @@ object AudioRingtoneHelper {
             val outputFile = File(context.cacheDir, "trim_${System.currentTimeMillis()}.m4a")
 
             Log.d(TAG, "下载音频: $url")
-            if (!downloadFile(url, downloadFile)) {
+            if (!downloadFile(context, url, downloadFile)) {
                 downloadFile.delete()
                 return@withContext TrimResult.Error("音频下载失败，请检查网络")
             }
@@ -133,25 +133,55 @@ object AudioRingtoneHelper {
         }
     }
 
-    private fun downloadFile(urlStr: String, out: File): Boolean {
+    private fun downloadFile(context: Context, urlStr: String, out: File): Boolean {
         return try {
-            val conn = URL(urlStr).openConnection() as HttpURLConnection
-            conn.connectTimeout = 15_000
-            conn.readTimeout = 60_000
-            conn.setRequestProperty("User-Agent", "ZongTing/1.0")
-            conn.connect()
-            if (conn.responseCode != HttpURLConnection.HTTP_OK) {
-                conn.disconnect(); return false
-            }
-            FileOutputStream(out).use { fos ->
-                conn.inputStream.use { inp ->
-                    val buf = ByteArray(BUFFER_SIZE)
-                    var n: Int
-                    while (inp.read(buf).also { n = it } != -1) fos.write(buf, 0, n)
+            when {
+                urlStr.startsWith("content://") -> {
+                    // 从 ContentProvider 读取（如缓存的音频）
+                    val uri = Uri.parse(urlStr)
+                    context.contentResolver.openInputStream(uri)?.use { inp ->
+                        FileOutputStream(out).use { fos ->
+                            val buf = ByteArray(BUFFER_SIZE)
+                            var n: Int
+                            while (inp.read(buf).also { n = it } != -1) fos.write(buf, 0, n)
+                        }
+                    } ?: return false
+                    true
+                }
+                urlStr.startsWith("file://") -> {
+                    // 直接读取本地文件
+                    val file = File(urlStr.removePrefix("file://"))
+                    if (!file.exists()) return false
+                    file.inputStream().use { inp ->
+                        FileOutputStream(out).use { fos ->
+                            val buf = ByteArray(BUFFER_SIZE)
+                            var n: Int
+                            while (inp.read(buf).also { n = it } != -1) fos.write(buf, 0, n)
+                        }
+                    }
+                    true
+                }
+                else -> {
+                    // HTTP/HTTPS 流
+                    val conn = URL(urlStr).openConnection() as HttpURLConnection
+                    conn.connectTimeout = 15_000
+                    conn.readTimeout = 60_000
+                    conn.setRequestProperty("User-Agent", "ZongTing/1.0")
+                    conn.connect()
+                    if (conn.responseCode != HttpURLConnection.HTTP_OK) {
+                        conn.disconnect(); return false
+                    }
+                    conn.inputStream.use { inp ->
+                        FileOutputStream(out).use { fos ->
+                            val buf = ByteArray(BUFFER_SIZE)
+                            var n: Int
+                            while (inp.read(buf).also { n = it } != -1) fos.write(buf, 0, n)
+                        }
+                    }
+                    conn.disconnect()
+                    true
                 }
             }
-            conn.disconnect()
-            true
         } catch (e: Exception) {
             Log.e(TAG, "download failed: ${e.message}")
             false

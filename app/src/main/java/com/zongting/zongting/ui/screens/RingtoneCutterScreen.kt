@@ -27,7 +27,6 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -334,41 +333,33 @@ private fun TimelineEditor(
     onEndChange: (Long) -> Unit,
     modifier: Modifier = Modifier
 ) {
-    var measuredSize by remember { mutableStateOf(IntSize.Zero) }
     val density = LocalDensity.current
+    var trackWidthPx by remember { mutableFloatStateOf(0f) }
 
-    // 转换毫秒到像素
     fun msToPx(ms: Long): Float {
-        if (measuredSize.width == 0 || durationMs == 0L) return 0f
-        return (ms.toFloat() / durationMs) * measuredSize.width
+        if (trackWidthPx <= 0f || durationMs <= 0L) return 0f
+        return (ms.toFloat() / durationMs) * trackWidthPx
     }
 
-    // 转换像素到毫秒
     fun pxToMs(px: Float): Long {
-        if (measuredSize.width == 0) return 0L
-        return ((px / measuredSize.width) * durationMs).toLong().coerceIn(0, durationMs)
+        if (trackWidthPx <= 0f || durationMs <= 0L) return 0L
+        return ((px / trackWidthPx) * durationMs).toLong().coerceIn(0L, durationMs)
     }
 
     val handleRadius = 12.dp
-    val handleRadiusPx = with(density) { handleRadius.toPx() }
     val trackHeight = 6.dp
-    val totalHeight = handleRadius * 2 + 24.dp  // 拖动手柄高度
+    val totalHeight = handleRadius * 2 + 24.dp
 
     BoxWithConstraints(
         modifier = modifier.height(totalHeight)
     ) {
-        val boxWidthPx = measuredSize.width.toFloat()
-
         // ===== 背景轨道 =====
-        val startX = msToPx(startMs)
-        val endX = msToPx(endMs)
-
         Box(
             modifier = Modifier
                 .fillMaxWidth()
                 .height(trackHeight)
                 .align(Alignment.Center)
-                .onSizeChanged { measuredSize = it }
+                .onSizeChanged { trackWidthPx = it.width.toFloat() }
                 .background(
                     MaterialTheme.colorScheme.surfaceVariant,
                     RoundedCornerShape(trackHeight / 2)
@@ -378,8 +369,8 @@ private fun TimelineEditor(
         // ===== 已选中的高亮区域 =====
         Box(
             modifier = Modifier
-                .offset(x = with(density) { (msToPx(startMs)).toDp() })
-                .width(with(density) { (msToPx(endMs) - msToPx(startMs)).toDp() })
+                .offset(x = with(density) { msToPx(startMs).toDp() })
+                .width(with(density) { (msToPx(endMs) - msToPx(startMs)).coerceAtLeast(0f).toDp() })
                 .height(trackHeight)
                 .align(Alignment.Center)
                 .background(
@@ -389,11 +380,11 @@ private fun TimelineEditor(
         )
 
         // ===== 开始拖柄 =====
+        val startOffsetPx = msToPx(startMs)
         Box(
             modifier = Modifier
-                .offset(x = with(density) { msToPx(startMs).toDp() })
+                .offset(x = with(density) { (startOffsetPx - 12f).toDp() })
                 .align(Alignment.CenterStart)
-                .offset(x = (-handleRadius))
                 .size(handleRadius * 2)
                 .background(
                     MaterialTheme.colorScheme.primary,
@@ -405,10 +396,11 @@ private fun TimelineEditor(
                     detectDragGestures(
                         onDragStart = { },
                         onDrag = { change, dragAmount ->
-                            if (durationMs <= 0) return@detectDragGestures
                             change.consume()
+                            if (trackWidthPx <= 0f || durationMs <= 0L) return@detectDragGestures
                             val deltaMs = pxToMs(dragAmount.x)
-                            val newMs = (startMs + deltaMs).coerceIn(0, (endMs - 1000).coerceAtLeast(0))
+                            val upperBound = (endMs - 1000L).coerceAtLeast(0L)
+                            val newMs = (startMs + deltaMs).coerceIn(0L, upperBound)
                             onStartChange(newMs)
                         }
                     )
@@ -416,11 +408,11 @@ private fun TimelineEditor(
         )
 
         // ===== 结束拖柄 =====
+        val endOffsetPx = msToPx(endMs)
         Box(
             modifier = Modifier
-                .offset(x = with(density) { msToPx(endMs).toDp() })
+                .offset(x = with(density) { (endOffsetPx - 12f).toDp() })
                 .align(Alignment.CenterStart)
-                .offset(x = (-handleRadius))
                 .size(handleRadius * 2)
                 .background(
                     MaterialTheme.colorScheme.primary,
@@ -432,11 +424,12 @@ private fun TimelineEditor(
                     detectDragGestures(
                         onDragStart = { },
                         onDrag = { change, dragAmount ->
-                            if (durationMs <= 0) return@detectDragGestures
                             change.consume()
+                            if (trackWidthPx <= 0f || durationMs <= 0L) return@detectDragGestures
                             val deltaMs = pxToMs(dragAmount.x)
-                            val maxEnd = minOf(durationMs, startMs + 60_000L)
-                            val newMs = (endMs + deltaMs).coerceIn((startMs + 1000).coerceAtMost(maxEnd), maxEnd.coerceAtLeast(0))
+                            val lowerBound = startMs + 1000L
+                            val upperBound = minOf(durationMs, startMs + 60_000L)
+                            val newMs = (endMs + deltaMs).coerceIn(lowerBound, upperBound)
                             onEndChange(newMs)
                         }
                     )
@@ -449,9 +442,8 @@ private fun TimelineEditor(
             style = MaterialTheme.typography.labelSmall,
             color = MaterialTheme.colorScheme.primary,
             modifier = Modifier
-                .offset(x = with(density) { msToPx(startMs).toDp() })
+                .offset(x = with(density) { (startOffsetPx - 12f).toDp() })
                 .align(Alignment.TopStart)
-                .offset(x = (-handleRadius))
         )
 
         // ===== 结束时间标签 =====
@@ -460,9 +452,8 @@ private fun TimelineEditor(
             style = MaterialTheme.typography.labelSmall,
             color = MaterialTheme.colorScheme.primary,
             modifier = Modifier
-                .offset(x = with(density) { msToPx(endMs).toDp() })
+                .offset(x = with(density) { (endOffsetPx - 12f).toDp() })
                 .align(Alignment.TopStart)
-                .offset(x = (-handleRadius))
         )
     }
 }
