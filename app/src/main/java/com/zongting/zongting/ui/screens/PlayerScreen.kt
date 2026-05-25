@@ -700,7 +700,7 @@ private fun LyricPage(
 
     Surface(
         modifier = Modifier.fillMaxSize(),
-        color = MaterialTheme.colorScheme.background.copy(alpha = 0.1f)
+        color = MaterialTheme.colorScheme.background.copy(alpha = 0.2f)
     ) {
         Box(modifier = Modifier.fillMaxSize()) {
             when (lyricState) {
