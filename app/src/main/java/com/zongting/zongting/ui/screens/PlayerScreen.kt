@@ -254,7 +254,9 @@ fun PlayerScreen(
             val ringtoneViewModel: com.zongting.zongting.ringtone.RingtoneCutterViewModel =
                 androidx.hilt.navigation.compose.hiltViewModel()
             LaunchedEffect(currentSong, durationMs, lyrics) {
-                ringtoneViewModel.initialize(currentSong, durationMs, lyrics)
+                if (durationMs > 0) {
+                    ringtoneViewModel.initialize(currentSong, durationMs, lyrics)
+                }
             }
 
             RingtoneCutterScreen(

@@ -405,9 +405,10 @@ private fun TimelineEditor(
                     detectDragGestures(
                         onDragStart = { },
                         onDrag = { change, dragAmount ->
+                            if (durationMs <= 0) return@detectDragGestures
                             change.consume()
                             val deltaMs = pxToMs(dragAmount.x)
-                            val newMs = (startMs + deltaMs).coerceIn(0, endMs - 1000)
+                            val newMs = (startMs + deltaMs).coerceIn(0, (endMs - 1000).coerceAtLeast(0))
                             onStartChange(newMs)
                         }
                     )
@@ -431,10 +432,11 @@ private fun TimelineEditor(
                     detectDragGestures(
                         onDragStart = { },
                         onDrag = { change, dragAmount ->
+                            if (durationMs <= 0) return@detectDragGestures
                             change.consume()
                             val deltaMs = pxToMs(dragAmount.x)
                             val maxEnd = minOf(durationMs, startMs + 60_000L)
-                            val newMs = (endMs + deltaMs).coerceIn(startMs + 1000, maxEnd)
+                            val newMs = (endMs + deltaMs).coerceIn((startMs + 1000).coerceAtMost(maxEnd), maxEnd.coerceAtLeast(0))
                             onEndChange(newMs)
                         }
                     )
