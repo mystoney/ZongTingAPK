@@ -334,7 +334,11 @@ private fun TimelineEditor(
     modifier: Modifier = Modifier
 ) {
     val density = LocalDensity.current
+    val CLIP_DURATION_MS = 60_000L
+
     var trackWidthPx by remember { mutableFloatStateOf(0f) }
+    var dragStartX by remember { mutableFloatStateOf(0f) }
+    var isDragging by remember { mutableStateOf(false) }
 
     fun msToPx(ms: Long): Float {
         if (trackWidthPx <= 0f || durationMs <= 0L) return 0f
@@ -346,130 +350,128 @@ private fun TimelineEditor(
         return ((px / trackWidthPx) * durationMs).toLong().coerceIn(0L, durationMs)
     }
 
-    // 拖柄位置用 mutableFloatStateOf，跟踪拖拽过程中的实时位置（避免闭包捕获旧值）
-    var startDragPx by remember { mutableFloatStateOf(0f) }
-    var endDragPx by remember { mutableFloatStateOf(0f) }
-
-    val handleTouchDp = 20.dp        // 触摸区域（较大方便拖动）
-    val handleVisualDp = 12.dp       // 视觉圆圈大小
-    val trackHeight = 6.dp
-    val totalHeight = handleTouchDp + 24.dp
+    val clipWidthPx: Float = if (trackWidthPx > 0f && durationMs > 0L)
+        (CLIP_DURATION_MS.toFloat() / durationMs) * trackWidthPx
+    else 0f
 
     BoxWithConstraints(
-        modifier = modifier.height(totalHeight)
+        modifier = modifier.height(72.dp)
     ) {
         val maxW = constraints.maxWidth.toFloat().coerceAtLeast(1f)
         LaunchedEffect(maxW) { trackWidthPx = maxW }
-        LaunchedEffect(startMs) { startDragPx = msToPx(startMs) }
-        LaunchedEffect(endMs) { endDragPx = msToPx(endMs) }
+
+        // clip 宽度（随 trackWidthPx 更新）
+        val clipWidthPx = if (trackWidthPx > 0f && durationMs > 0L)
+            (CLIP_DURATION_MS.toFloat() / durationMs) * trackWidthPx
+        else 0f
+
+        // 限制起点：clip 块最右不能超出音频末尾
+        val maxStartMs = (durationMs - CLIP_DURATION_MS).coerceAtLeast(0L)
 
         // ===== 背景轨道 =====
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(trackHeight)
+                .height(6.dp)
                 .align(Alignment.Center)
                 .background(
                     MaterialTheme.colorScheme.surfaceVariant,
-                    RoundedCornerShape(trackHeight / 2)
+                    RoundedCornerShape(3.dp)
                 )
         )
 
-        // ===== 已选中的高亮区域 =====
+        // ===== 60秒选中高亮块 =====
         Box(
             modifier = Modifier
                 .offset(x = with(density) { msToPx(startMs).toDp() })
-                .width(with(density) { (msToPx(endMs) - msToPx(startMs)).coerceAtLeast(0f).toDp() })
-                .height(trackHeight)
-                .align(Alignment.Center)
+                .width(with(density) { clipWidthPx.toDp() })
+                .height(6.dp)
+                .align(Alignment.CenterStart)
                 .background(
-                    MaterialTheme.colorScheme.primary,
-                    RoundedCornerShape(trackHeight / 2)
+                    MaterialTheme.colorScheme.primary.copy(alpha = 0.85f),
+                    RoundedCornerShape(3.dp)
                 )
         )
 
-        // ===== 拖柄辅助函数（使用 lambda 避免闭包捕获问题）=====
-        fun Modifier.draggableHandle(
-            getPositionPx: () -> Float,
-            onPositionChange: (Long) -> Unit,
-            clampPx: (candidate: Float) -> Float
-        ): Modifier = this
-            .offset(x = with(density) { getPositionPx().toDp() - handleTouchDp / 2 })
-            .size(handleTouchDp)
-            .pointerInput(Unit) {
-                detectDragGestures(
-                    onDragStart = { },
-                    onDrag = { change, dragAmount ->
-                        change.consume()
-                        if (trackWidthPx <= 0f || durationMs <= 0L) return@detectDragGestures
-                        val basePx = getPositionPx()
-                        val newPx = clampPx(basePx + dragAmount.x)
-                        val newMs = pxToMs(newPx)
-                        onPositionChange(newMs)
-                    }
-                )
-            }
-
-        // ===== 开始拖柄 =====
+        // ===== 整块拖拽区域 =====
         Box(
             modifier = Modifier
+                .offset(x = with(density) { msToPx(startMs).toDp() })
+                .width(with(density) { clipWidthPx.toDp() })
+                .height(48.dp)
                 .align(Alignment.CenterStart)
-                .size(handleTouchDp)
-                .padding(horizontal = (handleTouchDp - handleVisualDp) / 2)
-                .draggableHandle(
-                    getPositionPx = { startDragPx },
-                    onPositionChange = onStartChange,
-                    clampPx = { candidate ->
-                        msToPx((endMs - 1000L).coerceAtLeast(0L)).let { maxPx ->
-                            candidate.coerceIn(0f, maxPx)
-                        }
-                    }
-                )
-                .background(MaterialTheme.colorScheme.primary, CircleShape)
-                .border(3.dp, Color.White, CircleShape)
-                .shadow(4.dp, CircleShape)
-        )
-
-        // ===== 结束拖柄 =====
-        Box(
-            modifier = Modifier
-                .align(Alignment.CenterStart)
-                .size(handleTouchDp)
-                .padding(horizontal = (handleTouchDp - handleVisualDp) / 2)
-                .draggableHandle(
-                    getPositionPx = { endDragPx },
-                    onPositionChange = onEndChange,
-                    clampPx = { candidate ->
-                        msToPx(startMs + 1000L).let { minPx ->
-                            msToPx(minOf(durationMs, startMs + 60_000L)).let { maxPx ->
-                                candidate.coerceIn(minPx, maxPx)
+                .pointerInput(Unit) {
+                    detectDragGestures(
+                        onDragStart = { offset ->
+                            dragStartX = offset.x
+                            isDragging = true
+                        },
+                        onDrag = { change, dragAmount ->
+                            change.consume()
+                            if (trackWidthPx <= 0f || durationMs <= 0L) return@detectDragGestures
+                            // 新起点 = 旧起点 + 拖动量
+                            val rawNewStart = pxToMs(msToPx(startMs) + dragAmount.x)
+                            val clampedStart = rawNewStart.coerceIn(0L, maxStartMs)
+                            if (clampedStart != startMs) {
+                                onStartChange(clampedStart)
+                                onEndChange((clampedStart + CLIP_DURATION_MS).coerceAtMost(durationMs))
                             }
-                        }
-                    }
-                )
-                .background(MaterialTheme.colorScheme.primary, CircleShape)
-                .border(3.dp, Color.White, CircleShape)
-                .shadow(4.dp, CircleShape)
-        )
+                        },
+                        onDragEnd = { isDragging = false },
+                        onDragCancel = { isDragging = false }
+                    )
+                }
+            // 触摸提示：半透明覆盖层
+        ) {
+            // 左右两端的视觉把手
+            Box(
+                modifier = Modifier
+                    .align(Alignment.CenterStart)
+                    .offset(x = (-2).dp)
+                    .size(width = 6.dp, height = 56.dp)
+                    .background(
+                        Color.White.copy(alpha = 0.9f),
+                        RoundedCornerShape(3.dp)
+                    )
+            )
+            Box(
+                modifier = Modifier
+                    .align(Alignment.CenterEnd)
+                    .offset(x = 2.dp)
+                    .size(width = 6.dp, height = 56.dp)
+                    .background(
+                        Color.White.copy(alpha = 0.9f),
+                        RoundedCornerShape(3.dp)
+                    )
+            )
+            // 中心拖动手柄指示
+            Box(
+                modifier = Modifier
+                    .align(Alignment.Center)
+                    .size(width = 40.dp, height = 4.dp)
+                    .background(
+                        Color.White.copy(alpha = 0.5f),
+                        RoundedCornerShape(2.dp)
+                    )
+            )
+        }
 
-        // ===== 起始时间标签 =====
+        // ===== 时间标签 =====
         Text(
             text = formatTime(startMs),
             style = MaterialTheme.typography.labelSmall,
             color = MaterialTheme.colorScheme.primary,
             modifier = Modifier
-                .offset(x = with(density) { msToPx(startMs).toDp() - handleTouchDp / 2 })
+                .offset(x = with(density) { msToPx(startMs).toDp() })
                 .align(Alignment.TopStart)
         )
-
-        // ===== 结束时间标签 =====
         Text(
             text = formatTime(endMs),
             style = MaterialTheme.typography.labelSmall,
             color = MaterialTheme.colorScheme.primary,
             modifier = Modifier
-                .offset(x = with(density) { msToPx(endMs).toDp() - handleTouchDp / 2 })
-                .align(Alignment.TopEnd)
+                .offset(x = with(density) { (msToPx(startMs) + clipWidthPx).toDp() - 40.dp })
+                .align(Alignment.TopStart)
         )
     }
 }

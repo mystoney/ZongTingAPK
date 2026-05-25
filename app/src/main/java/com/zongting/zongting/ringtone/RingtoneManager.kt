@@ -39,7 +39,8 @@ object AudioRingtoneHelper {
     }
 
     /**
-     * 裁剪音频：下载URL到临时文件 → MediaMuxer裁剪
+     * 裁剪音频：下载URL到临时文件 → MediaCodec转码(MP3→AAC) → MediaMuxer封装
+     * 设备自带 MP3 decoder 和 AAC encoder，无需外部依赖
      */
     suspend fun trimAudio(
         context: Context,
@@ -106,6 +107,8 @@ object AudioRingtoneHelper {
     private fun trimWithMuxer(input: String, output: String, startUs: Long, endUs: Long): Boolean {
         var extractor: MediaExtractor? = null
         var muxer: MediaMuxer? = null
+        var decoder: MediaCodec? = null
+        var encoder: MediaCodec? = null
         try {
             extractor = MediaExtractor()
             extractor.setDataSource(input)
@@ -114,36 +117,136 @@ object AudioRingtoneHelper {
                 extractor.getTrackFormat(i).getString(MediaFormat.KEY_MIME)?.startsWith("audio/") == true
             } ?: return false
 
-            val format = extractor.getTrackFormat(trackIdx)
-            muxer = MediaMuxer(output, MediaMuxer.OutputFormat.MUXER_OUTPUT_MPEG_4)
-            val muxerTrack = muxer.addTrack(format)
-            muxer.start()
-
+            val srcFormat = extractor.getTrackFormat(trackIdx)
+            val mime = srcFormat.getString(MediaFormat.KEY_MIME) ?: return false
+            val sampleRate = srcFormat.getInteger(MediaFormat.KEY_SAMPLE_RATE)
+            val channelCount = srcFormat.getInteger(MediaFormat.KEY_CHANNEL_COUNT)
             extractor.selectTrack(trackIdx)
             extractor.seekTo(startUs, MediaExtractor.SEEK_TO_CLOSEST_SYNC)
 
-            val buffer = java.nio.ByteBuffer.allocate(BUFFER_SIZE)
-            val info = MediaCodec.BufferInfo()
-            while (true) {
-                info.size = extractor.readSampleData(buffer, 0)
-                if (info.size < 0) break
+            Log.d(TAG, "音频格式: mime=$mime, rate=$sampleRate, ch=$channelCount")
 
-                val t = extractor.sampleTime
-                if (t > endUs) break
+            // 解码器（MP3 → PCM）
+            decoder = MediaCodec.createDecoderByType(mime)
+            decoder.configure(srcFormat, null, null, 0)
 
-                info.offset = 0
-                info.presentationTimeUs = t - startUs
-                info.flags = extractor.sampleFlags
-                muxer.writeSampleData(muxerTrack, buffer, info)
-                extractor.advance()
+            // 编码器（PCM → AAC）
+            val dstFormat = MediaFormat.createAudioFormat(MediaFormat.MIMETYPE_AUDIO_AAC, sampleRate, channelCount).apply {
+                setInteger(MediaFormat.KEY_BIT_RATE, 192_000)
+                setInteger(MediaFormat.KEY_AAC_PROFILE, android.media.MediaCodecInfo.CodecProfileLevel.AACObjectLC)
             }
-            return true
+            encoder = MediaCodec.createEncoderByType(MediaFormat.MIMETYPE_AUDIO_AAC)
+            encoder.configure(dstFormat, null, null, MediaCodec.CONFIGURE_FLAG_ENCODE)
+
+            muxer = MediaMuxer(output, MediaMuxer.OutputFormat.MUXER_OUTPUT_MPEG_4)
+            var muxerTrackIdx = -1
+            var muxerStarted = false
+
+            val bufferInfo = MediaCodec.BufferInfo()
+
+            // Decoder callback：将PCM数据直接传给encoder
+            decoder.setCallback(object : MediaCodec.Callback() {
+                override fun onInputBufferAvailable(codec: MediaCodec, index: Int) {
+                    val buf = codec.getInputBuffer(index) ?: return
+                    buf.clear()
+                    val sampleSize = extractor?.readSampleData(buf, 0) ?: -1
+                    if (sampleSize < 0 || (extractor?.sampleTime ?: 0) > endUs + 500_000) {
+                        codec.queueInputBuffer(index, 0, 0, 0, MediaCodec.BUFFER_FLAG_END_OF_STREAM)
+                    } else {
+                        codec.queueInputBuffer(index, 0, sampleSize, extractor!!.sampleTime, 0)
+                        extractor.advance()
+                    }
+                }
+
+                override fun onOutputBufferAvailable(
+                    codec: MediaCodec, index: Int, info: MediaCodec.BufferInfo
+                ) {
+                    val encoded = codec.getOutputBuffer(index)
+                    if (info.size > 0 && encoded != null) {
+                        // 给encoder喂PCM
+                        val encInIdx = encoder?.dequeueInputBuffer(5000) ?: -1
+                        if (encInIdx >= 0) {
+                            val encBuf = encoder!!.getInputBuffer(encInIdx)!!
+                            val copyBytes = minOf(info.size, encBuf.remaining())
+                            val copy = ByteArray(copyBytes)
+                            encoded.get(copy, 0, copyBytes)
+                            encBuf.clear()
+                            encBuf.put(copy)
+                            encoder.queueInputBuffer(encInIdx, 0, copyBytes, info.presentationTimeUs, 0)
+                        }
+                    }
+                    codec.releaseOutputBuffer(index, false)
+                    if (info.flags and MediaCodec.BUFFER_FLAG_END_OF_STREAM != 0) {
+                        val encInIdx = encoder?.dequeueInputBuffer(5000) ?: -1
+                        if (encInIdx >= 0) {
+                            encoder!!.queueInputBuffer(encInIdx, 0, 0, 0, MediaCodec.BUFFER_FLAG_END_OF_STREAM)
+                        }
+                    }
+                }
+
+                override fun onError(codec: MediaCodec, e: MediaCodec.CodecException) {
+                    Log.e(TAG, "Decoder error", e)
+                }
+                override fun onOutputFormatChanged(codec: MediaCodec, format: MediaFormat) {}
+            })
+
+            // Encoder callback：将AAC数据写入muxer
+            encoder.setCallback(object : MediaCodec.Callback() {
+                override fun onInputBufferAvailable(codec: MediaCodec, index: Int) {}
+
+                override fun onOutputBufferAvailable(
+                    codec: MediaCodec, index: Int, info: MediaCodec.BufferInfo
+                ) {
+                    if (!muxerStarted) {
+                        muxerTrackIdx = muxer.addTrack(codec.outputFormat)
+                        muxer.start()
+                        muxerStarted = true
+                    }
+                    val data = codec.getOutputBuffer(index)
+                    if (info.size > 0 && data != null && info.presentationTimeUs <= endUs) {
+                        muxer.writeSampleData(muxerTrackIdx, data, info)
+                    }
+                    codec.releaseOutputBuffer(index, false)
+                    if (info.flags and MediaCodec.BUFFER_FLAG_END_OF_STREAM != 0) {
+                        Log.d(TAG, "Encoder EOS received")
+                    }
+                }
+
+                override fun onError(codec: MediaCodec, e: MediaCodec.CodecException) {
+                    Log.e(TAG, "Encoder error", e)
+                }
+                override fun onOutputFormatChanged(codec: MediaCodec, format: MediaFormat) {}
+            })
+
+            decoder.start()
+            encoder.start()
+
+            // 等待处理完成（最多30秒）
+            val timeout = System.currentTimeMillis() + 30_000
+            while (System.currentTimeMillis() < timeout) {
+                if (muxerStarted && File(output).length() > 0) {
+                    val hasMore = extractor?.sampleTime ?: 0 <= endUs + 500_000
+                    if (!hasMore) {
+                        // 数据读完，等encoder输出完毕
+                        Thread.sleep(500)
+                        break
+                    }
+                }
+                Thread.sleep(100)
+            }
+
+            val result = muxerStarted && File(output).length() > 0
+            Log.d(TAG, "trimWithMuxer完成: success=$result, size=${File(output).length()}")
+            return result
         } catch (e: Exception) {
-            Log.e(TAG, "MediaMuxer error", e)
+            Log.e(TAG, "trimWithMuxer异常", e)
             return false
         } finally {
-            extractor?.release()
+            listOf(decoder, encoder).forEach {
+                try { it?.stop(); it?.release() } catch (_: Exception) {}
+            }
             try { muxer?.stop(); muxer?.release() } catch (_: Exception) {}
+            extractor?.release()
         }
     }
 
