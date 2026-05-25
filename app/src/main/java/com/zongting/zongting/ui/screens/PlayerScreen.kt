@@ -121,11 +121,10 @@ fun PlayerScreen(
         // 深色基底
         Box(modifier = Modifier.fillMaxSize().background(Color(0xFF0D0D1A)))
 
-        // 平铺封面：produceState 加载图片，Canvas 画多张缩小后的封面实现真正平铺
+        // 平铺封面：单张图片拉伸到填满背景 + 虚化
         currentSong?.let { song ->
             val coverUrl = song.coverUrl ?: song.pic
             if (coverUrl.isNotBlank()) {
-                val scale = 0.25f // 每张缩到 25%，4x4 = 16 张铺满
                 val ctx = LocalContext.current
 
                 val loadedBmp: State<android.graphics.Bitmap?> = produceState<android.graphics.Bitmap?>(null, coverUrl) {
@@ -138,7 +137,7 @@ fun PlayerScreen(
                     value = (result.drawable as? android.graphics.drawable.BitmapDrawable)?.bitmap
                 }
 
-                // 画多张缩小封面实现平铺
+                // 单张图片拉伸填满屏幕
                 Canvas(
                     modifier = Modifier
                         .fillMaxSize()
@@ -149,33 +148,24 @@ fun PlayerScreen(
                 ) {
                     val bmp = loadedBmp.value
                     if (bmp != null && !bmp.isRecycled) {
-                        val tileW = (bmp.width * scale).toInt().coerceAtLeast(1)
-                        val tileH = (bmp.height * scale).toInt().coerceAtLeast(1)
-                        val scaled = android.graphics.Bitmap.createScaledBitmap(bmp, tileW, tileH, true)
-                        val cols = (size.width.toInt() / tileW) + 2
-                        val rows = (size.height.toInt() / tileH) + 2
-                        for (row in 0 until rows) {
-                            for (col in 0 until cols) {
-                                drawContext.canvas.nativeCanvas.drawBitmap(
-                                    scaled, (col * tileW).toFloat(), (row * tileH).toFloat(), null
-                                )
-                            }
-                        }
-                        if (scaled !== bmp) scaled.recycle()
+                        // 将图片拉伸到填满整个 Canvas（类似壁纸拉伸效果）
+                        val dst = android.graphics.Rect(0, 0, size.width.toInt().coerceAtLeast(1), size.height.toInt().coerceAtLeast(1))
+                        val src = android.graphics.Rect(0, 0, bmp.width, bmp.height)
+                        drawContext.canvas.nativeCanvas.drawBitmap(bmp, src, dst, null)
                     }
                 }
 
-                // Android 12+ 用 RenderEffect 虚化（RenderEffect.REPEAT 在缩小的平铺图上效果更好）
+                // Android 12+ 用 RenderEffect 虚化
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
                     Box(
                         modifier = Modifier
                             .fillMaxSize()
                             .graphicsLayer {
                                 renderEffect = android.graphics.RenderEffect
-                                    .createBlurEffect(20f, 20f, android.graphics.Shader.TileMode.REPEAT)
+                                    .createBlurEffect(20f, 20f, android.graphics.Shader.TileMode.CLAMP)
                                     .asComposeRenderEffect()
                             }
-                    ) { /* 透明子层，RenderEffect 模糊整个平铺背景 */ }
+                    ) { /* 透明子层，RenderEffect 模糊拉伸的图片背景 */ }
                 }
             }
         }
