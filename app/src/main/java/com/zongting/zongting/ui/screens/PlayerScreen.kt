@@ -155,15 +155,6 @@ fun PlayerScreen(
                     }
                 }
 
-                // 封面图片亮度+10%（白色叠加层）
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .drawBehind {
-                            drawRect(Color(0x1AFFFFFF)) // 10% 白色叠加提亮
-                        }
-                )
-
                 // Android 12+ 用 RenderEffect 虚化
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
                     Box(
@@ -184,7 +175,7 @@ fun PlayerScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .drawBehind {
-                    drawRect(Color(0xE6000000)) // 90% 透明黑色
+                    drawRect(Color(0xCC000000)) // 80% 透明黑色
                 }
         )
 
