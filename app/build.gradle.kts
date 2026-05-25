@@ -32,10 +32,20 @@ android {
         }
     }
 
+    signingConfigs {
+        create("release") {
+            storeFile = file("../zongting.keystore")
+            storePassword = "ZongTing2024!"
+            keyAlias = "zongting"
+            keyPassword = "ZongTing2024!"
+        }
+    }
+
     buildTypes {
         release {
             isMinifyEnabled = false
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
+            signingConfig = signingConfigs.getByName("release")
         }
     }
 

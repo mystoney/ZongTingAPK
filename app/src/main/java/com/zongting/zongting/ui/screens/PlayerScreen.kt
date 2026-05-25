@@ -57,6 +57,7 @@ fun PlayerScreen(
     val lyricState by viewModel.lyricState.collectAsState()
     val currentPlaylist by viewModel.currentPlaylist.collectAsState()
     var showSleepTimerDialog by remember { mutableStateOf(false) }
+    var showRingtoneCutter by remember { mutableStateOf(false) }
 
     // 定时关闭状态
     val isTimerActive by SleepTimerManager.isActive.collectAsState()
@@ -202,6 +203,7 @@ fun PlayerScreen(
             onToggleFavorite = { currentSong?.let { viewModel.toggleFavorite(it) } },
             onToggleSavePlaylist = { showSavePlaylistDialog = true },
             onSleepTimerClick = { showSleepTimerDialog = true },
+            onRingtoneCutterClick = { showRingtoneCutter = true },
             isTimerActive = isTimerActive,
             timerRemaining = timerRemaining,
             onPrevious = { viewModel.playPrevious() },
@@ -243,6 +245,25 @@ fun PlayerScreen(
                 onDismiss = { showSavePlaylistDialog = false }
             )
         }
+
+        // 铃声截取界面（全屏覆盖）
+        if (showRingtoneCutter) {
+            val lyrics = (lyricState as? LyricState.Success)?.lyrics ?: emptyList()
+            val durationMs = playbackState.duration.coerceAtLeast(0L)
+
+            val ringtoneViewModel: com.zongting.zongting.ringtone.RingtoneCutterViewModel =
+                androidx.hilt.navigation.compose.hiltViewModel()
+            LaunchedEffect(currentSong, durationMs, lyrics) {
+                ringtoneViewModel.initialize(currentSong, durationMs, lyrics)
+            }
+
+            RingtoneCutterScreen(
+                onBackClick = {
+                    ringtoneViewModel.stopPreview()
+                    showRingtoneCutter = false
+                }
+            )
+        }
     }
 }
 
@@ -262,6 +283,7 @@ private fun PlayerBottomBar(
     onToggleSavePlaylist: () -> Unit,
     onToggleFavorite: () -> Unit,
     onSleepTimerClick: () -> Unit,
+    onRingtoneCutterClick: () -> Unit,
     isTimerActive: Boolean,
     timerRemaining: Long,
     onPrevious: () -> Unit,
@@ -335,6 +357,15 @@ private fun PlayerBottomBar(
                         imageVector = if (isTimerActive) Icons.Default.BedtimeOff else Icons.Default.Bedtime,
                         contentDescription = "定时关闭",
                         tint = if (isTimerActive) Color(0xFF7C4DFF) else MaterialTheme.colorScheme.onSurface,
+                        modifier = Modifier.size(24.dp)
+                    )
+                }
+
+                IconButton(onClick = { onRingtoneCutterClick() }) {
+                    Icon(
+                        imageVector = Icons.Default.MusicNote,
+                        contentDescription = "设为铃声",
+                        tint = MaterialTheme.colorScheme.onSurface,
                         modifier = Modifier.size(24.dp)
                     )
                 }
