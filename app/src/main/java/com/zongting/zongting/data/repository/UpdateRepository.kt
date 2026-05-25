@@ -194,7 +194,8 @@ class UpdateRepository @Inject constructor(
                 return@withContext
             }
 
-            val apkUrl = json.get("apkUrl")?.asString
+            val apkUrl = json.get("downloadUrl")?.asString
+                ?: json.get("apkUrl")?.asString
                 ?: "$UPDATE_SERVER_BASE/zongting-latest.apk"
 
             pendingVersionInfo = VersionInfo(
