@@ -346,20 +346,29 @@ private fun TimelineEditor(
         return ((px / trackWidthPx) * durationMs).toLong().coerceIn(0L, durationMs)
     }
 
-    val handleRadius = 12.dp
+    // 拖柄位置用 mutableFloatStateOf，跟踪拖拽过程中的实时位置（避免闭包捕获旧值）
+    var startDragPx by remember { mutableFloatStateOf(0f) }
+    var endDragPx by remember { mutableFloatStateOf(0f) }
+
+    val handleTouchDp = 20.dp        // 触摸区域（较大方便拖动）
+    val handleVisualDp = 12.dp       // 视觉圆圈大小
     val trackHeight = 6.dp
-    val totalHeight = handleRadius * 2 + 24.dp
+    val totalHeight = handleTouchDp + 24.dp
 
     BoxWithConstraints(
         modifier = modifier.height(totalHeight)
     ) {
+        val maxW = constraints.maxWidth.toFloat().coerceAtLeast(1f)
+        LaunchedEffect(maxW) { trackWidthPx = maxW }
+        LaunchedEffect(startMs) { startDragPx = msToPx(startMs) }
+        LaunchedEffect(endMs) { endDragPx = msToPx(endMs) }
+
         // ===== 背景轨道 =====
         Box(
             modifier = Modifier
                 .fillMaxWidth()
                 .height(trackHeight)
                 .align(Alignment.Center)
-                .onSizeChanged { trackWidthPx = it.width.toFloat() }
                 .background(
                     MaterialTheme.colorScheme.surfaceVariant,
                     RoundedCornerShape(trackHeight / 2)
@@ -379,61 +388,68 @@ private fun TimelineEditor(
                 )
         )
 
+        // ===== 拖柄辅助函数（使用 lambda 避免闭包捕获问题）=====
+        fun Modifier.draggableHandle(
+            getPositionPx: () -> Float,
+            onPositionChange: (Long) -> Unit,
+            clampPx: (candidate: Float) -> Float
+        ): Modifier = this
+            .offset(x = with(density) { getPositionPx().toDp() - handleTouchDp / 2 })
+            .size(handleTouchDp)
+            .pointerInput(Unit) {
+                detectDragGestures(
+                    onDragStart = { },
+                    onDrag = { change, dragAmount ->
+                        change.consume()
+                        if (trackWidthPx <= 0f || durationMs <= 0L) return@detectDragGestures
+                        val basePx = getPositionPx()
+                        val newPx = clampPx(basePx + dragAmount.x)
+                        val newMs = pxToMs(newPx)
+                        onPositionChange(newMs)
+                    }
+                )
+            }
+
         // ===== 开始拖柄 =====
-        val startOffsetPx = msToPx(startMs)
         Box(
             modifier = Modifier
-                .offset(x = with(density) { (startOffsetPx - 12f).toDp() })
                 .align(Alignment.CenterStart)
-                .size(handleRadius * 2)
-                .background(
-                    MaterialTheme.colorScheme.primary,
-                    CircleShape
+                .size(handleTouchDp)
+                .padding(horizontal = (handleTouchDp - handleVisualDp) / 2)
+                .draggableHandle(
+                    getPositionPx = { startDragPx },
+                    onPositionChange = onStartChange,
+                    clampPx = { candidate ->
+                        msToPx((endMs - 1000L).coerceAtLeast(0L)).let { maxPx ->
+                            candidate.coerceIn(0f, maxPx)
+                        }
+                    }
                 )
+                .background(MaterialTheme.colorScheme.primary, CircleShape)
                 .border(3.dp, Color.White, CircleShape)
                 .shadow(4.dp, CircleShape)
-                .pointerInput(Unit) {
-                    detectDragGestures(
-                        onDragStart = { },
-                        onDrag = { change, dragAmount ->
-                            change.consume()
-                            if (trackWidthPx <= 0f || durationMs <= 0L) return@detectDragGestures
-                            val deltaMs = pxToMs(dragAmount.x)
-                            val upperBound = (endMs - 1000L).coerceAtLeast(0L)
-                            val newMs = (startMs + deltaMs).coerceIn(0L, upperBound)
-                            onStartChange(newMs)
-                        }
-                    )
-                }
         )
 
         // ===== 结束拖柄 =====
-        val endOffsetPx = msToPx(endMs)
         Box(
             modifier = Modifier
-                .offset(x = with(density) { (endOffsetPx - 12f).toDp() })
                 .align(Alignment.CenterStart)
-                .size(handleRadius * 2)
-                .background(
-                    MaterialTheme.colorScheme.primary,
-                    CircleShape
+                .size(handleTouchDp)
+                .padding(horizontal = (handleTouchDp - handleVisualDp) / 2)
+                .draggableHandle(
+                    getPositionPx = { endDragPx },
+                    onPositionChange = onEndChange,
+                    clampPx = { candidate ->
+                        msToPx(startMs + 1000L).let { minPx ->
+                            msToPx(minOf(durationMs, startMs + 60_000L)).let { maxPx ->
+                                candidate.coerceIn(minPx, maxPx)
+                            }
+                        }
+                    }
                 )
+                .background(MaterialTheme.colorScheme.primary, CircleShape)
                 .border(3.dp, Color.White, CircleShape)
                 .shadow(4.dp, CircleShape)
-                .pointerInput(Unit) {
-                    detectDragGestures(
-                        onDragStart = { },
-                        onDrag = { change, dragAmount ->
-                            change.consume()
-                            if (trackWidthPx <= 0f || durationMs <= 0L) return@detectDragGestures
-                            val deltaMs = pxToMs(dragAmount.x)
-                            val lowerBound = startMs + 1000L
-                            val upperBound = minOf(durationMs, startMs + 60_000L)
-                            val newMs = (endMs + deltaMs).coerceIn(lowerBound, upperBound)
-                            onEndChange(newMs)
-                        }
-                    )
-                }
         )
 
         // ===== 起始时间标签 =====
@@ -442,7 +458,7 @@ private fun TimelineEditor(
             style = MaterialTheme.typography.labelSmall,
             color = MaterialTheme.colorScheme.primary,
             modifier = Modifier
-                .offset(x = with(density) { (startOffsetPx - 12f).toDp() })
+                .offset(x = with(density) { msToPx(startMs).toDp() - handleTouchDp / 2 })
                 .align(Alignment.TopStart)
         )
 
@@ -452,12 +468,11 @@ private fun TimelineEditor(
             style = MaterialTheme.typography.labelSmall,
             color = MaterialTheme.colorScheme.primary,
             modifier = Modifier
-                .offset(x = with(density) { (endOffsetPx - 12f).toDp() })
-                .align(Alignment.TopStart)
+                .offset(x = with(density) { msToPx(endMs).toDp() - handleTouchDp / 2 })
+                .align(Alignment.TopEnd)
         )
     }
 }
-
 // ===== 歌词时间轴视图（拖动时显示对应歌词）=====
 @Composable
 fun LyricTimelineView(

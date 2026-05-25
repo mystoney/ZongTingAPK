@@ -52,7 +52,10 @@ object AudioRingtoneHelper {
             val actualEndMs = minOf(endMs, startMs + MAX_DURATION_MS)
 
             val url = audioUrl ?: getCurrentPlayingUrl()
+            Log.d(TAG, "trimAudio: url=${url ?: "NULL"}")
+
             if (url.isNullOrEmpty()) {
+                Log.e(TAG, "trimAudio FAILED: audioUrl is null or empty")
                 return@withContext TrimResult.Error("无法获取音频，请确保正在播放歌曲")
             }
 
@@ -61,9 +64,18 @@ object AudioRingtoneHelper {
             val outputFile = File(context.cacheDir, "trim_${System.currentTimeMillis()}.m4a")
 
             Log.d(TAG, "下载音频: $url")
-            if (!downloadFile(context, url, downloadFile)) {
+            val downloadOk = downloadFile(context, url, downloadFile)
+            Log.d(TAG, "下载结果: ok=$downloadOk, size=${downloadFile.length()}")
+
+            if (!downloadOk) {
                 downloadFile.delete()
+                Log.e(TAG, "trimAudio FAILED: downloadFile returned false")
                 return@withContext TrimResult.Error("音频下载失败，请检查网络")
+            }
+            if (downloadFile.length() == 0L) {
+                downloadFile.delete()
+                Log.e(TAG, "trimAudio FAILED: downloaded file is empty")
+                return@withContext TrimResult.Error("音频下载失败，文件为空")
             }
 
             Log.d(TAG, "裁剪音频: ${startMs}ms → ${actualEndMs}ms")
@@ -73,6 +85,7 @@ object AudioRingtoneHelper {
                 startMs * 1000L,
                 actualEndMs * 1000L
             )
+            Log.d(TAG, "裁剪结果: ok=$ok, outputSize=${outputFile.length()}")
 
             downloadFile.delete()
 
@@ -81,6 +94,7 @@ object AudioRingtoneHelper {
                 TrimResult.Success(outputFile.absolutePath)
             } else {
                 outputFile.delete()
+                Log.e(TAG, "trimAudio FAILED: trimWithMuxer returned false")
                 TrimResult.Error("音频裁剪失败")
             }
         } catch (e: Exception) {
