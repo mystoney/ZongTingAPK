@@ -384,7 +384,7 @@ object InstallLauncher {
     private const val TAG = "InstallLauncher"
 
     fun launchInstall(context: Context, apkFile: java.io.File, currentVersionCode: Int) {
-        Log.d(TAG, "launchInstall: ${apkFile.absolutePath}")
+        Log.d(TAG, "launchInstall: ${apkFile.absolutePath}, exists=${apkFile.exists()}, size=${apkFile.length()}")
 
         // 检查是否有安装未知应用权限（Android O+ 需要用户授权）
         val packageManager = context.packageManager
@@ -405,27 +405,37 @@ object InstallLauncher {
                     context.startActivity(fallback)
                 }
                 return
+            } else {
+                Log.d(TAG, "REQUEST_INSTALL_PACKAGES permission OK")
             }
         }
 
         // ─── 方案一（主）：content:// + FileProvider 触发系统 PackageInstaller UI ──
         // 适用于所有 Android O+ 设备，无论是否 root
         try {
+            val authority = "${context.packageName}.updatefileprovider"
+            Log.d(TAG, "FileProvider authority=$authority")
+            Log.d(TAG, "APK file path=${apkFile.absolutePath}, cacheDir=${context.cacheDir.absolutePath}")
             val contentUri = FileProvider.getUriForFile(
                 context,
-                "${context.packageName}.updatefileprovider",
+                authority,
                 apkFile
             )
+            Log.d(TAG, "FileProvider URI created: $contentUri")
             val installIntent = Intent(Intent.ACTION_VIEW).apply {
                 setDataAndType(contentUri, "application/vnd.android.package-archive")
                 addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
                 addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             }
-            Log.d(TAG, "Launching ACTION_VIEW install (FileProvider): $contentUri")
+            Log.d(TAG, "Launching ACTION_VIEW install, checking if activity resolvable...")
+            val resolveInfo = packageManager.resolveActivity(installIntent, android.content.pm.PackageManager.MATCH_DEFAULT_ONLY)
+            Log.d(TAG, "Resolved activity: $resolveInfo")
+            Log.d(TAG, "Calling context.startActivity...")
             context.startActivity(installIntent)
+            Log.d(TAG, "startActivity returned successfully!")
             return
         } catch (e: Exception) {
-            Log.e(TAG, "ACTION_VIEW failed: ${e.message}")
+            Log.e(TAG, "ACTION_VIEW failed: ${e.message}", e)
             // 继续尝试其他方案
         }
 
