@@ -337,9 +337,16 @@ private fun TimelineEditor(
     val CLIP_DURATION_MS = 60_000L
 
     var trackWidthPx by remember { mutableFloatStateOf(0f) }
+    // 纯本地拖动状态，拖完才上报 ViewModel
+    var localStartMs by remember(startMs) { mutableLongStateOf(startMs) }
     var isDragging by remember { mutableStateOf(false) }
-    // 累积拖动偏移量（独立于 startMs，解决 lambda 捕获旧值问题）
-    var dragOffsetPx by remember { mutableFloatStateOf(0f) }
+
+    // 同步外部 startMs 变化到本地（仅当非拖动时）
+    LaunchedEffect(startMs) {
+        if (!isDragging) {
+            localStartMs = startMs
+        }
+    }
 
     fun msToPx(ms: Long): Float {
         if (trackWidthPx <= 0f || durationMs <= 0L) return 0f
@@ -357,16 +364,11 @@ private fun TimelineEditor(
         val maxW = constraints.maxWidth.toFloat().coerceAtLeast(1f)
         LaunchedEffect(maxW) { trackWidthPx = maxW }
 
-        // clip 宽度（随 trackWidthPx 更新）
         val clipWidthPx = if (trackWidthPx > 0f && durationMs > 0L)
             (CLIP_DURATION_MS.toFloat() / durationMs) * trackWidthPx
         else 0f
 
-        // 限制起点：clip 块最右不能超出音频末尾
         val maxStartMs = (durationMs - CLIP_DURATION_MS).coerceAtLeast(0L)
-
-        // 可视化起点位置 = 基础起点 + 拖动偏移
-        val visualStartMs = pxToMs(msToPx(startMs) + dragOffsetPx).coerceIn(0L, maxStartMs)
 
         // ===== 背景轨道 =====
         Box(
@@ -383,7 +385,7 @@ private fun TimelineEditor(
         // ===== 60秒选中高亮块 =====
         Box(
             modifier = Modifier
-                .offset(x = with(density) { msToPx(visualStartMs).toDp() })
+                .offset(x = with(density) { msToPx(localStartMs).toDp() })
                 .width(with(density) { clipWidthPx.toDp() })
                 .height(6.dp)
                 .align(Alignment.Center)
@@ -396,50 +398,42 @@ private fun TimelineEditor(
         // ===== 整块拖拽区域（触摸热区覆盖在轨道上） =====
         Box(
             modifier = Modifier
-                .offset(x = with(density) { msToPx(visualStartMs).toDp() })
-                .width(with(density) { clipWidthPx.toDp() })
+                .offset(x = with(density) { msToPx(localStartMs).toDp() })
+                .width(with(density) { maxOf(clipWidthPx.toDp(), 60.dp) })
                 .height(56.dp)
                 .align(Alignment.Center)
                 .pointerInput(Unit) {
                     detectDragGestures(
                         onDragStart = { _ ->
-                            // 记录初始偏移（用于修正 startMs 变化后的跳变）
-                            dragOffsetPx = 0f
                             isDragging = true
                         },
                         onDrag = { change, dragAmount ->
                             change.consume()
                             if (trackWidthPx <= 0f || durationMs <= 0L) return@detectDragGestures
-                            // 累积拖动偏移
-                            dragOffsetPx += dragAmount.x
-                            // 基于累积偏移计算新位置
-                            val rawNewStart = pxToMs(msToPx(startMs) + dragOffsetPx)
-                            val clampedStart = rawNewStart.coerceIn(0L, maxStartMs)
-                            if (clampedStart != startMs) {
-                                // 修正 dragOffsetPx，消除跳变
-                                dragOffsetPx += (clampedStart - rawNewStart) * (trackWidthPx / durationMs)
-                                onStartChange(clampedStart)
-                                onEndChange((clampedStart + CLIP_DURATION_MS).coerceAtMost(durationMs))
-                            }
+                            val deltaMs = pxToMs(dragAmount.x)
+                            val newStart = (localStartMs + deltaMs).coerceIn(0L, maxStartMs)
+                            localStartMs = newStart
                         },
                         onDragEnd = {
-                            dragOffsetPx = 0f
+                            if (localStartMs != startMs) {
+                                onStartChange(localStartMs)
+                                onEndChange((localStartMs + CLIP_DURATION_MS).coerceAtMost(durationMs))
+                            }
                             isDragging = false
                         },
                         onDragCancel = {
-                            dragOffsetPx = 0f
+                            localStartMs = startMs
                             isDragging = false
                         }
                     )
                 }
         ) {
-            // 中心拖动手柄指示（三条横线）
             Column(
                 modifier = Modifier.align(Alignment.Center),
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.Center
             ) {
-                repeat(3) { i ->
+                repeat(3) { _ ->
                     Box(
                         modifier = Modifier
                             .padding(vertical = 2.dp)
@@ -455,19 +449,19 @@ private fun TimelineEditor(
 
         // ===== 时间标签 =====
         Text(
-            text = formatTime(visualStartMs),
+            text = formatTime(localStartMs),
             style = MaterialTheme.typography.labelSmall,
             color = MaterialTheme.colorScheme.primary,
             modifier = Modifier
-                .offset(x = with(density) { msToPx(visualStartMs).toDp() })
+                .offset(x = with(density) { msToPx(localStartMs).toDp() })
                 .align(Alignment.TopStart)
         )
         Text(
-            text = formatTime((visualStartMs + CLIP_DURATION_MS).coerceAtMost(durationMs)),
+            text = formatTime((localStartMs + CLIP_DURATION_MS).coerceAtMost(durationMs)),
             style = MaterialTheme.typography.labelSmall,
             color = MaterialTheme.colorScheme.primary,
             modifier = Modifier
-                .offset(x = with(density) { (msToPx((visualStartMs + CLIP_DURATION_MS).coerceAtMost(durationMs)) - 40f).toDp() })
+                .offset(x = with(density) { (msToPx((localStartMs + CLIP_DURATION_MS).coerceAtMost(durationMs)) - 40f).toDp() })
                 .align(Alignment.TopStart)
         )
 

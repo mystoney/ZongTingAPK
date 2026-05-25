@@ -468,12 +468,13 @@ object InstallLauncher {
     }
 
     /**
-     * 使用 file:// URI + 显式 ComponentName 启动系统 PackageInstaller
-     * 显式指定 com.android.packageinstaller 的 activity，绕过 Nemu Store 拦截
+     * 使用 FileProvider content:// URI 启动系统 PackageInstaller
+     * Android 10+ 不允许 file:// URI 跨应用传递，必须用 content:// + FileProvider
      */
     private fun launchWithFileUri(context: Context, apkFile: java.io.File) {
-        val uri = Uri.fromFile(apkFile)
-        Log.d(TAG, "launchWithFileUri: $uri")
+        val authority = "${context.packageName}.updatefileprovider"
+        val contentUri = FileProvider.getUriForFile(context, authority, apkFile)
+        Log.d(TAG, "launchWithFileUri (content): $contentUri")
 
         // 优先尝试直接指定 PackageInstaller 组件（绕过 Nemu Store 拦截）
         val components = listOf(
@@ -488,32 +489,33 @@ object InstallLauncher {
         for (component in components) {
             try {
                 val intent = Intent(Intent.ACTION_VIEW).apply {
-                    setDataAndType(uri, "application/vnd.android.package-archive")
+                    setDataAndType(contentUri, "application/vnd.android.package-archive")
                     addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
                     this.component = component
                 }
-                Log.d(TAG, "Trying component: ${component.flattenToShortString()}")
+                Log.d(TAG, "Trying component (content): ${component.flattenToShortString()}")
                 context.startActivity(intent)
                 Log.d(TAG, "startActivity with explicit component succeeded!")
                 return
             } catch (e: Exception) {
-                Log.d(TAG, "Component $component failed: ${e.message}")
+                Log.d(TAG, "Component $component failed (content): ${e.message}")
             }
         }
 
-        // fallback: 使用 ACTION_VIEW + MATCH_DEFAULT_ONLY + 清除 Nemu Store 默认处理
+        // fallback: ACTION_VIEW + content:// URI + 清除 Nemu Store 默认处理
         try {
             val intent = Intent(Intent.ACTION_VIEW).apply {
-                setDataAndType(uri, "application/vnd.android.package-archive")
+                setDataAndType(contentUri, "application/vnd.android.package-archive")
                 addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                 addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP)
                 addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
                 // 不设置 component，依赖系统解析
             }
             context.startActivity(intent)
-            Log.d(TAG, "startActivity (no explicit component) succeeded")
+            Log.d(TAG, "startActivity (no explicit component, content://) succeeded")
         } catch (e: Exception) {
-            Log.e(TAG, "All install approaches failed: ${e.message}", e)
+            Log.e(TAG, "All install approaches failed (content): ${e.message}", e)
         }
     }
 
