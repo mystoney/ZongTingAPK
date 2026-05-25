@@ -337,8 +337,9 @@ private fun TimelineEditor(
     val CLIP_DURATION_MS = 60_000L
 
     var trackWidthPx by remember { mutableFloatStateOf(0f) }
-    var dragStartX by remember { mutableFloatStateOf(0f) }
     var isDragging by remember { mutableStateOf(false) }
+    // 累积拖动偏移量（独立于 startMs，解决 lambda 捕获旧值问题）
+    var dragOffsetPx by remember { mutableFloatStateOf(0f) }
 
     fun msToPx(ms: Long): Float {
         if (trackWidthPx <= 0f || durationMs <= 0L) return 0f
@@ -349,10 +350,6 @@ private fun TimelineEditor(
         if (trackWidthPx <= 0f || durationMs <= 0L) return 0L
         return ((px / trackWidthPx) * durationMs).toLong().coerceIn(0L, durationMs)
     }
-
-    val clipWidthPx: Float = if (trackWidthPx > 0f && durationMs > 0L)
-        (CLIP_DURATION_MS.toFloat() / durationMs) * trackWidthPx
-    else 0f
 
     BoxWithConstraints(
         modifier = modifier.height(72.dp)
@@ -367,6 +364,9 @@ private fun TimelineEditor(
 
         // 限制起点：clip 块最右不能超出音频末尾
         val maxStartMs = (durationMs - CLIP_DURATION_MS).coerceAtLeast(0L)
+
+        // 可视化起点位置 = 基础起点 + 拖动偏移
+        val visualStartMs = pxToMs(msToPx(startMs) + dragOffsetPx).coerceIn(0L, maxStartMs)
 
         // ===== 背景轨道 =====
         Box(
@@ -383,98 +383,97 @@ private fun TimelineEditor(
         // ===== 60秒选中高亮块 =====
         Box(
             modifier = Modifier
-                .offset(x = with(density) { msToPx(startMs).toDp() })
+                .offset(x = with(density) { msToPx(visualStartMs).toDp() })
                 .width(with(density) { clipWidthPx.toDp() })
                 .height(6.dp)
-                .align(Alignment.CenterStart)
+                .align(Alignment.Center)
                 .background(
                     MaterialTheme.colorScheme.primary.copy(alpha = 0.85f),
                     RoundedCornerShape(3.dp)
                 )
         )
 
-        // ===== 整块拖拽区域 =====
+        // ===== 整块拖拽区域（触摸热区覆盖在轨道上） =====
         Box(
             modifier = Modifier
-                .offset(x = with(density) { msToPx(startMs).toDp() })
+                .offset(x = with(density) { msToPx(visualStartMs).toDp() })
                 .width(with(density) { clipWidthPx.toDp() })
-                .height(48.dp)
-                .align(Alignment.CenterStart)
+                .height(56.dp)
+                .align(Alignment.Center)
                 .pointerInput(Unit) {
                     detectDragGestures(
-                        onDragStart = { offset ->
-                            dragStartX = offset.x
+                        onDragStart = { _ ->
+                            // 记录初始偏移（用于修正 startMs 变化后的跳变）
+                            dragOffsetPx = 0f
                             isDragging = true
                         },
                         onDrag = { change, dragAmount ->
                             change.consume()
                             if (trackWidthPx <= 0f || durationMs <= 0L) return@detectDragGestures
-                            // 新起点 = 旧起点 + 拖动量
-                            val rawNewStart = pxToMs(msToPx(startMs) + dragAmount.x)
+                            // 累积拖动偏移
+                            dragOffsetPx += dragAmount.x
+                            // 基于累积偏移计算新位置
+                            val rawNewStart = pxToMs(msToPx(startMs) + dragOffsetPx)
                             val clampedStart = rawNewStart.coerceIn(0L, maxStartMs)
                             if (clampedStart != startMs) {
+                                // 修正 dragOffsetPx，消除跳变
+                                dragOffsetPx += (clampedStart - rawNewStart) * (trackWidthPx / durationMs)
                                 onStartChange(clampedStart)
                                 onEndChange((clampedStart + CLIP_DURATION_MS).coerceAtMost(durationMs))
                             }
                         },
-                        onDragEnd = { isDragging = false },
-                        onDragCancel = { isDragging = false }
+                        onDragEnd = {
+                            dragOffsetPx = 0f
+                            isDragging = false
+                        },
+                        onDragCancel = {
+                            dragOffsetPx = 0f
+                            isDragging = false
+                        }
                     )
                 }
-            // 触摸提示：半透明覆盖层
         ) {
-            // 左右两端的视觉把手
-            Box(
-                modifier = Modifier
-                    .align(Alignment.CenterStart)
-                    .offset(x = (-2).dp)
-                    .size(width = 6.dp, height = 56.dp)
-                    .background(
-                        Color.White.copy(alpha = 0.9f),
-                        RoundedCornerShape(3.dp)
+            // 中心拖动手柄指示（三条横线）
+            Column(
+                modifier = Modifier.align(Alignment.Center),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Center
+            ) {
+                repeat(3) { i ->
+                    Box(
+                        modifier = Modifier
+                            .padding(vertical = 2.dp)
+                            .size(width = 32.dp, height = 2.dp)
+                            .background(
+                                Color.White.copy(alpha = 0.6f),
+                                RoundedCornerShape(1.dp)
+                            )
                     )
-            )
-            Box(
-                modifier = Modifier
-                    .align(Alignment.CenterEnd)
-                    .offset(x = 2.dp)
-                    .size(width = 6.dp, height = 56.dp)
-                    .background(
-                        Color.White.copy(alpha = 0.9f),
-                        RoundedCornerShape(3.dp)
-                    )
-            )
-            // 中心拖动手柄指示
-            Box(
-                modifier = Modifier
-                    .align(Alignment.Center)
-                    .size(width = 40.dp, height = 4.dp)
-                    .background(
-                        Color.White.copy(alpha = 0.5f),
-                        RoundedCornerShape(2.dp)
-                    )
-            )
+                }
+            }
         }
 
         // ===== 时间标签 =====
         Text(
-            text = formatTime(startMs),
+            text = formatTime(visualStartMs),
             style = MaterialTheme.typography.labelSmall,
             color = MaterialTheme.colorScheme.primary,
             modifier = Modifier
-                .offset(x = with(density) { msToPx(startMs).toDp() })
+                .offset(x = with(density) { msToPx(visualStartMs).toDp() })
                 .align(Alignment.TopStart)
         )
         Text(
-            text = formatTime(endMs),
+            text = formatTime((visualStartMs + CLIP_DURATION_MS).coerceAtMost(durationMs)),
             style = MaterialTheme.typography.labelSmall,
             color = MaterialTheme.colorScheme.primary,
             modifier = Modifier
-                .offset(x = with(density) { (msToPx(startMs) + clipWidthPx).toDp() - 40.dp })
+                .offset(x = with(density) { (msToPx((visualStartMs + CLIP_DURATION_MS).coerceAtMost(durationMs)) - 40f).toDp() })
                 .align(Alignment.TopStart)
         )
+
     }
 }
+
 // ===== 歌词时间轴视图（拖动时显示对应歌词）=====
 @Composable
 fun LyricTimelineView(
