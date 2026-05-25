@@ -164,23 +164,29 @@ object AudioRingtoneHelper {
                     val encoded = codec.getOutputBuffer(index)
                     if (info.size > 0 && encoded != null) {
                         // 给encoder喂PCM
-                        val encInIdx = encoder?.dequeueInputBuffer(5000) ?: -1
-                        if (encInIdx >= 0) {
-                            val encBuf = encoder!!.getInputBuffer(encInIdx)!!
-                            val copyBytes = minOf(info.size, encBuf.remaining())
-                            val copy = ByteArray(copyBytes)
-                            encoded.get(copy, 0, copyBytes)
-                            encBuf.clear()
-                            encBuf.put(copy)
-                            encoder.queueInputBuffer(encInIdx, 0, copyBytes, info.presentationTimeUs, 0)
+                        try {
+                            val encInIdx = encoder?.dequeueInputBuffer(5000) ?: -1
+                            if (encInIdx >= 0) {
+                                val encBuf = encoder!!.getInputBuffer(encInIdx)!!
+                                val copyBytes = minOf(info.size, encBuf.remaining())
+                                val copy = ByteArray(copyBytes)
+                                encoded.get(copy, 0, copyBytes)
+                                encBuf.clear()
+                                encBuf.put(copy)
+                                encoder.queueInputBuffer(encInIdx, 0, copyBytes, info.presentationTimeUs, 0)
+                            }
+                        } catch (e: Exception) {
+                            Log.e(TAG, "encoder dequeueInputBuffer失败", e)
                         }
                     }
                     codec.releaseOutputBuffer(index, false)
                     if (info.flags and MediaCodec.BUFFER_FLAG_END_OF_STREAM != 0) {
-                        val encInIdx = encoder?.dequeueInputBuffer(5000) ?: -1
-                        if (encInIdx >= 0) {
-                            encoder!!.queueInputBuffer(encInIdx, 0, 0, 0, MediaCodec.BUFFER_FLAG_END_OF_STREAM)
-                        }
+                        try {
+                            val encInIdx = encoder?.dequeueInputBuffer(5000) ?: -1
+                            if (encInIdx >= 0) {
+                                encoder!!.queueInputBuffer(encInIdx, 0, 0, 0, MediaCodec.BUFFER_FLAG_END_OF_STREAM)
+                            }
+                        } catch (_: Exception) {}
                     }
                 }
 
