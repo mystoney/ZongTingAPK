@@ -155,6 +155,15 @@ fun PlayerScreen(
                     }
                 }
 
+                // 封面图片亮度+10%（白色叠加层）
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .drawBehind {
+                            drawRect(Color(0x1AFFFFFF)) // 10% 白色叠加提亮
+                        }
+                )
+
                 // Android 12+ 用 RenderEffect 虚化
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
                     Box(
@@ -700,7 +709,7 @@ private fun LyricPage(
 
     Surface(
         modifier = Modifier.fillMaxSize(),
-        color = MaterialTheme.colorScheme.background.copy(alpha = 0.2f)
+        color = MaterialTheme.colorScheme.background.copy(alpha = 0.1f)
     ) {
         Box(modifier = Modifier.fillMaxSize()) {
             when (lyricState) {
