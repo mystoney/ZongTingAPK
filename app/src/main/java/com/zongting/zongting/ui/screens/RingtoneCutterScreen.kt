@@ -374,10 +374,6 @@ private fun TimelineEditor(
         val maxW = constraints.maxWidth.toFloat().coerceAtLeast(1f)
         LaunchedEffect(maxW) { if (trackWidthPx == 0f) trackWidthPx = maxW }
 
-        val clipWidthPx = if (trackWidthPx > 0f && durationMs > 0L)
-            (CLIP_DURATION_MS.toFloat() / durationMs) * trackWidthPx
-        else 0f
-
         val maxStartMs = (durationMs - CLIP_DURATION_MS).coerceAtLeast(0L)
 
         // ===== 背景轨道 =====
@@ -408,19 +404,25 @@ private fun TimelineEditor(
         }
 
         // ===== 60秒选中高亮块 =====
+        val blockWidthPx = if (trackWidthPx > 0f && durationMs > 0L)
+            (CLIP_DURATION_MS.toFloat() / durationMs) * trackWidthPx
+        else 0f
+        val blockWidthDp = with(density) { maxOf(blockWidthPx, 72f).toDp() }
+        val blockOffsetX = with(density) { msToPx(localStartMs).toDp() }
+
         Box(
             modifier = Modifier
-                .offset(x = with(density) { msToPx(localStartMs).toDp() })
-                .width(with(density) { maxOf(clipWidthPx.toDp(), 72.dp) })
+                .offset(x = blockOffsetX)
+                .width(blockWidthDp)
                 .height(32.dp)
-                .align(Alignment.Center)
+                .align(Alignment.CenterStart) // 只负责垂直居中，水平用 offset 控制
                 .background(
                     MaterialTheme.colorScheme.primary.copy(alpha = 0.3f),
                     RoundedCornerShape(6.dp)
                 )
                 .pointerInput(Unit) {
                     detectDragGestures(
-                        onDragStart = { offset ->
+                        onDragStart = { _ ->
                             isDragging = true
                         },
                         onDrag = { change, dragAmount ->

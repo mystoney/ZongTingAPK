@@ -23,6 +23,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.blur
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
@@ -110,7 +111,10 @@ fun PlayerScreen(
 
     // 封面虚化平铺背景（无封面时用深色背景）
     Box(modifier = Modifier.fillMaxSize()) {
-        // 虚化封面平铺背景
+        // 深色基底
+        Box(modifier = Modifier.fillMaxSize().background(Color(0xFF0D0D1A)))
+
+        // 缩小居中的封面图作为背景
         currentSong?.let { song ->
             val coverUrl = song.coverUrl ?: song.pic
             if (coverUrl.isNotBlank()) {
@@ -120,23 +124,42 @@ fun PlayerScreen(
                     modifier = Modifier
                         .fillMaxSize()
                         .graphicsLayer {
-                            // Android 12+ (API 31) 支持 RenderEffect 虚化
+                            // 缩小到 40% 并居中，产生四周留黑边的效果
+                            scaleX = 0.4f
+                            scaleY = 0.4f
+                            // Android 12+ 使用 RenderEffect 虚化
                             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
                                 renderEffect = android.graphics.RenderEffect
-                                    .createBlurEffect(25f, 25f, android.graphics.Shader.TileMode.REPEAT)
+                                    .createBlurEffect(25f, 25f, android.graphics.Shader.TileMode.CLAMP)
                                     .asComposeRenderEffect()
                             }
                         },
                     contentScale = ContentScale.FillBounds
                 )
+                // Android 12 以下：用 Modifier.blur() 软件模糊（兼容所有设备）
+                if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) {
+                    AsyncImage(
+                        model = coverUrl,
+                        contentDescription = null,
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .graphicsLayer {
+                                scaleX = 0.4f
+                                scaleY = 0.4f
+                            }
+                            .blur(20.dp),
+                        contentScale = ContentScale.FillBounds
+                    )
+                }
             }
         }
+
         // 遮罩确保文字可读
         Box(
             modifier = Modifier
                 .fillMaxSize()
                 .drawBehind {
-                    drawRect(Color(0xCC000000)) // 50% 透明黑色
+                    drawRect(Color(0xE6000000)) // 90% 透明黑色
                 }
         )
 
