@@ -261,7 +261,9 @@ fun PlayerScreen(
                 onBackClick = {
                     ringtoneViewModel.stopPreview()
                     showRingtoneCutter = false
-                }
+                },
+                viewModel = ringtoneViewModel,
+                lyrics = lyrics
             )
         }
     }

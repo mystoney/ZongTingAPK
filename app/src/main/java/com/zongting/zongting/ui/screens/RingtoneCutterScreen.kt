@@ -47,7 +47,8 @@ import kotlin.math.roundToInt
 @Composable
 fun RingtoneCutterScreen(
     onBackClick: () -> Unit,
-    viewModel: RingtoneCutterViewModel = hiltViewModel()
+    viewModel: RingtoneCutterViewModel,
+    lyrics: List<LyricLine> = emptyList()
 ) {
     val state by viewModel.state.collectAsState()
     val context = androidx.compose.ui.platform.LocalContext.current
@@ -213,6 +214,19 @@ fun RingtoneCutterScreen(
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
+            }
+
+            // ===== 歌词时间轴（截取范围内歌词预览）=====
+            if (lyrics.isNotEmpty()) {
+                LyricTimelineView(
+                    lyrics = lyrics,
+                    startMs = state.startMs,
+                    endMs = state.endMs,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(160.dp)
+                )
+                Spacer(modifier = Modifier.height(8.dp))
             }
 
             Spacer(modifier = Modifier.weight(1f))
