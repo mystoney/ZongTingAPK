@@ -174,13 +174,23 @@ object AudioRingtoneHelper {
 
             var pendingDecoderEOS = false
             var pendingEncoderEOS = false
+            var pendingEncoderDrainEOS = false
+            var firstPtsUs = Long.MAX_VALUE
             val pcmBuf = ByteArray(32768)
 
+            // Encoder timestamp: convert decoder PTS to encoder timeline (relative to first frame)
+            fun toEncoderPts(decoderPtsUs: Long): Long {
+                if (firstPtsUs == Long.MAX_VALUE) firstPtsUs = decoderPtsUs
+                return (decoderPtsUs - firstPtsUs).coerceAtLeast(0)
+            }
+
             loop@ while (true) {
-                // Feed decoder
+                // --- Feed decoder ---
+                var decoderFed = false
                 if (!pendingDecoderEOS) {
                     val inIdx = decoder.dequeueInputBuffer(TIMEOUT_US)
                     if (inIdx >= 0) {
+                        decoderFed = true
                         val inBuf = decoder.getInputBuffer(inIdx)!!
                         val sz = extractor.readSampleData(inBuf, 0)
                         val t = extractor.sampleTime
@@ -194,14 +204,17 @@ object AudioRingtoneHelper {
                     }
                 }
 
-                // Drain decoder → encoder
+                // --- Drain decoder → PCM → encoder ---
                 val decIdx = decoder.dequeueOutputBuffer(decOutInfo, TIMEOUT_US)
                 if (decIdx >= 0) {
                     if ((decOutInfo.flags and MediaCodec.BUFFER_FLAG_END_OF_STREAM) != 0) {
                         decoder.releaseOutputBuffer(decIdx, false)
+                        // Queue EOS to encoder
                         val encInIdx = encoder.dequeueInputBuffer(TIMEOUT_US)
                         if (encInIdx >= 0) {
                             encoder.queueInputBuffer(encInIdx, 0, 0, 0, MediaCodec.BUFFER_FLAG_END_OF_STREAM)
+                        } else {
+                            pendingEncoderDrainEOS = true
                         }
                     } else {
                         val pcmSize = decOutInfo.size
@@ -213,11 +226,29 @@ object AudioRingtoneHelper {
                             pcm.get(pcmBuf, 0, copySize)
                             decoder.releaseOutputBuffer(decIdx, false)
 
-                            val encInIdx = encoder.dequeueInputBuffer(TIMEOUT_US)
+                            // Try to feed encoder, drain first if needed
+                            var encInIdx = encoder.dequeueInputBuffer(0)
+                            while (encInIdx < 0 && !pendingEncoderDrainEOS) {
+                                val dummyInfo = MediaCodec.BufferInfo()
+                                val drainIdx = encoder.dequeueOutputBuffer(dummyInfo, 0)
+                                if (drainIdx == MediaCodec.INFO_TRY_AGAIN_LATER) break
+                                if (drainIdx == MediaCodec.INFO_OUTPUT_FORMAT_CHANGED) continue
+                                if (drainIdx >= 0) {
+                                    if (dummyInfo.size > 0) {
+                                        val encOut = encoder.getOutputBuffer(drainIdx)!!
+                                        muxer!!.writeSampleData(muxerTrackIndex, encOut, dummyInfo)
+                                    }
+                                    encoder.releaseOutputBuffer(drainIdx, false)
+                                    if ((dummyInfo.flags and MediaCodec.BUFFER_FLAG_END_OF_STREAM) != 0) {
+                                        pendingEncoderEOS = true
+                                    }
+                                }
+                                encInIdx = encoder.dequeueInputBuffer(0)
+                            }
                             if (encInIdx >= 0) {
                                 val encIn = encoder.getInputBuffer(encInIdx)!!
                                 encIn.put(pcmBuf, 0, copySize)
-                                encoder.queueInputBuffer(encInIdx, 0, copySize, decOutInfo.presentationTimeUs, 0)
+                                encoder.queueInputBuffer(encInIdx, 0, copySize, toEncoderPts(decOutInfo.presentationTimeUs), 0)
                             }
                         } else {
                             decoder.releaseOutputBuffer(decIdx, false)
@@ -225,29 +256,40 @@ object AudioRingtoneHelper {
                     }
                 }
 
-                // Drain encoder → muxer (raw AAC, muxer handles MPEG-4 framing)
-                val encIdx = encoder.dequeueOutputBuffer(encOutInfo, TIMEOUT_US)
+                // --- Drain encoder → muxer ---
+                val drainIdx = encoder.dequeueOutputBuffer(encOutInfo, 0)
                 when {
-                    encIdx == MediaCodec.INFO_TRY_AGAIN_LATER -> {}
-                    encIdx == MediaCodec.INFO_OUTPUT_FORMAT_CHANGED -> {
-                        Log.d(TAG, "Encoder format: ${encoder.outputFormat}")
-                    }
-                    encIdx >= 0 -> {
-                        val flags = encOutInfo.flags
-                        if ((flags and MediaCodec.BUFFER_FLAG_END_OF_STREAM) != 0) {
-                            encoder.releaseOutputBuffer(encIdx, false)
+                    drainIdx == MediaCodec.INFO_TRY_AGAIN_LATER -> {}
+                    drainIdx == MediaCodec.INFO_OUTPUT_FORMAT_CHANGED -> {}
+                    drainIdx >= 0 -> {
+                        if ((encOutInfo.flags and MediaCodec.BUFFER_FLAG_END_OF_STREAM) != 0) {
+                            encoder.releaseOutputBuffer(drainIdx, false)
                             pendingEncoderEOS = true
                         } else if (encOutInfo.size > 0) {
-                            val encOut = encoder.getOutputBuffer(encIdx)!!
+                            val encOut = encoder.getOutputBuffer(drainIdx)!!
                             muxer!!.writeSampleData(muxerTrackIndex, encOut, encOutInfo)
-                            encoder.releaseOutputBuffer(encIdx, false)
+                            encoder.releaseOutputBuffer(drainIdx, false)
                         } else {
-                            encoder.releaseOutputBuffer(encIdx, false)
+                            encoder.releaseOutputBuffer(drainIdx, false)
                         }
                     }
                 }
 
+                // Check if we need to signal EOS to encoder because input buffer wasn't available
+                if (pendingDecoderEOS && !pendingEncoderDrainEOS) {
+                    val encInIdx = encoder.dequeueInputBuffer(0)
+                    if (encInIdx >= 0) {
+                        encoder.queueInputBuffer(encInIdx, 0, 0, 0, MediaCodec.BUFFER_FLAG_END_OF_STREAM)
+                        pendingEncoderDrainEOS = true
+                    }
+                }
+
                 if (pendingEncoderEOS) break@loop
+                // Safety: if we can't make progress, break
+                if (!decoderFed && decIdx < 0 && drainIdx < 0) {
+                    Log.w(TAG, "Decoder/encoder stall, breaking")
+                    break@loop
+                }
             }
 
             val result = File(output).length() > 1000
