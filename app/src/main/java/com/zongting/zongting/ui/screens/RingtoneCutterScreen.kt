@@ -321,18 +321,15 @@ private fun TimelineEditor(
     // 轨道宽度（用 mutableFloatStateOf 让 Compose 追踪变化，触发 pointerInput 重新安装）
     var trackWidthPx by remember { mutableFloatStateOf(0f) }
 
-    // 纯本地拖动状态，拖完才上报 ViewModel
-    var localStartMs by remember(startMs) { mutableLongStateOf(startMs) }
+    // 本地拖动状态：dragOffsetMs = 从拖动开始累计的毫秒偏移
+    var dragOffsetMs by remember { mutableLongStateOf(0L) }
     var isDragging by remember { mutableStateOf(false) }
-    var dragStartMs by remember { mutableLongStateOf(0L) }
     var lastDragAmountPx by remember { mutableFloatStateOf(0f) }
-    var savedTrackWidthPx by remember { mutableFloatStateOf(0f) }
-    var savedDurationMs by remember { mutableLongStateOf(0L) }
 
     // 同步外部 startMs 变化到本地（仅当非拖动时）
-    LaunchedEffect(startMs) {
+    LaunchedEffect(startMs, isDragging) {
         if (!isDragging) {
-            localStartMs = startMs
+            dragOffsetMs = 0L
         }
     }
 
@@ -373,8 +370,10 @@ private fun TimelineEditor(
 
         // ===== 播放进度白线（播放时跟随实际时间，非播放时对齐截取块起点） =====
         android.util.Log.d("HermesDebug", "HermesDebug timelineEditor: startMs=$startMs playbackPositionMs=$playbackPositionMs isPlaying=$isPlaying")
-        val whiteLineMs = if (isPlaying) playbackPositionMs.coerceIn(startMs, startMs + CLIP_DURATION_MS) else startMs
-        if (trackWidthPx > 0f && durationMs > 0L && whiteLineMs >= startMs) {
+        // 拖动期间用 dragOffsetMs 偏移后的起点
+        val displayStartMs = if (isDragging) startMs + dragOffsetMs else startMs
+        val whiteLineMs = if (isPlaying) playbackPositionMs.coerceIn(displayStartMs, displayStartMs + CLIP_DURATION_MS) else displayStartMs
+        if (trackWidthPx > 0f && durationMs > 0L && whiteLineMs >= displayStartMs) {
             Box(
                 modifier = Modifier
                     .offset(x = with(density) { msToPx(whiteLineMs).toDp() })
@@ -393,7 +392,7 @@ private fun TimelineEditor(
             (CLIP_DURATION_MS.toFloat() / durationMs) * trackWidthPx
         else 0f
         val blockWidthDp = with(density) { maxOf(blockWidthPx, 80f).toDp() }
-        val blockOffsetX = with(density) { msToPx(localStartMs).toDp() }
+        val blockOffsetX = with(density) { msToPx(startMs + dragOffsetMs).toDp() }
 
         Box(
             modifier = Modifier
@@ -408,40 +407,37 @@ private fun TimelineEditor(
                 .pointerInput(Unit, trackWidthPx) {
                     detectHorizontalDragGestures(
                         onDragStart = { _ ->
-                            android.util.Log.d("HermesDebug", "HermesDebug DRAG_START: trackWidthPx=$trackWidthPx localStartMs=$localStartMs")
+                            android.util.Log.d("HermesDebug", "HermesDebug DRAG_START: trackWidthPx=$trackWidthPx dragOffsetMs=$dragOffsetMs")
                             isDragging = true
-                            dragStartMs = localStartMs
                             lastDragAmountPx = 0f
-                            // 保存初始宽高，避免拖动中值变化导致跳动
-                            savedTrackWidthPx = trackWidthPx
-                            savedDurationMs = durationMs
+                            dragOffsetMs = 0L
                         },
                         onDragEnd = {
-                            android.util.Log.d("HermesDebug", "HermesDebug DRAG_END: localStartMs=$localStartMs startMs=$startMs")
-                            if (localStartMs != startMs) {
-                                onStartChange(localStartMs)
-                                onEndChange(localStartMs + CLIP_DURATION_MS)
+                            val finalStartMs = (startMs + dragOffsetMs).coerceIn(1_000L, maxStartMs)
+                            android.util.Log.d("HermesDebug", "HermesDebug DRAG_END: dragOffsetMs=$dragOffsetMs finalStartMs=$finalStartMs")
+                            if (finalStartMs != startMs) {
+                                onStartChange(finalStartMs)
+                                onEndChange(finalStartMs + CLIP_DURATION_MS)
                             }
                             onDragEnd()
                             isDragging = false
+                            dragOffsetMs = 0L
                         },
                         onDragCancel = {
                             android.util.Log.d("HermesDebug", "HermesDebug DRAG_CANCEL")
-                            localStartMs = startMs
                             isDragging = false
+                            dragOffsetMs = 0L
                         },
                         onHorizontalDrag = { change, dragAmount ->
                             change.consume()
-                            // trackWidthPx/durationMs 是 Composable scope 内的实时状态
                             val tw = trackWidthPx
                             val dm = durationMs
                             if (tw <= 0f || dm <= 0L) return@detectHorizontalDragGestures
-                            // dragAmount 是累计值，所以用 dragAmount - lastDragAmountPx 取增量
                             val deltaPx = dragAmount - lastDragAmountPx
                             lastDragAmountPx = dragAmount
                             val deltaMs = ((deltaPx / tw) * dm).toLong()
-                            localStartMs = (localStartMs + deltaMs).coerceIn(1_000L, maxStartMs)
-                            android.util.Log.d("HermesDebug", "HermesDebug DRAG: tw=$tw dm=$dm deltaPx=$deltaPx deltaMs=$deltaMs localStartMs=$localStartMs")
+                            dragOffsetMs = (dragOffsetMs + deltaMs).coerceIn(-(startMs - 1_000L), maxStartMs - startMs)
+                            android.util.Log.d("HermesDebug", "HermesDebug DRAG: tw=$tw dm=$dm deltaPx=$deltaPx deltaMs=$deltaMs dragOffsetMs=$dragOffsetMs")
                         }
                     )
                 },
