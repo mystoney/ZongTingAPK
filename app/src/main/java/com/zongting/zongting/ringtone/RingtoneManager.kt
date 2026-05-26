@@ -18,7 +18,6 @@ import java.io.File
 import java.io.FileOutputStream
 import java.net.HttpURLConnection
 import java.net.URL
-import java.nio.ByteBuffer
 import kotlin.coroutines.resume
 
 /**
@@ -173,21 +172,9 @@ object AudioRingtoneHelper {
             muxerTrackIndex = muxer.addTrack(outFmt)
             muxer.start()
 
-            // Compute ADTS header parameters
-            val sfIndex = getSamplingFrequencyIndex(sampleRate)
-            val chConfig = chCount
-            val profile = 1 // AAC-LC
-
-            // Extract AudioSpecificConfig from encoder output format for codec data
-            val asc = extractAudioSpecificConfig(encoder.outputFormat)
-
-            var frameCount = 0
             var pendingDecoderEOS = false
             var pendingEncoderEOS = false
             val pcmBuf = ByteArray(32768)
-
-            // Buffer for ADTS-wrapped AAC frames (large enough for any frame)
-            val aacBuf = ByteArray(65536)
 
             loop@ while (true) {
                 // Feed decoder
@@ -201,7 +188,6 @@ object AudioRingtoneHelper {
                             decoder.queueInputBuffer(inIdx, 0, 0, 0, MediaCodec.BUFFER_FLAG_END_OF_STREAM)
                             pendingDecoderEOS = true
                         } else {
-                            // Use presentation time as-is (seek to startUs, decoder outputs from there)
                             decoder.queueInputBuffer(inIdx, 0, sz, t, 0)
                             extractor.advance()
                         }
@@ -211,7 +197,6 @@ object AudioRingtoneHelper {
                 // Drain decoder → encoder
                 val decIdx = decoder.dequeueOutputBuffer(decOutInfo, TIMEOUT_US)
                 if (decIdx >= 0) {
-                    val pcm = decoder.getOutputBuffer(decIdx)!!
                     if ((decOutInfo.flags and MediaCodec.BUFFER_FLAG_END_OF_STREAM) != 0) {
                         decoder.releaseOutputBuffer(decIdx, false)
                         val encInIdx = encoder.dequeueInputBuffer(TIMEOUT_US)
@@ -221,20 +206,18 @@ object AudioRingtoneHelper {
                     } else {
                         val pcmSize = decOutInfo.size
                         if (pcmSize > 0) {
+                            val pcm = decoder.getOutputBuffer(decIdx)!!
                             pcm.position(decOutInfo.offset)
                             pcm.limit(decOutInfo.offset + pcmSize)
                             val copySize = minOf(pcmSize, pcmBuf.size)
                             pcm.get(pcmBuf, 0, copySize)
                             decoder.releaseOutputBuffer(decIdx, false)
 
-                            // Feed PCM to encoder
                             val encInIdx = encoder.dequeueInputBuffer(TIMEOUT_US)
                             if (encInIdx >= 0) {
                                 val encIn = encoder.getInputBuffer(encInIdx)!!
                                 encIn.put(pcmBuf, 0, copySize)
                                 encoder.queueInputBuffer(encInIdx, 0, copySize, decOutInfo.presentationTimeUs, 0)
-                            } else {
-                                decoder.releaseOutputBuffer(decIdx, false) // shouldn't happen, but safe
                             }
                         } else {
                             decoder.releaseOutputBuffer(decIdx, false)
@@ -242,32 +225,21 @@ object AudioRingtoneHelper {
                     }
                 }
 
-                // Drain encoder → muxer (add ADTS header)
+                // Drain encoder → muxer (raw AAC, muxer handles MPEG-4 framing)
                 val encIdx = encoder.dequeueOutputBuffer(encOutInfo, TIMEOUT_US)
                 when {
                     encIdx == MediaCodec.INFO_TRY_AGAIN_LATER -> {}
                     encIdx == MediaCodec.INFO_OUTPUT_FORMAT_CHANGED -> {
-                        // Already started with initial format, ignore
+                        Log.d(TAG, "Encoder format: ${encoder.outputFormat}")
                     }
                     encIdx >= 0 -> {
-                        val encOut = encoder.getOutputBuffer(encIdx)
                         val flags = encOutInfo.flags
-                        if ((flags and MediaCodec.BUFFER_FLAG_CODEC_CONFIG) != 0) {
-                            encoder.releaseOutputBuffer(encIdx, false)
-                        } else if ((flags and MediaCodec.BUFFER_FLAG_END_OF_STREAM) != 0) {
+                        if ((flags and MediaCodec.BUFFER_FLAG_END_OF_STREAM) != 0) {
                             encoder.releaseOutputBuffer(encIdx, false)
                             pendingEncoderEOS = true
-                        } else if (encOut != null) {
-                            val sz = encOutInfo.size
-                            if (sz > 0 && sz + 7 <= aacBuf.size) {
-                                encOut.position(encOutInfo.offset)
-                                encOut.limit(encOutInfo.offset + sz)
-                                encOut.get(aacBuf, 7, sz)
-                                val totalSize = sz + 7
-                                writeAdtsHeader(aacBuf, 0, totalSize, profile, sfIndex, chConfig)
-                                muxer.writeSampleData(muxerTrackIndex, ByteBuffer.wrap(aacBuf, 0, totalSize), encOutInfo)
-                                frameCount++
-                            }
+                        } else if (encOutInfo.size > 0) {
+                            val encOut = encoder.getOutputBuffer(encIdx)!!
+                            muxer!!.writeSampleData(muxerTrackIndex, encOut, encOutInfo)
                             encoder.releaseOutputBuffer(encIdx, false)
                         } else {
                             encoder.releaseOutputBuffer(encIdx, false)
@@ -279,7 +251,7 @@ object AudioRingtoneHelper {
             }
 
             val result = File(output).length() > 1000
-            Log.d(TAG, "trimToMp3 done: result=$result, size=${File(output).length()}, frames=$frameCount")
+            Log.d(TAG, "trimToMp3 done: result=$result, size=${File(output).length()}")
             return@withContext result
 
         } catch (e: Exception) {
@@ -291,33 +263,6 @@ object AudioRingtoneHelper {
             try { muxer?.stop(); muxer?.release() } catch (e: Exception) {}
             try { extractor?.release() } catch (e: Exception) {}
         }
-    }
-
-    private fun getSamplingFrequencyIndex(sampleRate: Int): Int = when (sampleRate) {
-        96000 -> 0; 88200 -> 1; 64000 -> 2; 48000 -> 3
-        44100 -> 4; 32000 -> 5; 24000 -> 6; 22050 -> 7
-        16000 -> 8; 12000 -> 9; 11025 -> 10; 8000 -> 11
-        7350 -> 12; else -> 4
-    }
-
-    private fun writeAdtsHeader(buf: ByteArray, offset: Int, frameSize: Int, profile: Int, sfIndex: Int, ch: Int) {
-        val o = offset
-        buf[o]   = 0xFF.toByte()         // sync word 0xFFF
-        buf[o+1] = 0xF1.toByte()         // ID=0, layer=0, protection_absent=1
-        buf[o+2] = ((profile - 1) shl 6 and 0xC0 or (sfIndex shl 2) and 0x3C or (ch shr 2) and 0x03).toByte()
-        buf[o+3] = ((ch and 0x03) shl 6 and 0xC0 or (frameSize shr 11) and 0x03).toByte()
-        buf[o+4] = ((frameSize shr 3) and 0xFF).toByte()
-        buf[o+5] = ((frameSize and 0x07) shl 5 and 0xE0 or 0x1F).toByte()  // buffer fullness = 0x7FF (CBR)
-        buf[o+6] = 0x00.toByte()          // number of AAC frames = 1
-    }
-
-    private fun extractAudioSpecificConfig(fmt: MediaFormat): ByteArray {
-        val sfIndex = getSamplingFrequencyIndex(fmt.getInteger(MediaFormat.KEY_SAMPLE_RATE))
-        val chCount = fmt.getInteger(MediaFormat.KEY_CHANNEL_COUNT)
-        val profile = (fmt.getInteger(MediaFormat.KEY_AAC_PROFILE) shr 3 and 0x0F) + 1
-        val byte0 = ((profile - 1) shl 3 and 0xF8 or (sfIndex and 0x0F) shr 1).toByte()
-        val byte1 = ((sfIndex and 0x01) shl 7 or (chCount and 0x0F) shl 3).toByte()
-        return byteArrayOf(byte0, byte1)
     }
 
     private fun downloadFile(context: Context, urlStr: String, out: File): Boolean {
