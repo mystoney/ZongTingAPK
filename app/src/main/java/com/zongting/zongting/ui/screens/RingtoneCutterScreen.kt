@@ -337,12 +337,12 @@ private fun TimelineEditor(
     }
 
     fun msToPx(ms: Long): Float {
-        if (trackWidthPx <= 0f || durationMs <= 0L) return 0f
+        if (durationMs <= 0L || trackWidthPx <= 0f) return 0f
         return (ms.toFloat() / durationMs) * trackWidthPx
     }
 
     fun pxToMs(px: Float): Long {
-        if (trackWidthPx <= 0f || durationMs <= 0L) return 0L
+        if (durationMs <= 0L || trackWidthPx <= 0f) return 0L
         return ((px / trackWidthPx) * durationMs).toLong()
     }
 
@@ -432,13 +432,16 @@ private fun TimelineEditor(
                         },
                         onHorizontalDrag = { change, dragAmount ->
                             change.consume()
-                            // 优先用 trackWidthPx（Compose 状态，实时读取最新值）
-                            // savedTrackWidthPx 作为回退（首次 lambda 创建时 trackWidthPx 可能还是 0）
-                            val tw = if (trackWidthPx > 0f) trackWidthPx else savedTrackWidthPx
-                            val dm = if (durationMs > 0L) durationMs else savedDurationMs
+                            // trackWidthPx/durationMs 是 Composable scope 内的实时状态
+                            val tw = trackWidthPx
+                            val dm = durationMs
                             if (tw <= 0f || dm <= 0L) return@detectHorizontalDragGestures
-                            val deltaMs = ((dragAmount / tw) * dm).toLong()
-                            localStartMs = (dragStartMs + deltaMs).coerceIn(1_000L, maxStartMs)
+                            // dragAmount 是累计值，所以用 dragAmount - lastDragAmountPx 取增量
+                            val deltaPx = dragAmount - lastDragAmountPx
+                            lastDragAmountPx = dragAmount
+                            val deltaMs = ((deltaPx / tw) * dm).toLong()
+                            localStartMs = (localStartMs + deltaMs).coerceIn(1_000L, maxStartMs)
+                            android.util.Log.d("HermesDebug", "HermesDebug DRAG: tw=$tw dm=$dm deltaPx=$deltaPx deltaMs=$deltaMs localStartMs=$localStartMs")
                         }
                     )
                 },
