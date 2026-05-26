@@ -2,6 +2,7 @@ package com.zongting.zongting.ringtone
 
 import android.content.Context
 import android.net.Uri
+import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.zongting.zongting.data.model.Song
@@ -51,6 +52,7 @@ class RingtoneCutterViewModel @Inject constructor(
         val minStart = 1_000L
         val maxStart = (durationMs - fixedDuration).coerceAtLeast(minStart)
         val start = minOf(1_000L, maxStart)
+        Log.d("HermesDebug", "HermesDebug initialize: durationMs=$durationMs maxStart=$maxStart start=$start")
         // 先停止播放、seek到截取块起点，再设state + 激活守卫
         // 这样PlayerManager.listener后续回调会因守卫激活而无法覆盖playbackPositionMs
         PlayerManager.pause()
