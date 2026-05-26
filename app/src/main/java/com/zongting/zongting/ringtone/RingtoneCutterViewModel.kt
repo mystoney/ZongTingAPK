@@ -96,37 +96,37 @@ class RingtoneCutterViewModel @Inject constructor(
 
     private var positionJob: kotlinx.coroutines.Job? = null
 
-    /** 预览播放截取片段 */
+    /** 预览播放截取片段（拖动结束后必须播放） */
     fun previewClip() {
-        val s = _state.value
-        if (s.isPlaying) {
-            PlayerManager.pause()
-            positionJob?.cancel()
-            _state.value = s.copy(isPlaying = false, playbackPositionMs = s.startMs)
-        } else {
-            // 读取当前state的startMs（而非lambda创建时捕获的旧值）
-            val startNano = System.nanoTime()
-            val currentStart = _state.value.startMs
-            _state.value = _state.value.copy(isPlaying = true, playbackPositionMs = currentStart, previewStartTimeNanos = startNano)
-            PlayerManager.seekTo(currentStart)
-            PlayerManager.play()
-            // 轮询播放进度：前200ms强制用startMs，屏蔽seek期间的旧位置
-            positionJob?.cancel()
-            positionJob = viewModelScope.launch {
-                while (true) {
-                    kotlinx.coroutines.delay(100L)
-                    val pos = PlayerManager.currentPosition
-                    val end = _state.value.endMs
-                    val start = _state.value.startMs
-                    val elapsed = System.nanoTime() - _state.value.previewStartTimeNanos
-                    // 前200ms认为seek未完成，白线固定在截取块起点
-                    val safePos = if (elapsed < 200_000_000L) start else pos
-                    _state.value = _state.value.copy(playbackPositionMs = safePos)
-                    if (pos >= end) {
-                        PlayerManager.pause()
-                        _state.value = _state.value.copy(isPlaying = false, playbackPositionMs = _state.value.startMs, previewStartTimeNanos = -1L)
-                        break
-                    }
+        // 拖动结束 → 停止现有播放，强制从新截取块起点开始播放
+        positionJob?.cancel()
+        PlayerManager.pause()
+
+        val startNano = System.nanoTime()
+        val currentStart = _state.value.startMs
+        _state.value = _state.value.copy(
+            isPlaying = true,
+            playbackPositionMs = currentStart,
+            previewStartTimeNanos = startNano
+        )
+        PlayerManager.seekTo(currentStart)
+        PlayerManager.play()
+
+        // 轮询播放进度：前200ms强制用startMs，屏蔽seek期间的旧位置
+        positionJob = viewModelScope.launch {
+            while (true) {
+                kotlinx.coroutines.delay(100L)
+                val pos = PlayerManager.currentPosition
+                val end = _state.value.endMs
+                val start = _state.value.startMs
+                val elapsed = System.nanoTime() - _state.value.previewStartTimeNanos
+                // 前200ms认为seek未完成，白线固定在截取块起点
+                val safePos = if (elapsed < 200_000_000L) start else pos
+                _state.value = _state.value.copy(playbackPositionMs = safePos)
+                if (pos >= end) {
+                    PlayerManager.pause()
+                    _state.value = _state.value.copy(isPlaying = false, playbackPositionMs = _state.value.startMs, previewStartTimeNanos = -1L)
+                    break
                 }
             }
         }
