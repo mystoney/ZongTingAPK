@@ -3,6 +3,7 @@ package com.zongting.zongting.ui.screens
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.*
 import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -409,34 +410,35 @@ private fun TimelineEditor(
             )
         }
 
-        // ===== 50秒选中高亮块 =====
+        // ===== 50秒选中高亮块（加大触摸区域方便拖动） =====
         val blockWidthPx = if (trackWidthPx > 0f && durationMs > 0L)
             (CLIP_DURATION_MS.toFloat() / durationMs) * trackWidthPx
         else 0f
-        val blockWidthDp = with(density) { maxOf(blockWidthPx, 72f).toDp() }
+        val blockWidthDp = with(density) { maxOf(blockWidthPx, 80f).toDp() }
         val blockOffsetX = with(density) { msToPx(localStartMs).toDp() }
 
         Box(
             modifier = Modifier
                 .offset(x = blockOffsetX)
                 .width(blockWidthDp)
-                .height(32.dp)
+                .height(48.dp) // 加大触摸区域
                 .align(Alignment.CenterStart) // 只负责垂直居中，水平用 offset 控制
                 .background(
                     MaterialTheme.colorScheme.primary.copy(alpha = 0.3f),
                     RoundedCornerShape(6.dp)
                 )
                 .pointerInput(Unit) {
-                    detectDragGestures(
+                    detectHorizontalDragGestures(
                         onDragStart = { _ ->
                             android.util.Log.d("HermesDebug", "HermesDebug dragStart: trackWidthPx=$trackWidthPx localStartMs=$localStartMs")
                             isDragging = true
                         },
-                        onDrag = { change, dragAmount ->
+                        onHorizontalDrag = { change, dragAmount ->
                             change.consume()
-                            android.util.Log.d("HermesDebug", "HermesDebug drag: trackWidthPx=$trackWidthPx durationMs=$durationMs deltaPx=${dragAmount.x}")
-                            if (trackWidthPx <= 0f || durationMs <= 0L) return@detectDragGestures
-                            val deltaMs = pxToMs(dragAmount.x)
+                            val currentTrack = trackWidthPx
+                            android.util.Log.d("HermesDebug", "HermesDebug drag: trackWidthPx=$currentTrack durationMs=$durationMs deltaPx=${dragAmount}")
+                            if (currentTrack <= 0f || durationMs <= 0L) return@detectHorizontalDragGestures
+                            val deltaMs = pxToMs(dragAmount)
                             val newStart = (localStartMs + deltaMs).coerceIn(1_000L, maxStartMs)
                             android.util.Log.d("HermesDebug", "HermesDebug drag: deltaMs=$deltaMs newStart=$newStart")
                             localStartMs = newStart
