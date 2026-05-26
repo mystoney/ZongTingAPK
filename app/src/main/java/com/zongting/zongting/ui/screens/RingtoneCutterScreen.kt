@@ -392,18 +392,18 @@ private fun TimelineEditor(
                 )
         )
 
-        // ===== 播放进度覆盖层（白线始终对齐截取块起点，+4dp偏移避免被拖动块遮挡） =====
-        android.util.Log.d("HermesDebug", "HermesDebug timelineEditor: startMs=$startMs localStartMs=$localStartMs")
-        val whiteLineMs = startMs
-        if (trackWidthPx > 0f && durationMs > 0L && whiteLineMs > 0L) {
+        // ===== 播放进度白线（播放时跟随实际时间，非播放时对齐截取块起点） =====
+        android.util.Log.d("HermesDebug", "HermesDebug timelineEditor: startMs=$startMs playbackPositionMs=$playbackPositionMs isPlaying=$isPlaying")
+        val whiteLineMs = if (isPlaying) playbackPositionMs.coerceIn(startMs, startMs + CLIP_DURATION_MS) else startMs
+        if (trackWidthPx > 0f && durationMs > 0L && whiteLineMs >= startMs) {
             Box(
                 modifier = Modifier
-                    .offset(x = with(density) { (msToPx(whiteLineMs) + 4f).toDp() })
+                    .offset(x = with(density) { msToPx(whiteLineMs).toDp() })
                     .width(2.dp)
-                    .height(6.dp)
+                    .height(80.dp)
                     .align(Alignment.TopStart)
                     .background(
-                        MaterialTheme.colorScheme.tertiary,
+                        Color.White.copy(alpha = 0.9f),
                         RoundedCornerShape(1.dp)
                     )
             )
