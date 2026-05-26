@@ -272,8 +272,9 @@ fun PlayerScreen(
             }
         }
 
-        // ===== 统一的底部播放控制栏 =====
-        PlayerBottomBar(
+        // ===== 统一的底部播放控制栏（铃声截取界面时隐藏） =====
+        if (!showRingtoneCutter) {
+            PlayerBottomBar(
             currentSong = currentSong,
             isPlaying = isPlaying,
             playbackState = playbackState,
@@ -295,10 +296,11 @@ fun PlayerScreen(
             onPlaySong = { song -> viewModel.playSong(song, currentPlaylist) },
             playlistListState = rememberLazyListState()
         )
+        }
 
-        // 定时关闭弹窗
+        // 定时关闭弹窗（铃声截取界面时隐藏）
         val context = LocalContext.current
-        if (showSleepTimerDialog) {
+        if (showSleepTimerDialog && !showRingtoneCutter) {
             SleepTimerDialog(
                 isActive = isTimerActive,
                 remainingSeconds = timerRemaining,
@@ -312,8 +314,8 @@ fun PlayerScreen(
             )
         }
 
-        // 添加到歌单弹窗
-        if (showSavePlaylistDialog) {
+        // 添加到歌单弹窗（铃声截取界面时隐藏）
+        if (showSavePlaylistDialog && !showRingtoneCutter) {
             SavePlaylistDialog(
                 songCount = 1,
                 playlists = viewModel.userPlaylists.value,
