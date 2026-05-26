@@ -367,8 +367,8 @@ object AudioRingtoneHelper {
             val ringtoneDir = File("/storage/emulated/0/Download").also { it.mkdirs() }
             if (!ringtoneDir.exists()) ringtoneDir.mkdirs()
 
-            val sanitized = songName.replace(Regex("[^a-zA-Z0-9\\u4e00-\\u9fa5]"), "_")
-            val fileName = "${sanitized}_铃声_${System.currentTimeMillis()}.mp3"
+            val sanitized = songName.replace(Regex("[^a-zA-Z0-9\\u4e00-\\u9fa5]"), "")
+            val fileName = "${sanitized}铃声${System.currentTimeMillis()}.mp3"
             val destFile = File(ringtoneDir, fileName)
             File(sourceFilePath).copyTo(destFile, overwrite = true)
             File(sourceFilePath).delete()
