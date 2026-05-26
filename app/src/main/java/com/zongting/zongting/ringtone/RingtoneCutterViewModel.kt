@@ -56,7 +56,7 @@ class RingtoneCutterViewModel @Inject constructor(
             startMs = start,
             endMs = start + fixedDuration,
             hasWriteSettings = AudioRingtoneHelper.hasWriteSettingsPermission(context),
-            playbackPositionMs = 0L  // 重置，避免残留上次的播放进度
+            playbackPositionMs = start  // 白线始终对齐截取块起点
         )
     }
 
@@ -107,7 +107,7 @@ class RingtoneCutterViewModel @Inject constructor(
                     // 播放到截取终点自动停止
                     if (pos >= end) {
                         PlayerManager.pause()
-                        _state.value = _state.value.copy(isPlaying = false, playbackPositionMs = 0L)
+                        _state.value = _state.value.copy(isPlaying = false, playbackPositionMs = _state.value.startMs)
                         break
                     }
                     kotlinx.coroutines.delay(100L)
@@ -121,7 +121,7 @@ class RingtoneCutterViewModel @Inject constructor(
     fun stopPreview() {
         positionJob?.cancel()
         PlayerManager.pause()
-        _state.value = _state.value.copy(isPlaying = false, playbackPositionMs = 0L)
+        _state.value = _state.value.copy(isPlaying = false, playbackPositionMs = _state.value.startMs)
     }
 
     /** 导出音频文件（保存到下载目录） */
