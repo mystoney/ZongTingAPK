@@ -429,10 +429,11 @@ private fun TimelineEditor(
                             change.consume()
                             val deltaPx = dragAmount - lastDragAmountPx
                             lastDragAmountPx = dragAmount
+                            android.util.Log.d("HermesDebug", "DRAG: dragAmount=$dragAmount deltaPx=$deltaPx localStartMs=$localStartMs")
                             if (trackWidthPx <= 0f || durationMs <= 0L) return@detectHorizontalDragGestures
-                            // deltaPx > 0 = 手指向右拖 → 截取块应相对固定 → localStartMs 减少
                             val deltaMs = pxToMs(deltaPx)
-                            val newStart = (localStartMs - deltaMs).coerceIn(1_000L, maxStartMs)
+                            val newStart = (localStartMs + deltaMs).coerceIn(1_000L, maxStartMs)
+                            android.util.Log.d("HermesDebug", "DRAG: deltaMs=$deltaMs newStart=$newStart")
                             localStartMs = newStart
                         }
                     )
