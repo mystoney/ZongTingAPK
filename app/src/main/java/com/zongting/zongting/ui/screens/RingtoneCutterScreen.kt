@@ -153,6 +153,7 @@ fun RingtoneCutterScreen(
                 startMs = state.startMs,
                 endMs = state.endMs,
                 playbackPositionMs = state.playbackPositionMs,
+                isPlaying = state.isPlaying,
                 onStartChange = { viewModel.updateStart(it) },
                 onEndChange = { viewModel.updateEnd(it) },
                 onDragEnd = { viewModel.previewClip() },
@@ -222,6 +223,8 @@ fun RingtoneCutterScreen(
                 RingtoneLyricView(
                     lyrics = lyrics,
                     playbackPositionMs = state.playbackPositionMs,
+                    isPlaying = state.isPlaying,
+                    startMs = state.startMs,
                     modifier = Modifier
                         .fillMaxWidth()
                         .weight(1f)
@@ -330,6 +333,7 @@ private fun TimelineEditor(
     startMs: Long,
     endMs: Long,
     playbackPositionMs: Long,
+    isPlaying: Boolean,
     onStartChange: (Long) -> Unit,
     onEndChange: (Long) -> Unit,
     onDragEnd: () -> Unit,
@@ -387,11 +391,12 @@ private fun TimelineEditor(
                 )
         )
 
-        // ===== 播放进度覆盖层 =====
-        if (trackWidthPx > 0f && durationMs > 0L && playbackPositionMs > 0L) {
+        // ===== 播放进度覆盖层（白线：非播放时对齐截取块起点，播放时跟随实际进度） =====
+        val whiteLineMs = if (isPlaying) playbackPositionMs else startMs
+        if (trackWidthPx > 0f && durationMs > 0L && whiteLineMs > 0L) {
             Box(
                 modifier = Modifier
-                    .offset(x = with(density) { msToPx(playbackPositionMs).toDp() })
+                    .offset(x = with(density) { msToPx(whiteLineMs).toDp() })
                     .width(2.dp)
                     .height(6.dp)
                     .align(Alignment.Center)
@@ -504,13 +509,18 @@ private fun TimelineEditor(
 private fun RingtoneLyricView(
     lyrics: List<LyricLine>,
     playbackPositionMs: Long,
+    isPlaying: Boolean,
+    startMs: Long,
     modifier: Modifier = Modifier
 ) {
     val lazyListState = rememberLazyListState()
     val RED = Color(0xFFFF3B30)
 
-    // 实时计算当前行（基于播放进度）
-    val currentLineIndex = lyrics.indices.lastOrNull { lyrics[it].timestamp <= playbackPositionMs } ?: 0
+    // 播放中用实际位置，非播放时对齐截取块起点
+    val effectivePos = if (isPlaying && playbackPositionMs > 0L) playbackPositionMs else startMs
+
+    // 实时计算当前行（基于有效进度）
+    val currentLineIndex = lyrics.indices.lastOrNull { lyrics[it].timestamp <= effectivePos } ?: 0
 
     // 播放进度变化时自动滚动到当前行
     LaunchedEffect(playbackPositionMs, currentLineIndex) {
@@ -565,8 +575,9 @@ private fun LyricTimelineView(
     val onSurfaceVariant = MaterialTheme.colorScheme.onSurfaceVariant
 
     // 找到播放进度对应的歌词行
-    val effectivePos = if (playbackPositionMs > 0L) playbackPositionMs else (startMs + endMs) / 2
-    val currentLine = lyrics.findLast { it.timestamp <= effectivePos }
+    // 播放中用实际位置，非播放时对齐截取块起点
+    val effectivePos = if (playbackPositionMs > 0L) playbackPositionMs else startMs
+    val currentLine = lyrics.findLast { it.timestamp <= effectivePos } ?: lyrics.lastOrNull()
 
     LaunchedEffect(currentLine, lyrics) {
         currentLine?.let { line ->
