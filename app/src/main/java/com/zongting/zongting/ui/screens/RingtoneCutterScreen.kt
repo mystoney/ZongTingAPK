@@ -190,11 +190,11 @@ fun RingtoneCutterScreen(
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            // ===== 预览播放按钮 =====
+            // ===== 预览播放按钮（紧凑）=====
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 16.dp),
+                    .padding(horizontal = 16.dp, vertical = 4.dp),
                 horizontalArrangement = Arrangement.Center,
                 verticalAlignment = Alignment.CenterVertically
             ) {
@@ -206,32 +206,29 @@ fun RingtoneCutterScreen(
                         imageVector = if (state.isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
                         contentDescription = if (state.isPlaying) "暂停" else "预览",
                         tint = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.size(48.dp)
+                        modifier = Modifier.size(32.dp)
                     )
                 }
-                Spacer(modifier = Modifier.width(8.dp))
+                Spacer(modifier = Modifier.width(4.dp))
                 Text(
                     text = if (state.isPlaying) "预览中..." else "点击预览截取片段",
-                    style = MaterialTheme.typography.bodyMedium,
+                    style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
 
-            // ===== 歌词时间轴 =====
+            // ===== 歌词区（当前行红色居中）=====
             if (lyrics.isNotEmpty()) {
-                LyricTimelineView(
+                RingtoneLyricView(
                     lyrics = lyrics,
-                    startMs = state.startMs,
-                    endMs = state.endMs,
                     playbackPositionMs = state.playbackPositionMs,
                     modifier = Modifier
                         .fillMaxWidth()
                         .weight(1f)
                 )
-                Spacer(modifier = Modifier.height(8.dp))
+            } else {
+                Spacer(modifier = Modifier.weight(1f))
             }
-
-            Spacer(modifier = Modifier.weight(1f))
 
             // ===== 底部按钮区 =====
             Row(
@@ -289,35 +286,35 @@ fun RingtoneCutterScreen(
     }
 }
 
-// ===== 歌曲信息头部 =====
+// ===== 歌曲信息头部（紧凑版）=====
 @Composable
 private fun SongInfoHeader(song: Song) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 8.dp),
+            .padding(horizontal = 16.dp, vertical = 6.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         AsyncImage(
             model = song.pic,
             contentDescription = "专辑封面",
             modifier = Modifier
-                .size(56.dp)
-                .clip(RoundedCornerShape(8.dp)),
+                .size(40.dp)
+                .clip(RoundedCornerShape(6.dp)),
             contentScale = ContentScale.Crop
         )
-        Spacer(modifier = Modifier.width(12.dp))
+        Spacer(modifier = Modifier.width(10.dp))
         Column(modifier = Modifier.weight(1f)) {
             Text(
                 text = song.name,
-                style = MaterialTheme.typography.titleMedium,
+                style = MaterialTheme.typography.titleSmall,
                 fontWeight = FontWeight.Bold,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )
             Text(
                 text = song.artist,
-                style = MaterialTheme.typography.bodyMedium,
+                style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
@@ -498,6 +495,56 @@ private fun TimelineEditor(
                 .offset(x = with(density) { (msToPx(localStartMs) - 2f).toDp() })
                 .align(Alignment.TopStart)
         )
+    }
+}
+
+// ===== 歌词视图（当前行红色居中）=====
+@Composable
+private fun RingtoneLyricView(
+    lyrics: List<LyricLine>,
+    playbackPositionMs: Long,
+    modifier: Modifier = Modifier
+) {
+    val lazyListState = rememberLazyListState()
+    val RED = Color(0xFFFF3B30)
+
+    // 实时计算当前行（基于播放进度）
+    val currentLineIndex = lyrics.indices.lastOrNull { lyrics[it].timestamp <= playbackPositionMs } ?: 0
+
+    // 播放进度变化时自动滚动到当前行
+    LaunchedEffect(playbackPositionMs, currentLineIndex) {
+        if (lyrics.isNotEmpty() && currentLineIndex in lyrics.indices) {
+            lazyListState.animateScrollToItem(index = currentLineIndex)
+        }
+    }
+
+    BoxWithConstraints(modifier = modifier) {
+        val boxHeightPx = with(LocalDensity.current) { maxHeight.toPx() }
+        val lineHeightPx = 48f // 估算行高
+        val verticalPadding = with(LocalDensity.current) { ((boxHeightPx - lineHeightPx) / 2).toDp() }
+
+        LazyColumn(
+            state = lazyListState,
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(horizontal = 24.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            contentPadding = PaddingValues(vertical = verticalPadding)
+        ) {
+            itemsIndexed(lyrics) { index, lyricLine ->
+                val isCurrentLine = index == currentLineIndex
+                Text(
+                    text = lyricLine.text.ifEmpty { "♪" },
+                    fontSize = if (isCurrentLine) 18.sp else 14.sp,
+                    fontWeight = if (isCurrentLine) FontWeight.Bold else FontWeight.Normal,
+                    color = if (isCurrentLine) RED else MaterialTheme.colorScheme.onSurfaceVariant,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 8.dp)
+                )
+            }
+        }
     }
 }
 
