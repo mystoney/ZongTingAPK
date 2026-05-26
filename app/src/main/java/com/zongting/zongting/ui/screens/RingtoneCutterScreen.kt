@@ -21,6 +21,11 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onSizeChanged
@@ -410,25 +415,25 @@ private fun TimelineEditor(
                 )
                 .pointerInput(Unit, trackWidthPx) {
                     awaitPointerEventScope {
-                        var dragStartX = 0f
-                        var lastX = 0f
-                        var dragging = false
                         while (true) {
-                            val event = awaitPointerEvent()
-                            val change = event.changes.firstOrNull() ?: continue
-                            when {
-                                !dragging && change.pressed -> {
-                                    dragStartX = change.position.x
-                                    lastX = dragStartX
-                                    sessionTrackWidthPx = trackWidthPx
-                                    sessionDurationMs = durationMs
-                                    sessionStartMs = startMs
-                                    localDragOffsetMs = 0L
-                                    isDragging = true
-                                    change.consume()
-                                    android.util.Log.d("HermesDebug", "HermesDebug DRAG_START: tw=${sessionTrackWidthPx} dm=${sessionDurationMs} startMs=$sessionStartMs")
-                                }
-                                dragging && change.pressed -> {
+                            var dragStartX = 0f
+                            var lastX = 0f
+                            val down = awaitFirstDown()
+                            dragStartX = down.position.x
+                            lastX = dragStartX
+                            sessionTrackWidthPx = trackWidthPx
+                            sessionDurationMs = durationMs
+                            sessionStartMs = startMs
+                            localDragOffsetMs = 0L
+                            isDragging = true
+                            down.consume()
+                            android.util.Log.d("HermesDebug", "HermesDebug DRAG_START: tw=${sessionTrackWidthPx} dm=${sessionDurationMs} startMs=$sessionStartMs")
+
+                            // 拖动中：等待 MOVE 事件
+                            do {
+                                val event = awaitPointerEvent()
+                                val change = event.changes.firstOrNull() ?: break
+                                if (change.pressed) {
                                     val currentX = change.position.x
                                     val tw = sessionTrackWidthPx
                                     val dm = sessionDurationMs
@@ -443,20 +448,18 @@ private fun TimelineEditor(
                                     }
                                     change.consume()
                                 }
-                                dragging && !change.pressed -> {
-                                    val finalStartMs = (sessionStartMs + localDragOffsetMs).coerceIn(1_000L, sessionDurationMs - CLIP_DURATION_MS)
-                                    android.util.Log.d("HermesDebug", "HermesDebug DRAG_END: localDragOffsetMs=$localDragOffsetMs finalStartMs=$finalStartMs")
-                                    if (finalStartMs != startMs) {
-                                        onStartChange(finalStartMs)
-                                        onEndChange(finalStartMs + CLIP_DURATION_MS)
-                                    }
-                                    onDragEnd()
-                                    isDragging = false
-                                    localDragOffsetMs = 0L
-                                    dragging = false
-                                }
-                                else -> change.consume()
+                            } while (event.changes.any { it.pressed })
+
+                            // 拖动结束
+                            val finalStartMs = (sessionStartMs + localDragOffsetMs).coerceIn(1_000L, sessionDurationMs - CLIP_DURATION_MS)
+                            android.util.Log.d("HermesDebug", "HermesDebug DRAG_END: localDragOffsetMs=$localDragOffsetMs finalStartMs=$finalStartMs")
+                            if (finalStartMs != startMs) {
+                                onStartChange(finalStartMs)
+                                onEndChange(finalStartMs + CLIP_DURATION_MS)
                             }
+                            onDragEnd()
+                            isDragging = false
+                            localDragOffsetMs = 0L
                         }
                     }
                 },
