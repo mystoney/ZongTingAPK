@@ -326,6 +326,8 @@ private fun TimelineEditor(
     var isDragging by remember { mutableStateOf(false) }
     var dragStartMs by remember { mutableLongStateOf(0L) }
     var lastDragAmountPx by remember { mutableFloatStateOf(0f) }
+    var savedTrackWidthPx by remember { mutableFloatStateOf(0f) }
+    var savedDurationMs by remember { mutableLongStateOf(0L) }
 
     // 同步外部 startMs 变化到本地（仅当非拖动时）
     LaunchedEffect(startMs) {
@@ -410,6 +412,9 @@ private fun TimelineEditor(
                             isDragging = true
                             dragStartMs = localStartMs
                             lastDragAmountPx = 0f
+                            // 保存初始宽高，避免拖动中值变化导致跳动
+                            savedTrackWidthPx = trackWidthPx
+                            savedDurationMs = durationMs
                         },
                         onDragEnd = {
                             android.util.Log.d("HermesDebug", "HermesDebug DRAG_END: localStartMs=$localStartMs startMs=$startMs")
@@ -427,11 +432,10 @@ private fun TimelineEditor(
                         },
                         onHorizontalDrag = { change, dragAmount ->
                             change.consume()
-                            if (trackWidthPx <= 0f || durationMs <= 0L) return@detectHorizontalDragGestures
-                            val deltaPx = dragAmount - lastDragAmountPx
-                            lastDragAmountPx = dragAmount
-                            val deltaMs = pxToMs(deltaPx)
-                            localStartMs = (localStartMs + deltaMs).coerceIn(1_000L, maxStartMs)
+                            if (savedTrackWidthPx <= 0f || savedDurationMs <= 0L) return@detectHorizontalDragGestures
+                            // 用 dragAmount（总偏移）直接算，不要 deltaPx 累加（delta太小会四舍五入归零）
+                            val deltaMs = ((dragAmount / savedTrackWidthPx) * savedDurationMs).toLong()
+                            localStartMs = (dragStartMs + deltaMs).coerceIn(1_000L, maxStartMs)
                         }
                     )
                 },
