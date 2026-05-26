@@ -392,6 +392,7 @@ private fun TimelineEditor(
         )
 
         // ===== 播放进度覆盖层（白线：非播放时对齐截取块起点，播放时跟随实际进度） =====
+        android.util.Log.d("HermesDebug", "HermesDebug render: isPlaying=$isPlaying playbackPositionMs=$playbackPositionMs startMs=$startMs")
         val whiteLineMs = if (isPlaying) playbackPositionMs else startMs
         if (trackWidthPx > 0f && durationMs > 0L && whiteLineMs > 0L) {
             Box(
