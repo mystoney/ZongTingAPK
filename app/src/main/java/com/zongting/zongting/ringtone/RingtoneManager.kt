@@ -18,6 +18,7 @@ import java.io.File
 import java.io.FileOutputStream
 import java.net.HttpURLConnection
 import java.net.URL
+import java.nio.ByteBuffer
 import kotlin.coroutines.resume
 
 /**
@@ -108,7 +109,7 @@ object AudioRingtoneHelper {
     }
 
     /**
-     * 使用 MediaCodec 解码 → 重新编码为 AAC/M4A（音频转码，裁剪）
+     * 使用 MediaCodec 解码 → 重新编码为 AAC，加 ADTS 头封装 → MediaMuxer 输出
      * 裁剪通过 startUs/endUs 参数控制 extractor 读取范围实现
      */
     private suspend fun trimToMp3(
@@ -124,147 +125,160 @@ object AudioRingtoneHelper {
         var decoder: MediaCodec? = null
         var encoder: MediaCodec? = null
         var muxer: MediaMuxer? = null
-        var trackIndex = -1
         var muxerTrackIndex = -1
-        var sawInputEOS = false
-        var sawOutputEOS = false
-        var encoderOutputFinished = false
-        var decoderOutputFinished = false
         val startUs = startMs * 1000L
         val endUs = endMs * 1000L
 
-        val inputBufferInfo = MediaCodec.BufferInfo()
-        val outputBufferInfo = MediaCodec.BufferInfo()
+        val decOutInfo = MediaCodec.BufferInfo()
+        val encOutInfo = MediaCodec.BufferInfo()
         val TIMEOUT_US = 10_000L
 
         try {
             // --- Setup Extractor ---
             extractor = MediaExtractor()
             extractor.setDataSource(input)
+            var audioTrack = -1
             for (i in 0 until extractor.trackCount) {
-                val format = extractor.getTrackFormat(i)
-                val mime = format.getString(MediaFormat.KEY_MIME) ?: continue
-                if (mime.startsWith("audio/")) {
-                    extractor.selectTrack(i)
-                    trackIndex = i
-                    break
-                }
+                val fmt = extractor.getTrackFormat(i)
+                val mime = fmt.getString(MediaFormat.KEY_MIME) ?: continue
+                if (mime.startsWith("audio/")) { audioTrack = i; break }
             }
-            if (trackIndex < 0) {
-                Log.e(TAG, "No audio track found"); return@withContext false
-            }
-            val inputFormat = extractor.getTrackFormat(trackIndex)
-            val inputMime = inputFormat.getString(MediaFormat.KEY_MIME)!!
-            val sampleRate = inputFormat.getInteger(MediaFormat.KEY_SAMPLE_RATE)
-            val channelCount = inputFormat.getInteger(MediaFormat.KEY_CHANNEL_COUNT)
-            val duration = inputFormat.getLong(MediaFormat.KEY_DURATION)
+            if (audioTrack < 0) { Log.e(TAG, "No audio track"); return@withContext false }
 
-            // Seek to start
+            extractor.selectTrack(audioTrack)
+            val inFmt = extractor.getTrackFormat(audioTrack)
+            val inMime = inFmt.getString(MediaFormat.KEY_MIME)!!
+            val sampleRate = inFmt.getInteger(MediaFormat.KEY_SAMPLE_RATE)
+            val chCount = inFmt.getInteger(MediaFormat.KEY_CHANNEL_COUNT)
             extractor.seekTo(startUs, MediaExtractor.SEEK_TO_CLOSEST_SYNC)
-            Log.d(TAG, "Input format: $inputMime, rate=$sampleRate, ch=$channelCount, dur=$duration")
+            Log.d(TAG, "Input: $inMime, rate=$sampleRate, ch=$chCount")
 
-            // --- Setup Decoder ---
-            decoder = MediaCodec.createDecoderByType(inputMime)
-            decoder.configure(inputFormat, null, null, 0)
+            // --- Decoder ---
+            decoder = MediaCodec.createDecoderByType(inMime)
+            decoder.configure(inFmt, null, null, 0)
             decoder.start()
 
-            // --- Setup Encoder (AAC) ---
-            val outputFormat = MediaFormat.createAudioFormat(MediaFormat.MIMETYPE_AUDIO_AAC, sampleRate, channelCount).apply {
+            // --- Encoder (AAC) ---
+            val outFmt = MediaFormat.createAudioFormat(MediaFormat.MIMETYPE_AUDIO_AAC, sampleRate, chCount).apply {
                 setInteger(MediaFormat.KEY_BIT_RATE, 192_000)
-                setInteger(MediaFormat.KEY_AAC_PROFILE, android.media.MediaCodecInfo.CodecProfileLevel.AACObjectLC)
+                setInteger(MediaFormat.KEY_AAC_PROFILE, MediaCodecInfo.CodecProfileLevel.AACObjectLC)
             }
             encoder = MediaCodec.createEncoderByType(MediaFormat.MIMETYPE_AUDIO_AAC)
-            encoder.configure(outputFormat, null, null, MediaCodec.CONFIGURE_FLAG_ENCODE)
+            encoder.configure(outFmt, null, null, MediaCodec.CONFIGURE_FLAG_ENCODE)
             encoder.start()
 
-            // --- Setup Muxer ---
+            // --- Muxer (MPEG-4, needs ADTS framing) ---
             File(output).delete()
             muxer = MediaMuxer(output, MediaMuxer.OutputFormat.MUXER_OUTPUT_MPEG_4)
-            muxerTrackIndex = muxer.addTrack(outputFormat)
+            muxerTrackIndex = muxer.addTrack(outFmt)
             muxer.start()
-            Log.d(TAG, "Muxer started, trackIndex=$muxerTrackIndex")
 
-            // --- Transcode Loop ---
-            val bufferInfo = MediaCodec.BufferInfo()
+            // Compute ADTS header parameters
+            val sfIndex = getSamplingFrequencyIndex(sampleRate)
+            val chConfig = chCount
+            val profile = 1 // AAC-LC
+
+            // Extract AudioSpecificConfig from encoder output format for codec data
+            val asc = extractAudioSpecificConfig(encoder.outputFormat)
+
             var frameCount = 0
+            var pendingDecoderEOS = false
+            var pendingEncoderEOS = false
+            val pcmBuf = ByteArray(32768)
 
-            while (!sawOutputEOS) {
-                // Feed input to decoder
-                if (!sawInputEOS) {
-                    val inIndex = decoder.dequeueInputBuffer(TIMEOUT_US)
-                    if (inIndex >= 0) {
-                        val inBuf = decoder.getInputBuffer(inIndex)!!
-                        val sampleSize = extractor.readSampleData(inBuf, 0)
-                        val sampleTime = extractor.sampleTime
+            // Buffer for ADTS-wrapped AAC frames (large enough for any frame)
+            val aacBuf = ByteArray(65536)
 
-                        if (sampleSize < 0 || sampleTime > endUs) {
-                            decoder.queueInputBuffer(inIndex, 0, 0, 0, MediaCodec.BUFFER_FLAG_END_OF_STREAM)
-                            sawInputEOS = true
-                            Log.d(TAG, "Input EOS queued at ${extractor.sampleTime}")
+            loop@ while (true) {
+                // Feed decoder
+                if (!pendingDecoderEOS) {
+                    val inIdx = decoder.dequeueInputBuffer(TIMEOUT_US)
+                    if (inIdx >= 0) {
+                        val inBuf = decoder.getInputBuffer(inIdx)!!
+                        val sz = extractor.readSampleData(inBuf, 0)
+                        val t = extractor.sampleTime
+                        if (sz < 0 || t > endUs) {
+                            decoder.queueInputBuffer(inIdx, 0, 0, 0, MediaCodec.BUFFER_FLAG_END_OF_STREAM)
+                            pendingDecoderEOS = true
                         } else {
-                            decoder.queueInputBuffer(inIndex, 0, sampleSize, sampleTime - startUs, 0)
+                            // Use presentation time as-is (seek to startUs, decoder outputs from there)
+                            decoder.queueInputBuffer(inIdx, 0, sz, t, 0)
                             extractor.advance()
                         }
                     }
                 }
 
-                // Drain decoder output → encoder input
-                if (!decoderOutputFinished) {
-                    val outIndex = decoder.dequeueOutputBuffer(inputBufferInfo, TIMEOUT_US)
-                    when {
-                        outIndex == MediaCodec.INFO_TRY_AGAIN_LATER -> {}
-                        outIndex == MediaCodec.INFO_OUTPUT_FORMAT_CHANGED -> {}
-                        outIndex >= 0 -> {
-                            val outBuf = decoder.getOutputBuffer(outIndex)!!
-                            val info = inputBufferInfo
-                            if ((info.flags and MediaCodec.BUFFER_FLAG_END_OF_STREAM) != 0) {
-                                encoder.queueInputBuffer(outIndex, 0, 0, 0, MediaCodec.BUFFER_FLAG_END_OF_STREAM)
-                                decoderOutputFinished = true
+                // Drain decoder → encoder
+                val decIdx = decoder.dequeueOutputBuffer(decOutInfo, TIMEOUT_US)
+                if (decIdx >= 0) {
+                    val pcm = decoder.getOutputBuffer(decIdx)!!
+                    if ((decOutInfo.flags and MediaCodec.BUFFER_FLAG_END_OF_STREAM) != 0) {
+                        decoder.releaseOutputBuffer(decIdx, false)
+                        val encInIdx = encoder.dequeueInputBuffer(TIMEOUT_US)
+                        if (encInIdx >= 0) {
+                            encoder.queueInputBuffer(encInIdx, 0, 0, 0, MediaCodec.BUFFER_FLAG_END_OF_STREAM)
+                        }
+                    } else {
+                        val pcmSize = decOutInfo.size
+                        if (pcmSize > 0) {
+                            pcm.position(decOutInfo.offset)
+                            pcm.limit(decOutInfo.offset + pcmSize)
+                            val copySize = minOf(pcmSize, pcmBuf.size)
+                            pcm.get(pcmBuf, 0, copySize)
+                            decoder.releaseOutputBuffer(decIdx, false)
+
+                            // Feed PCM to encoder
+                            val encInIdx = encoder.dequeueInputBuffer(TIMEOUT_US)
+                            if (encInIdx >= 0) {
+                                val encIn = encoder.getInputBuffer(encInIdx)!!
+                                encIn.put(pcmBuf, 0, copySize)
+                                encoder.queueInputBuffer(encInIdx, 0, copySize, decOutInfo.presentationTimeUs, 0)
                             } else {
-                                encoder.queueInputBuffer(outIndex, 0, info.size, info.presentationTimeUs, 0)
+                                decoder.releaseOutputBuffer(decIdx, false) // shouldn't happen, but safe
                             }
+                        } else {
+                            decoder.releaseOutputBuffer(decIdx, false)
                         }
                     }
                 }
 
-                // Drain encoder output → muxer
-                if (!encoderOutputFinished) {
-                    val outIndex = encoder.dequeueOutputBuffer(outputBufferInfo, TIMEOUT_US)
-                    when {
-                        outIndex == MediaCodec.INFO_TRY_AGAIN_LATER -> {}
-                        outIndex == MediaCodec.INFO_OUTPUT_FORMAT_CHANGED -> {
-                            Log.d(TAG, "Encoder output format changed: ${encoder.outputFormat}")
-                        }
-                        outIndex >= 0 -> {
-                            val outBuf = encoder.getOutputBuffer(outIndex)!!
-                            val info = outputBufferInfo
-                            if ((info.flags and MediaCodec.BUFFER_FLAG_CODEC_CONFIG) != 0) {
-                                // skip codec config
-                                encoder.releaseOutputBuffer(outIndex, false)
-                            } else {
-                                outBuf.position(info.offset)
-                                outBuf.limit(info.offset + info.size)
-                                muxer.writeSampleData(muxerTrackIndex, outBuf, info)
+                // Drain encoder → muxer (add ADTS header)
+                val encIdx = encoder.dequeueOutputBuffer(encOutInfo, TIMEOUT_US)
+                when {
+                    encIdx == MediaCodec.INFO_TRY_AGAIN_LATER -> {}
+                    encIdx == MediaCodec.INFO_OUTPUT_FORMAT_CHANGED -> {
+                        // Already started with initial format, ignore
+                    }
+                    encIdx >= 0 -> {
+                        val encOut = encoder.getOutputBuffer(encIdx)
+                        val flags = encOutInfo.flags
+                        if ((flags and MediaCodec.BUFFER_FLAG_CODEC_CONFIG) != 0) {
+                            encoder.releaseOutputBuffer(encIdx, false)
+                        } else if ((flags and MediaCodec.BUFFER_FLAG_END_OF_STREAM) != 0) {
+                            encoder.releaseOutputBuffer(encIdx, false)
+                            pendingEncoderEOS = true
+                        } else if (encOut != null) {
+                            val sz = encOutInfo.size
+                            if (sz > 0 && sz + 7 <= aacBuf.size) {
+                                encOut.position(encOutInfo.offset)
+                                encOut.limit(encOutInfo.offset + sz)
+                                encOut.get(aacBuf, 7, sz)
+                                val totalSize = sz + 7
+                                writeAdtsHeader(aacBuf, 0, totalSize, profile, sfIndex, chConfig)
+                                muxer.writeSampleData(muxerTrackIndex, ByteBuffer.wrap(aacBuf, 0, totalSize), encOutInfo)
                                 frameCount++
                             }
-                            encoder.releaseOutputBuffer(outIndex, false)
-
-                            if ((info.flags and MediaCodec.BUFFER_FLAG_END_OF_STREAM) != 0) {
-                                encoderOutputFinished = true
-                                sawOutputEOS = true
-                                Log.d(TAG, "Encoder EOS, wrote $frameCount frames")
-                            }
+                            encoder.releaseOutputBuffer(encIdx, false)
+                        } else {
+                            encoder.releaseOutputBuffer(encIdx, false)
                         }
                     }
                 }
 
-                // Timeout safety: if we've processed beyond endUs, signal EOS
-                if (sawInputEOS && decoderOutputFinished && encoderOutputFinished) {
-                    sawOutputEOS = true
-                }
+                if (pendingEncoderEOS) break@loop
             }
 
-            val result = File(output).length() > 0
+            val result = File(output).length() > 1000
             Log.d(TAG, "trimToMp3 done: result=$result, size=${File(output).length()}, frames=$frameCount")
             return@withContext result
 
@@ -277,6 +291,33 @@ object AudioRingtoneHelper {
             try { muxer?.stop(); muxer?.release() } catch (e: Exception) {}
             try { extractor?.release() } catch (e: Exception) {}
         }
+    }
+
+    private fun getSamplingFrequencyIndex(sampleRate: Int): Int = when (sampleRate) {
+        96000 -> 0; 88200 -> 1; 64000 -> 2; 48000 -> 3
+        44100 -> 4; 32000 -> 5; 24000 -> 6; 22050 -> 7
+        16000 -> 8; 12000 -> 9; 11025 -> 10; 8000 -> 11
+        7350 -> 12; else -> 4
+    }
+
+    private fun writeAdtsHeader(buf: ByteArray, offset: Int, frameSize: Int, profile: Int, sfIndex: Int, ch: Int) {
+        val o = offset
+        buf[o]   = 0xFF.toByte()         // sync word 0xFFF
+        buf[o+1] = 0xF1.toByte()         // ID=0, layer=0, protection_absent=1
+        buf[o+2] = ((profile - 1) shl 6 and 0xC0 or (sfIndex shl 2) and 0x3C or (ch shr 2) and 0x03).toByte()
+        buf[o+3] = ((ch and 0x03) shl 6 and 0xC0 or (frameSize shr 11) and 0x03).toByte()
+        buf[o+4] = ((frameSize shr 3) and 0xFF).toByte()
+        buf[o+5] = ((frameSize and 0x07) shl 5 and 0xE0 or 0x1F).toByte()  // buffer fullness = 0x7FF (CBR)
+        buf[o+6] = 0x00.toByte()          // number of AAC frames = 1
+    }
+
+    private fun extractAudioSpecificConfig(fmt: MediaFormat): ByteArray {
+        val sfIndex = getSamplingFrequencyIndex(fmt.getInteger(MediaFormat.KEY_SAMPLE_RATE))
+        val chCount = fmt.getInteger(MediaFormat.KEY_CHANNEL_COUNT)
+        val profile = (fmt.getInteger(MediaFormat.KEY_AAC_PROFILE) shr 3 and 0x0F) + 1
+        val byte0 = ((profile - 1) shl 3 and 0xF8 or (sfIndex and 0x0F) shr 1).toByte()
+        val byte1 = ((sfIndex and 0x01) shl 7 or (chCount and 0x0F) shl 3).toByte()
+        return byteArrayOf(byte0, byte1)
     }
 
     private fun downloadFile(context: Context, urlStr: String, out: File): Boolean {
