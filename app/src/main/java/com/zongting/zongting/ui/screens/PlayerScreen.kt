@@ -287,7 +287,10 @@ fun PlayerScreen(
             onToggleFavorite = { currentSong?.let { viewModel.toggleFavorite(it) } },
             onToggleSavePlaylist = { showSavePlaylistDialog = true },
             onSleepTimerClick = { showSleepTimerDialog = true },
-            onRingtoneCutterClick = { showRingtoneCutter = true },
+            onRingtoneCutterClick = {
+                PlayerManager.pause()
+                showRingtoneCutter = true
+            },
             isTimerActive = isTimerActive,
             timerRemaining = timerRemaining,
             onPrevious = { viewModel.playPrevious() },
