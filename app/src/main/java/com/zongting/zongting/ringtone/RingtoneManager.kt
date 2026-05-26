@@ -2,6 +2,8 @@ package com.zongting.zongting.ringtone
 
 import android.content.Context
 import android.content.Intent
+import android.media.MediaCodec
+import android.media.MediaCodecInfo
 import android.media.MediaExtractor
 import android.media.MediaFormat
 import android.media.MediaMuxer
@@ -9,18 +11,7 @@ import android.net.Uri
 import android.os.Build
 import android.provider.Settings
 import android.util.Log
-import androidx.media3.common.MediaItem
-import androidx.media3.common.util.UnstableApi
-import androidx.media3.transformer.Composition
-import androidx.media3.transformer.EditedMediaItem
-import androidx.media3.transformer.EditedMediaItemSequence
-import androidx.media3.transformer.ExportException
-import androidx.media3.transformer.ExportResult
-import androidx.media3.transformer.ProgressHolder
-import androidx.media3.transformer.Transformer
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
 import java.io.File
 import java.io.FileOutputStream
@@ -32,7 +23,6 @@ import kotlin.coroutines.resume
  * 铃声裁剪与设置管理器
  * 导出格式：MP3，使用 Media3 Transformer 转码
  */
-@UnstableApi
 object AudioRingtoneHelper {
 
     private const val TAG = "AudioRingtoneHelper"
@@ -117,11 +107,8 @@ object AudioRingtoneHelper {
     }
 
     /**
-     * 使用 Media3 Transformer 将音频片段转码为 MP3
-     * @param input 输入文件路径（已下载的完整音频）
-     * @param output 输出 MP3 文件路径
-     * @param startMs 裁剪起点（毫秒）
-     * @param endMs 裁剪终点（毫秒）
+     * 使用 MediaCodec 解码 → 重新编码为 AAC/M4A（音频转码，裁剪）
+     * 裁剪通过 startUs/endUs 参数控制 extractor 读取范围实现
      */
     private suspend fun trimToMp3(
         context: Context,
@@ -129,56 +116,165 @@ object AudioRingtoneHelper {
         output: String,
         startMs: Long,
         endMs: Long
-    ): Boolean = suspendCancellableCoroutine { cont ->
-        Log.d(TAG, "Media3Transformer: input=$input, output=$output, start=${startMs}ms, end=${endMs}ms")
+    ): Boolean = withContext(Dispatchers.IO) {
+        Log.d(TAG, "trimToMp3: $input → $output (${startMs}ms → ${endMs}ms)")
+
+        var extractor: MediaExtractor? = null
+        var decoder: MediaCodec? = null
+        var encoder: MediaCodec? = null
+        var muxer: MediaMuxer? = null
+        var trackIndex = -1
+        var muxerTrackIndex = -1
+        var sawInputEOS = false
+        var sawOutputEOS = false
+        var encoderOutputFinished = false
+        var decoderOutputFinished = false
+        val startUs = startMs * 1000L
+        val endUs = endMs * 1000L
+
+        val inputBufferInfo = MediaCodec.BufferInfo()
+        val outputBufferInfo = MediaCodec.BufferInfo()
+        val TIMEOUT_US = 10_000L
 
         try {
-            // 删除已存在的输出文件
+            // --- Setup Extractor ---
+            extractor = MediaExtractor()
+            extractor.setDataSource(input)
+            for (i in 0 until extractor.trackCount) {
+                val format = extractor.getTrackFormat(i)
+                val mime = format.getString(MediaFormat.KEY_MIME) ?: continue
+                if (mime.startsWith("audio/")) {
+                    extractor.selectTrack(i)
+                    trackIndex = i
+                    break
+                }
+            }
+            if (trackIndex < 0) {
+                Log.e(TAG, "No audio track found"); return@withContext false
+            }
+            val inputFormat = extractor.getTrackFormat(trackIndex)
+            val inputMime = inputFormat.getString(MediaFormat.KEY_MIME)!!
+            val sampleRate = inputFormat.getInteger(MediaFormat.KEY_SAMPLE_RATE)
+            val channelCount = inputFormat.getInteger(MediaFormat.KEY_CHANNEL_COUNT)
+            val duration = inputFormat.getLong(MediaFormat.KEY_DURATION)
+
+            // Seek to start
+            extractor.seekTo(startUs, MediaExtractor.SEEK_TO_CLOSEST_SYNC)
+            Log.d(TAG, "Input format: $inputMime, rate=$sampleRate, ch=$channelCount, dur=$duration")
+
+            // --- Setup Decoder ---
+            decoder = MediaCodec.createDecoderByType(inputMime)
+            decoder.configure(inputFormat, null, null, 0)
+            decoder.start()
+
+            // --- Setup Encoder (AAC) ---
+            val outputFormat = MediaFormat.createAudioFormat(MediaFormat.MIMETYPE_AUDIO_AAC, sampleRate, channelCount).apply {
+                setInteger(MediaFormat.KEY_BIT_RATE, 192_000)
+                setInteger(MediaFormat.KEY_AAC_PROFILE, android.media.MediaCodecInfo.CodecProfileLevel.AACObjectLC)
+            }
+            encoder = MediaCodec.createEncoderByType(MediaFormat.MIMETYPE_AUDIO_AAC)
+            encoder.configure(outputFormat, null, null, MediaCodec.CONFIGURE_FLAG_ENCODE)
+            encoder.start()
+
+            // --- Setup Muxer ---
             File(output).delete()
+            muxer = MediaMuxer(output, MediaMuxer.OutputFormat.MUXER_OUTPUT_MPEG_4)
+            muxerTrackIndex = muxer.addTrack(outputFormat)
+            muxer.start()
+            Log.d(TAG, "Muxer started, trackIndex=$muxerTrackIndex")
 
-            // 创建 MediaItem 并配置裁剪
-            val mediaItem = MediaItem.Builder()
-                .setUri(input)
-                .setClippingConfiguration(
-                    MediaItem.ClippingConfiguration.Builder()
-                        .setStartPositionMs(startMs)
-                        .setEndPositionMs(endMs)
-                        .build()
-                )
-                .build()
+            // --- Transcode Loop ---
+            val bufferInfo = MediaCodec.BufferInfo()
+            var frameCount = 0
 
-            val editedMediaItem = EditedMediaItem.Builder(mediaItem)
-                .setRemoveAudio(false)
-                .setRemoveVideo(true)  // 纯音频导出
-                .build()
+            while (!sawOutputEOS) {
+                // Feed input to decoder
+                if (!sawInputEOS) {
+                    val inIndex = decoder.dequeueInputBuffer(TIMEOUT_US)
+                    if (inIndex >= 0) {
+                        val inBuf = decoder.getInputBuffer(inIndex)!!
+                        val sampleSize = extractor.readSampleData(inBuf, 0)
+                        val sampleTime = extractor.sampleTime
 
-            val progressHolder = ProgressHolder()
-
-            val transformer = Transformer.Builder(context)
-                .addListener(object : Transformer.Listener {
-                    override fun onCompleted(composition: Composition, exportResult: ExportResult) {
-                        Log.d(TAG, "Transformer completed: ${File(output).length()} bytes, duration=${exportResult.durationMs}ms")
-                        if (cont.isActive) cont.resume(File(output).length() > 0)
+                        if (sampleSize < 0 || sampleTime > endUs) {
+                            decoder.queueInputBuffer(inIndex, 0, 0, 0, MediaCodec.BUFFER_FLAG_END_OF_STREAM)
+                            sawInputEOS = true
+                            Log.d(TAG, "Input EOS queued at ${extractor.sampleTime}")
+                        } else {
+                            decoder.queueInputBuffer(inIndex, 0, sampleSize, sampleTime - startUs, 0)
+                            extractor.advance()
+                        }
                     }
+                }
 
-                    override fun onError(
-                        composition: Composition,
-                        exportResult: ExportResult,
-                        exportException: ExportException
-                    ) {
-                        Log.e(TAG, "Transformer error: ${exportException.message}", exportException)
-                        if (cont.isActive) cont.resume(false)
+                // Drain decoder output → encoder input
+                if (!decoderOutputFinished) {
+                    val outIndex = decoder.dequeueOutputBuffer(inputBufferInfo, TIMEOUT_US)
+                    when {
+                        outIndex == MediaCodec.INFO_TRY_AGAIN_LATER -> {}
+                        outIndex == MediaCodec.INFO_OUTPUT_FORMAT_CHANGED -> {}
+                        outIndex >= 0 -> {
+                            val outBuf = decoder.getOutputBuffer(outIndex)!!
+                            val info = inputBufferInfo
+                            if ((info.flags and MediaCodec.BUFFER_FLAG_END_OF_STREAM) != 0) {
+                                encoder.queueInputBuffer(outIndex, 0, 0, 0, MediaCodec.BUFFER_FLAG_END_OF_STREAM)
+                                decoderOutputFinished = true
+                            } else {
+                                encoder.queueInputBuffer(outIndex, 0, info.size, info.presentationTimeUs, 0)
+                            }
+                        }
                     }
-                })
-                .build()
+                }
 
-            // 启动转码（Transformer 自动处理编码格式和封装）
-            transformer.start(editedMediaItem, output)
-            Log.d(TAG, "Transformer started for $input → $output")
+                // Drain encoder output → muxer
+                if (!encoderOutputFinished) {
+                    val outIndex = encoder.dequeueOutputBuffer(outputBufferInfo, TIMEOUT_US)
+                    when {
+                        outIndex == MediaCodec.INFO_TRY_AGAIN_LATER -> {}
+                        outIndex == MediaCodec.INFO_OUTPUT_FORMAT_CHANGED -> {
+                            Log.d(TAG, "Encoder output format changed: ${encoder.outputFormat}")
+                        }
+                        outIndex >= 0 -> {
+                            val outBuf = encoder.getOutputBuffer(outIndex)!!
+                            val info = outputBufferInfo
+                            if ((info.flags and MediaCodec.BUFFER_FLAG_CODEC_CONFIG) != 0) {
+                                // skip codec config
+                                encoder.releaseOutputBuffer(outIndex, false)
+                            } else {
+                                outBuf.position(info.offset)
+                                outBuf.limit(info.offset + info.size)
+                                muxer.writeSampleData(muxerTrackIndex, outBuf, info)
+                                frameCount++
+                            }
+                            encoder.releaseOutputBuffer(outIndex, false)
+
+                            if ((info.flags and MediaCodec.BUFFER_FLAG_END_OF_STREAM) != 0) {
+                                encoderOutputFinished = true
+                                sawOutputEOS = true
+                                Log.d(TAG, "Encoder EOS, wrote $frameCount frames")
+                            }
+                        }
+                    }
+                }
+
+                // Timeout safety: if we've processed beyond endUs, signal EOS
+                if (sawInputEOS && decoderOutputFinished && encoderOutputFinished) {
+                    sawOutputEOS = true
+                }
+            }
+
+            val result = File(output).length() > 0
+            Log.d(TAG, "trimToMp3 done: result=$result, size=${File(output).length()}, frames=$frameCount")
+            return@withContext result
 
         } catch (e: Exception) {
-            Log.e(TAG, "Transformer setup failed", e)
-            if (cont.isActive) cont.resume(false)
+            Log.e(TAG, "trimToMp3 EXCEPTION", e)
+            return@withContext false
+        } finally {
+            try { decoder?.stop(); decoder?.release() } catch (e: Exception) {}
+            try { encoder?.stop(); encoder?.release() } catch (e: Exception) {}
+            try { muxer?.stop(); muxer?.release() } catch (e: Exception) {}
+            try { extractor?.release() } catch (e: Exception) {}
         }
     }
 
