@@ -9,6 +9,7 @@ import android.media.MediaFormat
 import android.media.MediaMuxer
 import android.net.Uri
 import android.os.Build
+import android.os.Environment
 import android.provider.Settings
 import android.util.Log
 import kotlinx.coroutines.Dispatchers
@@ -337,13 +338,16 @@ object AudioRingtoneHelper {
         artist: String
     ): Uri? = withContext(Dispatchers.IO) {
         try {
-            val fileName = "${songName}_铃声_${System.currentTimeMillis()}.mp3"
-            // 保存到 /data/user/ringtones/ 目录
-            val ringtoneDir = File("/data/user/ringtones")
+            val ringtoneDir = context.getExternalFilesDir(Environment.DIRECTORY_RINGTONES)
+                ?: File(context.filesDir, "Ringtones").also { it.mkdirs() }
             if (!ringtoneDir.exists()) ringtoneDir.mkdirs()
+
+            val sanitized = songName.replace(Regex("[^a-zA-Z0-9\\u4e00-\\u9fa5]"), "_")
+            val fileName = "${sanitized}_铃声_${System.currentTimeMillis()}.mp3"
             val destFile = File(ringtoneDir, fileName)
             File(sourceFilePath).copyTo(destFile, overwrite = true)
             File(sourceFilePath).delete()
+            Log.d(TAG, "保存成功: ${destFile.absolutePath}")
             Uri.fromFile(destFile)
         } catch (e: Exception) {
             Log.e(TAG, "saveToMediaStore failed", e)
