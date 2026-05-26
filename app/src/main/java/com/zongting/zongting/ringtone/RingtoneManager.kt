@@ -105,8 +105,8 @@ object AudioRingtoneHelper {
     }
 
     /**
-     * 音频裁剪：Extractor 直接 remux 音频轨道到 Muxer
-     * 适用于 MP3/AAC 等已编码格式，无需解码重编码
+     * 音频裁剪：MP3 直接 copy 原始帧，AAC 用 MediaMuxer remux
+     * MP3 自包含不需要 MPEG-4 容器封装
      */
     private suspend fun trimToMp3(
         context: Context,
@@ -128,10 +128,11 @@ object AudioRingtoneHelper {
             extractor.setDataSource(input)
 
             var audioTrack = -1
+            var mime = ""
             for (i in 0 until extractor.trackCount) {
                 val fmt = extractor.getTrackFormat(i)
-                val mime = fmt.getString(MediaFormat.KEY_MIME) ?: continue
-                if (mime.startsWith("audio/")) { audioTrack = i; break }
+                val m = fmt.getString(MediaFormat.KEY_MIME) ?: continue
+                if (m.startsWith("audio/")) { audioTrack = i; mime = m; break }
             }
             if (audioTrack < 0) {
                 Log.e(TAG, "No audio track found")
@@ -140,9 +141,14 @@ object AudioRingtoneHelper {
 
             extractor.selectTrack(audioTrack)
             val trackFmt = extractor.getTrackFormat(audioTrack)
-            Log.d(TAG, "Audio track format: $trackFmt")
+            Log.d(TAG, "Audio track format: $trackFmt, mime=$mime")
 
-            // Seek to start position (closest sync point before startUs)
+            // MP3: 直接 copy 原始帧，不走 MediaMuxer
+            if (mime == "audio/mpeg") {
+                return@withContext trimMp3Raw(input, output, startMs, endMs)
+            }
+
+            // AAC/M4A: MediaMuxer remux
             extractor.seekTo(startUs, MediaExtractor.SEEK_TO_CLOSEST_SYNC)
 
             File(output).delete()
@@ -188,6 +194,129 @@ object AudioRingtoneHelper {
             try { muxer?.stop(); muxer?.release() } catch (e: Exception) {}
             try { extractor?.release() } catch (e: Exception) {}
         }
+    }
+
+    /**
+     * MP3 原始帧拷贝：解析 MP3 帧头找到时间范围内的帧，直接写入输出文件
+     * MP3 是自包含格式，不需要容器封装
+     */
+    private fun trimMp3Raw(input: String, output: String, startMs: Long, endMs: Long): Boolean {
+        return try {
+            val bytes = File(input).readBytes()
+            Log.d(TAG, "trimMp3Raw: reading ${bytes.size} bytes, start=$startMs, end=$endMs")
+
+            val frames = mutableListOf<Pair<Int, ByteArray>>() // offset, frame bytes
+            var i = 0
+            while (i < bytes.size - 4) {
+                // 找 MP3 帧同步字: 0xFF 0xE? (MPEG-1 Audio Layer III)
+                if (bytes[i].toInt() and 0xFF == 0xFF && (bytes[i + 1].toInt() and 0xE0) == 0xE0) {
+                    val header = (bytes[i].toInt() and 0xFF shl 24) or (bytes[i + 1].toInt() and 0xFF shl 16) or
+                                 (bytes[i + 2].toInt() and 0xFF shl 8) or (bytes[i + 3].toInt() and 0xFF)
+
+                    // 采样率: bits 11-12 (0=MPEG1, 1=MPEG2, 2=MPEG2.5)
+                    val version = (header shr 19) and 0x3
+                    val sampleRateIdx = (header shr 10) and 0x3
+                    val sampleRates = if (version == 3) intArrayOf(44100, 48000, 32000) // MPEG-1
+                                      else intArrayOf(22050, 24000, 16000) // MPEG-2/2.5
+                    val sampleRate = if (sampleRateIdx < sampleRates.size) sampleRates[sampleRateIdx] else 44100
+
+                    // 比特率索引 bits 12-15
+                    val bitrateIdx = (header shr 12) and 0xF
+                    val bitrates = intArrayOf(0, 32, 40, 48, 56, 64, 80, 96, 112, 128, 160, 192, 224, 256, 320, 0)
+                    val bitrate = if (bitrateIdx < bitrates.size) bitrates[bitrateIdx] * 1000 else 128000
+
+                    // 填充位
+                    val padding = if ((header shr 9) and 0x1 == 1) 1 else 0
+                    val channelMode = (header shr 6) and 0x3
+
+                    // 帧长 = (144 * bitrate / sampleRate) + padding
+                    val frameSize = (144 * bitrate / sampleRate) + padding
+                    if (frameSize <= 0 || i + frameSize > bytes.size) {
+                        i++; continue
+                    }
+
+                    val frameBytes = bytes.copyOfRange(i, i + frameSize)
+                    frames.add(i to frameBytes)
+                    i += frameSize
+                } else {
+                    i++
+                }
+            }
+
+            Log.d(TAG, "trimMp3Raw: found ${frames.size} frames")
+
+            // 用 MediaExtractor 定位起始帧
+            val extractor = MediaExtractor()
+            extractor.setDataSource(input)
+            var audioTrack = -1
+            for (t in 0 until extractor.trackCount) {
+                val fmt = extractor.getTrackFormat(t)
+                if ((fmt.getString(MediaFormat.KEY_MIME) ?: "").startsWith("audio/")) {
+                    audioTrack = t; break
+                }
+            }
+            extractor.selectTrack(audioTrack)
+            extractor.seekTo(startMs * 1000L, MediaExtractor.SEEK_TO_CLOSEST_SYNC)
+            val startPts = extractor.sampleTime
+            extractor.seekTo(endMs * 1000L, MediaExtractor.SEEK_TO_CLOSEST_SYNC)
+            val endPts = extractor.sampleTime
+            extractor.release()
+
+            Log.d(TAG, "trimMp3Raw: PTS range $startPts - $endPts")
+
+            // 分配足够大的 buffer
+            val totalSize = frames.sumOf { it.second.size }
+            val outBytes = ByteArray(totalSize)
+            var outPos = 0
+            var framesWritten = 0
+
+            for ((offset, frame) in frames) {
+                val pts = extractorPtsForByteOffset(input, audioTrack, offset)
+                if (pts < 0) { outPos += frame.size; continue }
+                if (pts >= startPts && pts <= endPts) {
+                    System.arraycopy(frame, 0, outBytes, outPos, frame.size)
+                    outPos += frame.size
+                    framesWritten++
+                }
+            }
+
+            Log.d(TAG, "trimMp3Raw: framesWritten=$framesWritten, outPos=$outPos")
+            if (framesWritten == 0) {
+                Log.e(TAG, "trimMp3Raw: no frames in range!")
+                return false
+            }
+
+            File(output).writeBytes(outBytes.copyOf(outPos))
+            val result = File(output).length() > 1000
+            Log.d(TAG, "trimMp3Raw done: result=$result, fileSize=${File(output).length()}")
+            return result
+        } catch (e: Exception) {
+            Log.e(TAG, "trimMp3Raw EXCEPTION", e)
+            return false
+        }
+    }
+
+    // 用 extractor 查询某 byte offset 对应的 PTS
+    private fun extractorPtsForByteOffset(input: String, track: Int, byteOffset: Int): Long {
+        return try {
+            val ext = MediaExtractor()
+            ext.setDataSource(input)
+            ext.selectTrack(track)
+            var offset = 0
+            while (true) {
+                val pts = ext.sampleTime
+                val size = ext.readSampleData(java.nio.ByteBuffer.allocate(32768), 0)
+                if (size < 0) break
+                if (offset <= byteOffset && byteOffset < offset + kotlin.math.max(size, 1)) {
+                    ext.release()
+                    return pts
+                }
+                offset += kotlin.math.max(size, 1)
+                ext.advance()
+            }
+            ext.release()
+            -1L
+        } catch (e: Exception) { -1L }
     }
 
     private fun downloadFile(context: Context, urlStr: String, out: File): Boolean {
