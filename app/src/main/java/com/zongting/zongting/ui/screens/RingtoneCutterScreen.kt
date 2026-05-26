@@ -148,6 +148,7 @@ fun RingtoneCutterScreen(
             Spacer(modifier = Modifier.height(8.dp))
 
             // ===== 截取时间轴 =====
+            android.util.Log.d("HermesDebug", "HermesDebug screen: state.startMs=${state.startMs} state.playbackPositionMs=${state.playbackPositionMs} state.isPlaying=${state.isPlaying}")
             TimelineEditor(
                 durationMs = state.durationMs,
                 startMs = state.startMs,
@@ -392,6 +393,7 @@ private fun TimelineEditor(
         )
 
         // ===== 播放进度覆盖层（白线始终对齐截取块起点） =====
+        android.util.Log.d("HermesDebug", "HermesDebug timelineEditor: startMs=$startMs localStartMs=$localStartMs")
         val whiteLineMs = startMs
         if (trackWidthPx > 0f && durationMs > 0L && whiteLineMs > 0L) {
             Box(
