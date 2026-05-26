@@ -27,7 +27,8 @@ data class RingtoneCutterState(
     val resultMessage: String = "",       // 结果消息
     val resultType: ResultType = ResultType.NONE,
     val savedUri: Uri? = null,           // 保存到MediaStore的URI
-    val hasWriteSettings: Boolean = false // 是否有WRITE_SETTINGS权限
+    val hasWriteSettings: Boolean = false, // 是否有WRITE_SETTINGS权限
+    val previewStartTimeNanos: Long = 0L    // 预览开始时刻（纳秒），用于过滤seek期间旧位置
 ) {
     val clipDurationMs: Long get() = endMs - startMs
     val isValid: Boolean get() = clipDurationMs in 1..50_000
@@ -95,25 +96,28 @@ class RingtoneCutterViewModel @Inject constructor(
             positionJob?.cancel()
             _state.value = s.copy(isPlaying = false, playbackPositionMs = s.startMs)
         } else {
-            // 先更新白线位置 = 截取块起点，再 seek/play
-            _state.value = s.copy(isPlaying = true, playbackPositionMs = s.startMs)
+            // 先更新时间戳，再更新state + seek/play
+            val startNano = System.nanoTime()
+            _state.value = s.copy(isPlaying = true, playbackPositionMs = s.startMs, previewStartTimeNanos = startNano)
             PlayerManager.seekTo(s.startMs)
             PlayerManager.play()
-            // 轮询播放进度
+            // 轮询播放进度：前200ms强制用startMs，屏蔽seek期间的旧位置
             positionJob?.cancel()
             positionJob = viewModelScope.launch {
-                // 等待 seek 生效（100ms），期间保持白线在 startMs 不动
-                kotlinx.coroutines.delay(100L)
                 while (true) {
+                    kotlinx.coroutines.delay(100L)
                     val pos = PlayerManager.currentPosition
                     val end = _state.value.endMs
-                    _state.value = _state.value.copy(playbackPositionMs = pos)
+                    val start = _state.value.startMs
+                    val elapsed = System.nanoTime() - _state.value.previewStartTimeNanos
+                    // 前200ms认为seek未完成，白线固定在截取块起点
+                    val safePos = if (elapsed < 200_000_000L) start else pos
+                    _state.value = _state.value.copy(playbackPositionMs = safePos)
                     if (pos >= end) {
                         PlayerManager.pause()
-                        _state.value = _state.value.copy(isPlaying = false, playbackPositionMs = _state.value.startMs)
+                        _state.value = _state.value.copy(isPlaying = false, playbackPositionMs = _state.value.startMs, previewStartTimeNanos = 0L)
                         break
                     }
-                    kotlinx.coroutines.delay(100L)
                 }
             }
         }
@@ -123,7 +127,7 @@ class RingtoneCutterViewModel @Inject constructor(
     fun stopPreview() {
         positionJob?.cancel()
         PlayerManager.pause()
-        _state.value = _state.value.copy(isPlaying = false, playbackPositionMs = _state.value.startMs)
+        _state.value = _state.value.copy(isPlaying = false, playbackPositionMs = _state.value.startMs, previewStartTimeNanos = 0L)
     }
 
     /** 导出音频文件（保存到下载目录） */
