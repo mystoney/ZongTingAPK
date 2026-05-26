@@ -247,6 +247,7 @@ object AudioRingtoneHelper {
                             }
                             if (encInIdx >= 0) {
                                 val encIn = encoder.getInputBuffer(encInIdx)!!
+                                encIn.clear()
                                 encIn.put(pcmBuf, 0, copySize)
                                 encoder.queueInputBuffer(encInIdx, 0, copySize, toEncoderPts(decOutInfo.presentationTimeUs), 0)
                             }
