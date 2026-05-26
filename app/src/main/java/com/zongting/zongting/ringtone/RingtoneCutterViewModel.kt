@@ -51,13 +51,19 @@ class RingtoneCutterViewModel @Inject constructor(
         val minStart = 1_000L
         val maxStart = (durationMs - fixedDuration).coerceAtLeast(minStart)
         val start = minOf(1_000L, maxStart)
+        // 先停止播放、seek到截取块起点，再设state + 激活守卫
+        // 这样PlayerManager.listener后续回调会因守卫激活而无法覆盖playbackPositionMs
+        PlayerManager.pause()
+        PlayerManager.seekTo(start)
+        val guardNano = System.nanoTime()
         _state.value = RingtoneCutterState(
             song = song,
             durationMs = durationMs,
             startMs = start,
             endMs = start + fixedDuration,
             hasWriteSettings = AudioRingtoneHelper.hasWriteSettingsPermission(context),
-            playbackPositionMs = start  // 白线始终对齐截取块起点
+            playbackPositionMs = start,  // 白线对齐截取块起点
+            previewStartTimeNanos = guardNano  // 激活守卫，屏蔽seek期间listener的旧位置覆盖
         )
     }
 
@@ -96,10 +102,11 @@ class RingtoneCutterViewModel @Inject constructor(
             positionJob?.cancel()
             _state.value = s.copy(isPlaying = false, playbackPositionMs = s.startMs)
         } else {
-            // 先更新时间戳，再更新state + seek/play
+            // 读取当前state的startMs（而非lambda创建时捕获的旧值）
             val startNano = System.nanoTime()
-            _state.value = s.copy(isPlaying = true, playbackPositionMs = s.startMs, previewStartTimeNanos = startNano)
-            PlayerManager.seekTo(s.startMs)
+            val currentStart = _state.value.startMs
+            _state.value = _state.value.copy(isPlaying = true, playbackPositionMs = currentStart, previewStartTimeNanos = startNano)
+            PlayerManager.seekTo(currentStart)
             PlayerManager.play()
             // 轮询播放进度：前200ms强制用startMs，屏蔽seek期间的旧位置
             positionJob?.cancel()
@@ -115,7 +122,7 @@ class RingtoneCutterViewModel @Inject constructor(
                     _state.value = _state.value.copy(playbackPositionMs = safePos)
                     if (pos >= end) {
                         PlayerManager.pause()
-                        _state.value = _state.value.copy(isPlaying = false, playbackPositionMs = _state.value.startMs, previewStartTimeNanos = 0L)
+                        _state.value = _state.value.copy(isPlaying = false, playbackPositionMs = _state.value.startMs, previewStartTimeNanos = -1L)
                         break
                     }
                 }
@@ -127,7 +134,7 @@ class RingtoneCutterViewModel @Inject constructor(
     fun stopPreview() {
         positionJob?.cancel()
         PlayerManager.pause()
-        _state.value = _state.value.copy(isPlaying = false, playbackPositionMs = _state.value.startMs, previewStartTimeNanos = 0L)
+        _state.value = _state.value.copy(isPlaying = false, playbackPositionMs = _state.value.startMs, previewStartTimeNanos = -1L)
     }
 
     /** 导出音频文件（保存到下载目录） */
