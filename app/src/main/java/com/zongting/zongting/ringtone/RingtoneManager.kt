@@ -18,8 +18,8 @@ import java.net.HttpURLConnection
 import java.net.URL
 
 /**
- * 铃声裁剪与设置管理器（使用 Android 原生 MediaMuxer，无外部依赖）
- * 注意：类名避免与 android.media.RingtoneManager 重名
+ * 铃声裁剪与设置管理器
+ * 导出格式：MP3 (192kbps CBR)，使用纯 Java LAME 算法编码
  */
 object AudioRingtoneHelper {
 
@@ -62,7 +62,7 @@ object AudioRingtoneHelper {
 
             val sanitizedName = songName.replace(Regex("[^a-zA-Z0-9\\u4e00-\\u9fa5]"), "_")
             val downloadFile = File(context.cacheDir, "dl_${System.currentTimeMillis()}.tmp")
-            val outputFile = File(context.cacheDir, "trim_${System.currentTimeMillis()}.m4a")
+            val outputFile = File(context.cacheDir, "trim_${System.currentTimeMillis()}.mp3")
 
             Log.d(TAG, "下载音频: $url")
             val downloadOk = downloadFile(context, url, downloadFile)
@@ -80,7 +80,7 @@ object AudioRingtoneHelper {
             }
 
             Log.d(TAG, "裁剪音频: ${startMs}ms → ${actualEndMs}ms")
-            val ok = trimWithMuxer(
+            val ok = trimToMp3(
                 downloadFile.absolutePath,
                 outputFile.absolutePath,
                 startMs * 1000L,
@@ -104,11 +104,13 @@ object AudioRingtoneHelper {
         }
     }
 
-    private fun trimWithMuxer(input: String, output: String, startUs: Long, endUs: Long): Boolean {
+    /**
+     * Decode audio → PCM → PureJavaMp3Encoder → MP3 file.
+     * Uses blocking I/O instead of callbacks for reliability.
+     */
+    private fun trimToMp3(input: String, output: String, startUs: Long, endUs: Long): Boolean {
         var extractor: MediaExtractor? = null
-        var muxer: MediaMuxer? = null
         var decoder: MediaCodec? = null
-        var encoder: MediaCodec? = null
         try {
             extractor = MediaExtractor()
             extractor.setDataSource(input)
@@ -124,37 +126,27 @@ object AudioRingtoneHelper {
             extractor.selectTrack(trackIdx)
             extractor.seekTo(startUs, MediaExtractor.SEEK_TO_CLOSEST_SYNC)
 
-            Log.d(TAG, "音频格式: mime=$mime, rate=$sampleRate, ch=$channelCount")
+            Log.d(TAG, "解码音频: mime=$mime, rate=$sampleRate, ch=$channelCount, range=${startUs}→${endUs}us")
 
-            // 解码器（MP3 → PCM）
             decoder = MediaCodec.createDecoderByType(mime)
             decoder.configure(srcFormat, null, null, 0)
 
-            // 编码器（PCM → AAC）
-            val dstFormat = MediaFormat.createAudioFormat(MediaFormat.MIMETYPE_AUDIO_AAC, sampleRate, channelCount).apply {
-                setInteger(MediaFormat.KEY_BIT_RATE, 192_000)
-                setInteger(MediaFormat.KEY_AAC_PROFILE, android.media.MediaCodecInfo.CodecProfileLevel.AACObjectLC)
-            }
-            encoder = MediaCodec.createEncoderByType(MediaFormat.MIMETYPE_AUDIO_AAC)
-            encoder.configure(dstFormat, null, null, MediaCodec.CONFIGURE_FLAG_ENCODE)
+            val pcmBuffer = java.io.ByteArrayOutputStream(32 * 1024 * 1024)  // 32MB max
+            val inputDone = java.util.concurrent.atomic.AtomicBoolean(false)
+            val outputDone = java.util.concurrent.atomic.AtomicBoolean(false)
+            val decoderStarted = java.util.concurrent.atomic.AtomicBoolean(false)
 
-            muxer = MediaMuxer(output, MediaMuxer.OutputFormat.MUXER_OUTPUT_MPEG_4)
-            var muxerTrackIdx = -1
-            var muxerStarted = false
-            var encoderStarted = false
-
-            val bufferInfo = MediaCodec.BufferInfo()
-
-            // Decoder callback：将解码后的PCM数据直接传给encoder
             decoder.setCallback(object : MediaCodec.Callback() {
                 override fun onInputBufferAvailable(codec: MediaCodec, index: Int) {
+                    if (inputDone.get()) return
                     val buf = codec.getInputBuffer(index) ?: return
                     buf.clear()
-                    val sampleSize = extractor?.readSampleData(buf, 0) ?: -1
-                    if (sampleSize < 0 || (extractor?.sampleTime ?: 0) > endUs + 500_000) {
+                    val sampleSize = extractor.readSampleData(buf, 0)
+                    if (sampleSize < 0 || extractor.sampleTime > endUs + 500_000) {
                         codec.queueInputBuffer(index, 0, 0, 0, MediaCodec.BUFFER_FLAG_END_OF_STREAM)
+                        inputDone.set(true)
                     } else {
-                        codec.queueInputBuffer(index, 0, sampleSize, extractor!!.sampleTime, 0)
+                        codec.queueInputBuffer(index, 0, sampleSize, extractor.sampleTime, 0)
                         extractor.advance()
                     }
                 }
@@ -162,102 +154,61 @@ object AudioRingtoneHelper {
                 override fun onOutputBufferAvailable(
                     codec: MediaCodec, index: Int, info: MediaCodec.BufferInfo
                 ) {
-                    // encoder 尚未start时跳过
-                    if (!encoderStarted || encoder == null) {
-                        codec.releaseOutputBuffer(index, false)
-                        return
+                    if (!decoderStarted.getAndSet(true)) {
+                        // First output confirms decoder is running
                     }
-                    val encoded = codec.getOutputBuffer(index)
-                    if (info.size > 0 && encoded != null) {
-                        try {
-                            val encInIdx = encoder!!.dequeueInputBuffer(5000)
-                            if (encInIdx >= 0) {
-                                val encBuf = encoder!!.getInputBuffer(encInIdx)!!
-                                val copyBytes = minOf(info.size, encBuf.remaining())
-                                val copy = ByteArray(copyBytes)
-                                encoded.get(copy, 0, copyBytes)
-                                encBuf.clear()
-                                encBuf.put(copy)
-                                encoder.queueInputBuffer(encInIdx, 0, copyBytes, info.presentationTimeUs, 0)
-                            }
-                        } catch (e: Exception) {
-                            Log.e(TAG, "encoder dequeueInputBuffer失败", e)
+                    if (info.size > 0) {
+                        val pcm = codec.getOutputBuffer(index) ?: return
+                        val bytes = ByteArray(info.size)
+                        pcm.get(bytes, 0, info.size)
+                        synchronized(pcmBuffer) {
+                            pcmBuffer.writeBytes(bytes)
                         }
                     }
                     codec.releaseOutputBuffer(index, false)
                     if (info.flags and MediaCodec.BUFFER_FLAG_END_OF_STREAM != 0) {
-                        try {
-                            val encInIdx = encoder!!.dequeueInputBuffer(5000)
-                            if (encInIdx >= 0) {
-                                encoder!!.queueInputBuffer(encInIdx, 0, 0, 0, MediaCodec.BUFFER_FLAG_END_OF_STREAM)
-                            }
-                        } catch (_: Exception) {}
+                        outputDone.set(true)
                     }
                 }
 
                 override fun onError(codec: MediaCodec, e: MediaCodec.CodecException) {
-                    Log.e(TAG, "Decoder error", e)
-                }
-                override fun onOutputFormatChanged(codec: MediaCodec, format: MediaFormat) {}
-            })
-
-            // Encoder callback：将AAC数据写入muxer
-            encoder.setCallback(object : MediaCodec.Callback() {
-                override fun onInputBufferAvailable(codec: MediaCodec, index: Int) {}
-
-                override fun onOutputBufferAvailable(
-                    codec: MediaCodec, index: Int, info: MediaCodec.BufferInfo
-                ) {
-                    if (!muxerStarted) {
-                        muxerTrackIdx = muxer.addTrack(codec.outputFormat)
-                        muxer.start()
-                        muxerStarted = true
-                    }
-                    val data = codec.getOutputBuffer(index)
-                    if (info.size > 0 && data != null && info.presentationTimeUs <= endUs) {
-                        muxer.writeSampleData(muxerTrackIdx, data, info)
-                    }
-                    codec.releaseOutputBuffer(index, false)
-                    if (info.flags and MediaCodec.BUFFER_FLAG_END_OF_STREAM != 0) {
-                        Log.d(TAG, "Encoder EOS received")
-                    }
-                }
-
-                override fun onError(codec: MediaCodec, e: MediaCodec.CodecException) {
-                    Log.e(TAG, "Encoder error", e)
+                    Log.e(TAG, "Decoder error in trimToMp3", e)
+                    inputDone.set(true)
                 }
                 override fun onOutputFormatChanged(codec: MediaCodec, format: MediaFormat) {}
             })
 
             decoder.start()
-            encoder.start()
-            encoderStarted = true
 
-            // 等待处理完成（最多30秒）
-            val timeout = System.currentTimeMillis() + 30_000
-            while (System.currentTimeMillis() < timeout) {
-                if (muxerStarted && File(output).length() > 0) {
-                    val hasMore = extractor?.sampleTime ?: 0 <= endUs + 500_000
-                    if (!hasMore) {
-                        // 数据读完，等encoder输出完毕
-                        Thread.sleep(500)
-                        break
-                    }
-                }
-                Thread.sleep(100)
+            // Wait for decoding to finish
+            val timeout = System.currentTimeMillis() + 60_000
+            while (!outputDone.get() && System.currentTimeMillis() < timeout) {
+                Thread.sleep(200)
             }
 
-            val result = muxerStarted && File(output).length() > 0
-            Log.d(TAG, "trimWithMuxer完成: success=$result, size=${File(output).length()}")
-            return result
+            val pcmBytes = synchronized(pcmBuffer) { pcmBuffer.toByteArray() }
+            Log.d(TAG, "PCM收集完成: ${pcmBytes.size} bytes")
+
+            if (pcmBytes.isEmpty()) {
+                Log.e(TAG, "trimToMp3: no PCM data collected")
+                return false
+            }
+
+            // Encode PCM → MP3
+            val mp3Bytes = PureJavaMp3Encoder.encode(pcmBytes, sampleRate, 192)
+
+            // Write to output file
+            java.io.FileOutputStream(output).use { fos ->
+                fos.write(mp3Bytes)
+            }
+
+            Log.d(TAG, "MP3编码完成: ${mp3Bytes.size} bytes → $output")
+            return java.io.File(output).length() > 0
         } catch (e: Exception) {
-            Log.e(TAG, "trimWithMuxer异常", e)
+            Log.e(TAG, "trimToMp3异常", e)
             return false
         } finally {
-            listOf(decoder, encoder).forEach {
-                try { it?.stop(); it?.release() } catch (_: Exception) {}
-            }
-            try { muxer?.stop(); muxer?.release() } catch (_: Exception) {}
+            try { decoder?.stop(); decoder?.release() } catch (_: Exception) {}
             extractor?.release()
         }
     }
@@ -324,10 +275,10 @@ object AudioRingtoneHelper {
         artist: String
     ): Uri? = withContext(Dispatchers.IO) {
         try {
-            val fileName = "${songName}_铃声_${System.currentTimeMillis()}.m4a"
+            val fileName = "${songName}_铃声_${System.currentTimeMillis()}.mp3"
             val values = ContentValues().apply {
                 put(MediaStore.Audio.Media.DISPLAY_NAME, fileName)
-                put(MediaStore.Audio.Media.MIME_TYPE, "audio/mp4")
+                put(MediaStore.Audio.Media.MIME_TYPE, "audio/mpeg")
                 put(MediaStore.Audio.Media.TITLE, "${songName}_铃声")
                 put(MediaStore.Audio.Media.ARTIST, artist)
                 put(MediaStore.Audio.Media.IS_RINGTONE, true)
