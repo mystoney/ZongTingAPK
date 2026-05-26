@@ -333,7 +333,7 @@ private fun TimelineEditor(
     val density = LocalDensity.current
     val CLIP_DURATION_MS = 50_000L
 
-    // 立即获取轨道宽度（同步方式，避免 LaunchedEffect 延迟）
+    // 轨道宽度（用 mutableFloatStateOf 让 Compose 追踪变化，触发 pointerInput 重新安装）
     var trackWidthPx by remember { mutableFloatStateOf(0f) }
 
     // 纯本地拖动状态，拖完才上报 ViewModel
@@ -416,8 +416,7 @@ private fun TimelineEditor(
                     MaterialTheme.colorScheme.primary.copy(alpha = 0.3f),
                     RoundedCornerShape(6.dp)
                 )
-                .pointerInput(Unit) {
-                    android.util.Log.d("HermesDebug", "HermesDebug pointerInput: START trackWidthPx=$trackWidthPx blockWidthPx=$blockWidthPx")
+                .pointerInput(Unit, trackWidthPx) {
                     detectDragGestures(
                         onDragStart = { _ ->
                             android.util.Log.d("HermesDebug", "HermesDebug DRAG_START: trackWidthPx=$trackWidthPx localStartMs=$localStartMs")
