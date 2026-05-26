@@ -401,7 +401,7 @@ private fun TimelineEditor(
                     .offset(x = with(density) { msToPx(whiteLineMs).toDp() })
                     .width(2.dp)
                     .height(6.dp)
-                    .align(Alignment.Center)
+                    .align(Alignment.TopStart)
                     .background(
                         MaterialTheme.colorScheme.tertiary,
                         RoundedCornerShape(1.dp)
