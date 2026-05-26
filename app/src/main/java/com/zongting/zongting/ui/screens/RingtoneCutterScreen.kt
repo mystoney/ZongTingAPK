@@ -340,8 +340,8 @@ private fun TimelineEditor(
     }
 
     fun pxToMs(px: Float): Long {
-        if (trackWidthPx <= 0f || durationMs <= 0L) return 1_000L
-        return ((px / trackWidthPx) * durationMs).toLong().coerceIn(1_000L, durationMs)
+        if (trackWidthPx <= 0f || durationMs <= 0L) return 0L
+        return ((px / trackWidthPx) * durationMs).toLong()
     }
 
     BoxWithConstraints(
@@ -427,14 +427,11 @@ private fun TimelineEditor(
                         },
                         onHorizontalDrag = { change, dragAmount ->
                             change.consume()
+                            if (trackWidthPx <= 0f || durationMs <= 0L) return@detectHorizontalDragGestures
                             val deltaPx = dragAmount - lastDragAmountPx
                             lastDragAmountPx = dragAmount
-                            android.util.Log.d("HermesDebug", "DRAG: dragAmount=$dragAmount deltaPx=$deltaPx localStartMs=$localStartMs")
-                            if (trackWidthPx <= 0f || durationMs <= 0L) return@detectHorizontalDragGestures
                             val deltaMs = pxToMs(deltaPx)
-                            val newStart = (localStartMs + deltaMs).coerceIn(1_000L, maxStartMs)
-                            android.util.Log.d("HermesDebug", "DRAG: deltaMs=$deltaMs newStart=$newStart")
-                            localStartMs = newStart
+                            localStartMs = (localStartMs + deltaMs).coerceIn(1_000L, maxStartMs)
                         }
                     )
                 },
