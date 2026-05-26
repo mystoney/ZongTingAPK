@@ -222,29 +222,41 @@ class RingtoneCutterViewModel @Inject constructor(
                 is AudioRingtoneHelper.TrimResult.Success -> {
                     _state.value = _state.value.copy(
                         isProcessing = false,
-                        processingMessage = "正在设置为铃声..."
+                        processingMessage = "正在保存到音乐库..."
                     )
 
-                    val success = AudioRingtoneHelper.setAsRingtone(
+                    // 保存到MediaStore获取content:// URI，再用它设置铃声
+                    val uri = AudioRingtoneHelper.saveToMediaStore(
                         context = context,
-                        filePath = result.filePath,
-                        type = type
+                        sourceFilePath = result.filePath,
+                        songName = song.name,
+                        artist = song.artist
                     )
 
-                    _state.value = _state.value.copy(
-                        isProcessing = false,
-                        processingMessage = "",
-                        resultMessage = if (success) {
-                            when (type) {
-                                AudioRingtoneHelper.RingtoneType.RINGTONE -> "已设为来电铃声"
-                                AudioRingtoneHelper.RingtoneType.NOTIFICATION -> "已设为通知声"
-                                AudioRingtoneHelper.RingtoneType.ALARM -> "已设为闹钟"
-                            }
-                        } else {
-                            "设置失败，请检查权限"
-                        },
-                        resultType = if (success) ResultType.SUCCESS else ResultType.ERROR
-                    )
+                    if (uri != null) {
+                        val success = AudioRingtoneHelper.setMediaStoreAsRingtone(context, uri, type)
+                        _state.value = _state.value.copy(
+                            isProcessing = false,
+                            processingMessage = "",
+                            savedUri = uri,
+                            resultMessage = when {
+                                success -> when (type) {
+                                    AudioRingtoneHelper.RingtoneType.RINGTONE -> "已设为来电铃声"
+                                    AudioRingtoneHelper.RingtoneType.NOTIFICATION -> "已设为通知声"
+                                    AudioRingtoneHelper.RingtoneType.ALARM -> "已设为闹钟"
+                                }
+                                else -> "设置失败，请检查权限"
+                            },
+                            resultType = if (success) ResultType.SUCCESS else ResultType.ERROR
+                        )
+                    } else {
+                        _state.value = _state.value.copy(
+                            isProcessing = false,
+                            processingMessage = "",
+                            resultMessage = "音频已裁剪，但保存失败",
+                            resultType = ResultType.ERROR
+                        )
+                    }
                 }
                 is AudioRingtoneHelper.TrimResult.Error -> {
                     _state.value = _state.value.copy(
