@@ -201,122 +201,109 @@ object AudioRingtoneHelper {
      * MP3 是自包含格式，不需要容器封装
      */
     private fun trimMp3Raw(input: String, output: String, startMs: Long, endMs: Long): Boolean {
-        return try {
+        var extractorForFmt: MediaExtractor? = null
+        try {
+            // 获取 track format（用于 sample rate）
+            extractorForFmt = MediaExtractor()
+            extractorForFmt.setDataSource(input)
+            var audioTrackIdx = -1
+            var trackFmt: MediaFormat? = null
+            for (t in 0 until extractorForFmt.trackCount) {
+                val fmt = extractorForFmt.getTrackFormat(t)
+                if ((fmt.getString(MediaFormat.KEY_MIME) ?: "").startsWith("audio/")) {
+                    audioTrackIdx = t; trackFmt = fmt; break
+                }
+            }
+            if (audioTrackIdx < 0 || trackFmt == null) {
+                Log.e(TAG, "trimMp3Raw: no audio track"); return false
+            }
+            val sampleRate = trackFmt.getInteger(MediaFormat.KEY_SAMPLE_RATE)
+            Log.d(TAG, "trimMp3Raw: sampleRate=$sampleRate")
+            extractorForFmt.release()
+            extractorForFmt = null
+
+            // ── 步骤1: 读取文件字节，扫描所有 MP3 帧 ──────────────────────
             val bytes = File(input).readBytes()
             Log.d(TAG, "trimMp3Raw: reading ${bytes.size} bytes, start=$startMs, end=$endMs")
 
-            val frames = mutableListOf<Pair<Int, ByteArray>>() // offset, frame bytes
+            val frames = mutableListOf<ByteArray>() // 帧数据列表（按文件顺序）
             var i = 0
             while (i < bytes.size - 4) {
-                // 找 MP3 帧同步字: 0xFF 0xE? (MPEG-1 Audio Layer III)
+                // MPEG Audio Frame Sync: 0xFF 0xE? (MPEG-1/2 Audio Layer III)
                 if (bytes[i].toInt() and 0xFF == 0xFF && (bytes[i + 1].toInt() and 0xE0) == 0xE0) {
-                    val header = (bytes[i].toInt() and 0xFF shl 24) or (bytes[i + 1].toInt() and 0xFF shl 16) or
-                                 (bytes[i + 2].toInt() and 0xFF shl 8) or (bytes[i + 3].toInt() and 0xFF)
-
-                    // 采样率: bits 11-12 (0=MPEG1, 1=MPEG2, 2=MPEG2.5)
-                    val version = (header shr 19) and 0x3
-                    val sampleRateIdx = (header shr 10) and 0x3
-                    val sampleRates = if (version == 3) intArrayOf(44100, 48000, 32000) // MPEG-1
-                                      else intArrayOf(22050, 24000, 16000) // MPEG-2/2.5
-                    val sampleRate = if (sampleRateIdx < sampleRates.size) sampleRates[sampleRateIdx] else 44100
-
-                    // 比特率索引 bits 12-15
-                    val bitrateIdx = (header shr 12) and 0xF
-                    val bitrates = intArrayOf(0, 32, 40, 48, 56, 64, 80, 96, 112, 128, 160, 192, 224, 256, 320, 0)
-                    val bitrate = if (bitrateIdx < bitrates.size) bitrates[bitrateIdx] * 1000 else 128000
-
-                    // 填充位
-                    val padding = if ((header shr 9) and 0x1 == 1) 1 else 0
-                    val channelMode = (header shr 6) and 0x3
-
-                    // 帧长 = (144 * bitrate / sampleRate) + padding
-                    val frameSize = (144 * bitrate / sampleRate) + padding
-                    if (frameSize <= 0 || i + frameSize > bytes.size) {
-                        i++; continue
-                    }
-
-                    val frameBytes = bytes.copyOfRange(i, i + frameSize)
-                    frames.add(i to frameBytes)
-                    i += frameSize
-                } else {
-                    i++
-                }
+                    val h = (bytes[i].toInt() and 0xFF shl 24) or (bytes[i + 1].toInt() and 0xFF shl 16) or
+                            (bytes[i + 2].toInt() and 0xFF shl 8) or (bytes[i + 3].toInt() and 0xFF)
+                    val version = (h shr 19) and 0x3
+                    val srIdx = (h shr 10) and 0x3
+                    val srArr = if (version == 3) intArrayOf(44100, 48000, 32000) else intArrayOf(22050, 24000, 16000)
+                    val sr = if (srIdx < srArr.size) srArr[srIdx] else 44100
+                    val brIdx = (h shr 12) and 0xF
+                    val brArr = intArrayOf(0,32,40,48,56,64,80,96,112,128,160,192,224,256,320,0)
+                    val br = if (brIdx < brArr.size) brArr[brIdx] * 1000 else 128000
+                    val padding = if ((h shr 9) and 0x1 == 1) 1 else 0
+                    val frameSz = (144 * br / sr) + padding
+                    if (frameSz <= 0 || i + frameSz > bytes.size) { i++; continue }
+                    frames.add(bytes.copyOfRange(i, i + frameSz))
+                    i += frameSz
+                } else { i++ }
             }
+            Log.d(TAG, "trimMp3Raw: found ${frames.size} MP3 frames (file-level scan)")
 
-            Log.d(TAG, "trimMp3Raw: found ${frames.size} frames")
-
-            // 用 MediaExtractor 定位起始帧
-            val extractor = MediaExtractor()
-            extractor.setDataSource(input)
-            var audioTrack = -1
-            for (t in 0 until extractor.trackCount) {
-                val fmt = extractor.getTrackFormat(t)
-                if ((fmt.getString(MediaFormat.KEY_MIME) ?: "").startsWith("audio/")) {
-                    audioTrack = t; break
-                }
+            // ── 步骤2: 用 extractor 获取帧级 PTS ──────────────────────────
+            val ext2 = MediaExtractor()
+            ext2.setDataSource(input)
+            ext2.selectTrack(audioTrackIdx)
+            ext2.seekTo(startMs * 1000L, MediaExtractor.SEEK_TO_CLOSEST_SYNC)
+            val startPts = ext2.sampleTime
+            val ptsList = mutableListOf<Long>()
+            while (true) {
+                val pts = ext2.sampleTime
+                if (pts < 0) break
+                ptsList.add(pts)
+                ext2.advance()
+                if (pts > endMs * 1000L + 5_000_000L) break
             }
-            extractor.selectTrack(audioTrack)
-            extractor.seekTo(startMs * 1000L, MediaExtractor.SEEK_TO_CLOSEST_SYNC)
-            val startPts = extractor.sampleTime
-            extractor.seekTo(endMs * 1000L, MediaExtractor.SEEK_TO_CLOSEST_SYNC)
-            val endPts = extractor.sampleTime
-            extractor.release()
+            ext2.release()
+            Log.d(TAG, "trimMp3Raw: extractor pts count=${ptsList.size}, startPts=$startPts")
 
-            Log.d(TAG, "trimMp3Raw: PTS range $startPts - $endPts")
+            // MPEG-1 Layer 3: 1152 samples/frame, frame duration = 1152/sr * 1e6 us
+            val frameDurUs = (1152L * 1_000_000L) / sampleRate
 
-            // 分配足够大的 buffer
-            val totalSize = frames.sumOf { it.second.size }
-            val outBytes = ByteArray(totalSize)
+            // ── 步骤3: 按 PTS 范围筛选帧 ──────────────────────────────────
+            val outBuf = ByteArray(bytes.size) // 足够大
             var outPos = 0
-            var framesWritten = 0
+            var written = 0
+            val endPts = startMs * 1000L + (endMs - startMs) * 1000L
 
-            for ((offset, frame) in frames) {
-                val pts = extractorPtsForByteOffset(input, audioTrack, offset)
-                if (pts < 0) { outPos += frame.size; continue }
+            for ((fi, frame) in frames.withIndex()) {
+                val pts: Long = if (fi < ptsList.size) {
+                    ptsList[fi]
+                } else if (ptsList.isNotEmpty()) {
+                    ptsList.last() + (fi - ptsList.size + 1) * frameDurUs
+                } else {
+                    startMs * 1000L + fi * frameDurUs
+                }
                 if (pts >= startPts && pts <= endPts) {
-                    System.arraycopy(frame, 0, outBytes, outPos, frame.size)
+                    System.arraycopy(frame, 0, outBuf, outPos, frame.size)
                     outPos += frame.size
-                    framesWritten++
+                    written++
                 }
             }
 
-            Log.d(TAG, "trimMp3Raw: framesWritten=$framesWritten, outPos=$outPos")
-            if (framesWritten == 0) {
-                Log.e(TAG, "trimMp3Raw: no frames in range!")
-                return false
-            }
+            Log.d(TAG, "trimMp3Raw: written=$written frames, bytes=$outPos")
+            if (written == 0) { Log.e(TAG, "trimMp3Raw: no frames in range!"); return false }
 
-            File(output).writeBytes(outBytes.copyOf(outPos))
-            val result = File(output).length() > 1000
-            Log.d(TAG, "trimMp3Raw done: result=$result, fileSize=${File(output).length()}")
-            return result
+            File(output).writeBytes(outBuf.copyOf(outPos))
+            val ok = File(output).length() > 1000
+            Log.d(TAG, "trimMp3Raw done: result=$ok, fileSize=${File(output).length()}")
+            return ok
+
         } catch (e: Exception) {
             Log.e(TAG, "trimMp3Raw EXCEPTION", e)
             return false
+        } finally {
+            try { extractorForFmt?.release() } catch (e: Exception) {}
         }
-    }
-
-    // 用 extractor 查询某 byte offset 对应的 PTS
-    private fun extractorPtsForByteOffset(input: String, track: Int, byteOffset: Int): Long {
-        return try {
-            val ext = MediaExtractor()
-            ext.setDataSource(input)
-            ext.selectTrack(track)
-            var offset = 0
-            while (true) {
-                val pts = ext.sampleTime
-                val size = ext.readSampleData(java.nio.ByteBuffer.allocate(32768), 0)
-                if (size < 0) break
-                if (offset <= byteOffset && byteOffset < offset + kotlin.math.max(size, 1)) {
-                    ext.release()
-                    return pts
-                }
-                offset += kotlin.math.max(size, 1)
-                ext.advance()
-            }
-            ext.release()
-            -1L
-        } catch (e: Exception) { -1L }
     }
 
     private fun downloadFile(context: Context, urlStr: String, out: File): Boolean {
