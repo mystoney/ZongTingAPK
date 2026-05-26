@@ -413,7 +413,7 @@ private fun TimelineEditor(
                     MaterialTheme.colorScheme.primary.copy(alpha = 0.3f),
                     RoundedCornerShape(6.dp)
                 )
-                .pointerInput(Unit, trackWidthPx) {
+                .pointerInput(startMs, durationMs) {
                     awaitPointerEventScope {
                         while (true) {
                             var dragStartX = 0f
@@ -426,7 +426,6 @@ private fun TimelineEditor(
                             sessionStartMs = startMs
                             localDragOffsetMs = 0L
                             isDragging = true
-                            down.consume()
                             android.util.Log.d("HermesDebug", "HermesDebug DRAG_START: tw=${sessionTrackWidthPx} dm=${sessionDurationMs} startMs=$sessionStartMs")
 
                             // 拖动中：等待 MOVE 事件
@@ -437,16 +436,20 @@ private fun TimelineEditor(
                                     val currentX = change.position.x
                                     val tw = sessionTrackWidthPx
                                     val dm = sessionDurationMs
+                                    val ss = sessionStartMs
                                     if (tw > 0f && dm > 0L) {
                                         val deltaPx = currentX - lastX
                                         lastX = currentX
                                         val deltaMs = ((deltaPx / tw) * dm).toLong()
-                                        val minOffset = -(sessionStartMs - 1_000L)
-                                        val maxOffset = (dm - CLIP_DURATION_MS) - sessionStartMs
-                                        localDragOffsetMs = (localDragOffsetMs + deltaMs).coerceIn(minOffset, maxOffset)
-                                        android.util.Log.d("HermesDebug", "HermesDebug DRAG: tw=$tw dm=$dm deltaPx=$deltaPx deltaMs=$deltaMs localDragOffsetMs=$localDragOffsetMs")
+                                        // 动态计算边界：每次 MOVE 都重新算
+                                        // 截取块终点 <= 歌曲终点
+                                        val maxOffset = dm - CLIP_DURATION_MS - ss
+                                        // 截取块起点 >= 1秒
+                                        val minOffset = 1000L - ss
+                                        val rawOffset = localDragOffsetMs + deltaMs
+                                        localDragOffsetMs = rawOffset.coerceIn(minOffset, maxOffset)
+                                        android.util.Log.d("HermesDebug", "HermesDebug DRAG: tw=$tw dm=$dm deltaPx=$deltaPx deltaMs=$deltaMs raw=$rawOffset min=$minOffset max=$maxOffset → localDragOffsetMs=$localDragOffsetMs")
                                     }
-                                    change.consume()
                                 }
                             } while (event.changes.any { it.pressed })
 
