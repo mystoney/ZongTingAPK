@@ -432,9 +432,12 @@ private fun TimelineEditor(
                         },
                         onHorizontalDrag = { change, dragAmount ->
                             change.consume()
-                            if (savedTrackWidthPx <= 0f || savedDurationMs <= 0L) return@detectHorizontalDragGestures
-                            // 用 dragAmount（总偏移）直接算，不要 deltaPx 累加（delta太小会四舍五入归零）
-                            val deltaMs = ((dragAmount / savedTrackWidthPx) * savedDurationMs).toLong()
+                            // 优先用 trackWidthPx（Compose 状态，实时读取最新值）
+                            // savedTrackWidthPx 作为回退（首次 lambda 创建时 trackWidthPx 可能还是 0）
+                            val tw = if (trackWidthPx > 0f) trackWidthPx else savedTrackWidthPx
+                            val dm = if (durationMs > 0L) durationMs else savedDurationMs
+                            if (tw <= 0f || dm <= 0L) return@detectHorizontalDragGestures
+                            val deltaMs = ((dragAmount / tw) * dm).toLong()
                             localStartMs = (dragStartMs + deltaMs).coerceIn(1_000L, maxStartMs)
                         }
                     )
