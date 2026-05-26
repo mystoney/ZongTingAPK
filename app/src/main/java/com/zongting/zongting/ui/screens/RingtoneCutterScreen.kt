@@ -429,6 +429,7 @@ private fun TimelineEditor(
                 .pointerInput(Unit) {
                     detectDragGestures(
                         onDragStart = { _ ->
+                            android.util.Log.d("HermesDebug", "HermesDebug dragStart: trackWidthPx=$trackWidthPx localStartMs=$localStartMs")
                             isDragging = true
                         },
                         onDrag = { change, dragAmount ->
