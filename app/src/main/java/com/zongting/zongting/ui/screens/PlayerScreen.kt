@@ -45,6 +45,8 @@ import android.os.Build
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.graphics.asComposeRenderEffect
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.ui.graphics.graphicsLayer
 import coil.compose.AsyncImage
 import com.zongting.zongting.player.PlayerManager
@@ -720,22 +722,18 @@ private fun LyricPage(
                     val lines = lyricState.lyrics
                     val position = playbackState.position
 
-                    val currentLineIndex = remember(lines, position) {
-                        var idx = 0
-                        for ((i, line) in lines.withIndex()) {
-                            if (position >= line.timestamp) idx = i
-                        }
-                        idx
-                    }
+                    // 实时计算当前行（不用 remember，避免缓存导致高亮滞后）
+                    // 实时计算当前行，保证 position 变化时立即更新高亮
+                    val currentLineIndex = lines.indices.lastOrNull { lines[it].timestamp <= position } ?: 0
 
-                    val lineHeightDp = 40.dp
-                    val estimatedLineHeightPx = with(LocalDensity.current) { lineHeightDp.toPx().toInt() }
+                    val lineHeightDp = 44.dp
 
                     BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
-                        val boxHeightPx = with(LocalDensity.current) { maxHeight.toPx().toInt() }
-                        val topPaddingPx = boxHeightPx / 2 - estimatedLineHeightPx / 2
+                        val boxHeightPx = with(LocalDensity.current) { maxHeight.toPx() }
+                        val lineHeightPx = with(LocalDensity.current) { lineHeightDp.toPx() }
 
-                        LaunchedEffect(currentLineIndex) {
+                        // position 变化时强制重新触发滚动
+                        LaunchedEffect(position, currentLineIndex) {
                             if (lines.isNotEmpty() && currentLineIndex in lines.indices) {
                                 lazyListState.animateScrollToItem(index = currentLineIndex)
                             }
@@ -753,31 +751,38 @@ private fun LyricPage(
                         }
 
                         Box(modifier = Modifier.fillMaxSize()) {
+                            val verticalPadding = with(LocalDensity.current) { ((boxHeightPx - lineHeightPx) / 2).toDp() }
                             LazyColumn(
                                 state = lazyListState,
                                 modifier = Modifier
                                     .fillMaxSize()
                                     .padding(horizontal = 24.dp),
                                 horizontalAlignment = Alignment.CenterHorizontally,
-                                contentPadding = PaddingValues(
-                                    top = with(LocalDensity.current) { topPaddingPx.toDp() },
-                                    bottom = with(LocalDensity.current) { topPaddingPx.toDp() }
-                                )
+                                contentPadding = PaddingValues(vertical = verticalPadding)
                             ) {
                                 itemsIndexed(lines) { index, lyricLine ->
                                     val isCurrentLine = index == currentLineIndex
+                                    val alpha by animateFloatAsState(
+                                        targetValue = if (isCurrentLine) 1f else 0.45f,
+                                        animationSpec = tween(300),
+                                        label = "lyricAlpha"
+                                    )
                                     Text(
                                         text = lyricLine.text,
-                                        fontSize = if (isCurrentLine) 18.sp else 14.sp,
+                                        fontSize = if (isCurrentLine) 20.sp else 15.sp,
                                         fontWeight = if (isCurrentLine) FontWeight.Bold else FontWeight.Normal,
                                         color = if (isCurrentLine)
-                                            MaterialTheme.colorScheme.primary
+                                            MaterialTheme.colorScheme.primary.copy(alpha = alpha)
                                         else
-                                            MaterialTheme.colorScheme.onSurfaceVariant,
+                                            MaterialTheme.colorScheme.onSurface.copy(alpha = alpha),
                                         textAlign = TextAlign.Center,
                                         modifier = Modifier
                                             .fillMaxWidth()
-                                            .padding(vertical = 6.dp)
+                                            .graphicsLayer {
+                                                scaleX = if (isCurrentLine) 1.05f else 1f
+                                                scaleY = if (isCurrentLine) 1.05f else 1f
+                                            }
+                                            .padding(vertical = 8.dp)
                                             .clickable { onSeek(lyricLine.timestamp) }
                                     )
                                 }
@@ -818,10 +823,7 @@ private fun LyricPage(
                                 if (!isUserScrolling && lines.isNotEmpty()) {
                                     kotlinx.coroutines.delay(5000)
                                     if (!lazyListState.isScrollInProgress) {
-                                        lazyListState.animateScrollToItem(
-                                            index = currentLineIndex,
-                                            scrollOffset = -topPaddingPx
-                                        )
+                                        lazyListState.animateScrollToItem(index = currentLineIndex)
                                     }
                                 }
                             }
