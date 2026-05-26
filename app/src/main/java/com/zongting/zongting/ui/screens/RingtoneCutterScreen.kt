@@ -155,6 +155,7 @@ fun RingtoneCutterScreen(
                 playbackPositionMs = state.playbackPositionMs,
                 onStartChange = { viewModel.updateStart(it) },
                 onEndChange = { viewModel.updateEnd(it) },
+                onDragEnd = { viewModel.previewClip() },
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 16.dp)
@@ -334,10 +335,11 @@ private fun TimelineEditor(
     playbackPositionMs: Long,
     onStartChange: (Long) -> Unit,
     onEndChange: (Long) -> Unit,
+    onDragEnd: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val density = LocalDensity.current
-    val CLIP_DURATION_MS = 60_000L
+    val CLIP_DURATION_MS = 50_000L
 
     // 立即获取轨道宽度（同步方式，避免 LaunchedEffect 延迟）
     var trackWidthPx by remember { mutableFloatStateOf(0f) }
@@ -403,7 +405,7 @@ private fun TimelineEditor(
             )
         }
 
-        // ===== 60秒选中高亮块 =====
+        // ===== 50秒选中高亮块 =====
         val blockWidthPx = if (trackWidthPx > 0f && durationMs > 0L)
             (CLIP_DURATION_MS.toFloat() / durationMs) * trackWidthPx
         else 0f
@@ -437,6 +439,7 @@ private fun TimelineEditor(
                                 onStartChange(localStartMs)
                                 onEndChange((localStartMs + CLIP_DURATION_MS).coerceAtMost(durationMs))
                             }
+                            onDragEnd()
                             isDragging = false
                         },
                         onDragCancel = {

@@ -30,7 +30,7 @@ data class RingtoneCutterState(
     val hasWriteSettings: Boolean = false // 是否有WRITE_SETTINGS权限
 ) {
     val clipDurationMs: Long get() = endMs - startMs
-    val isValid: Boolean get() = clipDurationMs in 1..60_000
+    val isValid: Boolean get() = clipDurationMs in 1..50_000
 }
 
 enum class ResultType {
@@ -50,7 +50,7 @@ class RingtoneCutterViewModel @Inject constructor(
             song = song,
             durationMs = durationMs,
             startMs = 0L,
-            endMs = minOf(durationMs, 60_000L),
+            endMs = minOf(durationMs, 50_000L),
             hasWriteSettings = AudioRingtoneHelper.hasWriteSettingsPermission(context)
         )
     }
@@ -63,7 +63,7 @@ class RingtoneCutterViewModel @Inject constructor(
     }
 
     fun updateEnd(ms: Long) {
-        val maxEnd = minOf(_state.value.durationMs, _state.value.startMs + 60_000L)
+        val maxEnd = minOf(_state.value.durationMs, _state.value.startMs + 50_000L)
         _state.value = _state.value.copy(
             endMs = ms.coerceIn(_state.value.startMs + 1000, maxEnd)
         )
