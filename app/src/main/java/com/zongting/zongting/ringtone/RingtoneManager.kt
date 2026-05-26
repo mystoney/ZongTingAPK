@@ -364,7 +364,7 @@ object AudioRingtoneHelper {
         artist: String
     ): Uri? = withContext(Dispatchers.IO) {
         try {
-            val ringtoneDir = File("/storage/emulated/0/Ringtones").also { it.mkdirs() }
+            val ringtoneDir = File("/storage/emulated/0/Download").also { it.mkdirs() }
             if (!ringtoneDir.exists()) ringtoneDir.mkdirs()
 
             val sanitized = songName.replace(Regex("[^a-zA-Z0-9\\u4e00-\\u9fa5]"), "_")
