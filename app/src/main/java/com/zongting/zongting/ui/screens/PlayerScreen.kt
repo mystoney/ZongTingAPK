@@ -187,84 +187,88 @@ fun PlayerScreen(
                 .fillMaxSize()
                 .background(Color.Transparent) // 内容区透明，背景是 Box 的虚化封面
         ) {
-        // 顶部导航
-        TopAppBar(
-            title = { Text("正在播放") },
-            navigationIcon = {
-                IconButton(
-                    onClick = {
-                        if (showPlaylistSheet) {
-                            showPlaylistSheet = false
-                        } else {
-                            onBackClick()
+        // 顶部导航（铃声截取界面时隐藏）
+        if (!showRingtoneCutter) {
+            TopAppBar(
+                title = { Text("正在播放") },
+                navigationIcon = {
+                    IconButton(
+                        onClick = {
+                            if (showPlaylistSheet) {
+                                showPlaylistSheet = false
+                            } else {
+                                onBackClick()
+                            }
                         }
+                    ) {
+                        Icon(Icons.Default.KeyboardArrowDown, contentDescription = "收起")
                     }
-                ) {
-                    Icon(Icons.Default.KeyboardArrowDown, contentDescription = "收起")
-                }
-            },
-            colors = TopAppBarDefaults.topAppBarColors(
-                containerColor = Color.Transparent
+                },
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = Color.Transparent
+                )
             )
-        )
 
-        // Tab 切换指示器
-        if (currentSong != null) {
-            TabRow(
-                selectedTabIndex = pagerState.currentPage,
-                containerColor = Color.Transparent,
-                contentColor = MaterialTheme.colorScheme.primary,
-                divider = {}
-            ) {
-                Tab(
-                    selected = pagerState.currentPage == 0,
-                    onClick = { coroutineScope.launch { pagerState.animateScrollToPage(0) } },
-                    text = { Text("播放") }
-                )
-                Tab(
-                    selected = pagerState.currentPage == 1,
-                    onClick = { coroutineScope.launch { pagerState.animateScrollToPage(1) } },
-                    text = { Text("歌词") }
-                )
+            // Tab 切换指示器
+            if (currentSong != null) {
+                TabRow(
+                    selectedTabIndex = pagerState.currentPage,
+                    containerColor = Color.Transparent,
+                    contentColor = MaterialTheme.colorScheme.primary,
+                    divider = {}
+                ) {
+                    Tab(
+                        selected = pagerState.currentPage == 0,
+                        onClick = { coroutineScope.launch { pagerState.animateScrollToPage(0) } },
+                        text = { Text("播放") }
+                    )
+                    Tab(
+                        selected = pagerState.currentPage == 1,
+                        onClick = { coroutineScope.launch { pagerState.animateScrollToPage(1) } },
+                        text = { Text("歌词") }
+                    )
+                }
             }
         }
 
-        // 页面内容区域（左右滑动切换）
-        HorizontalPager(
-            state = pagerState,
-            modifier = Modifier
-                .fillMaxSize()
-                .weight(1f)
-        ) { page ->
-            when (page) {
-                0 -> AlbumCoverPage(
-                    currentSong = currentSong,
-                    isPlaying = isPlaying,
-                    playbackState = playbackState,
-                    playMode = viewModel.playMode.value,
-                    onTogglePlay = { viewModel.togglePlayPause() },
-                    onSeek = { pos ->
-                        isSeeking = true
-                        viewModel.seekTo(pos)
-                        coroutineScope.launch {
-                            delay(500L)
-                            isSeeking = false
-                        }
-                    },
-                    onDrag = { pos -> viewModel.updateProgress(pos, playbackState.duration) },
-                    onPrevious = { viewModel.playPrevious() },
-                    onNext = { viewModel.playNext() }
-                )
-                1 -> LyricPage(
-                    currentSong = currentSong,
-                    lyricState = lyricState,
-                    playbackState = playbackState,
-                    isPlaying = isPlaying,
-                    onTogglePlay = { viewModel.togglePlayPause() },
-                    onPrevious = { viewModel.playPrevious() },
-                    onNext = { viewModel.playNext() },
-                    onSeek = { viewModel.seekTo(it) }
-                )
+        // 页面内容区域（铃声截取界面时隐藏）
+        if (!showRingtoneCutter) {
+            HorizontalPager(
+                state = pagerState,
+                modifier = Modifier
+                    .fillMaxSize()
+                    .weight(1f)
+            ) { page ->
+                when (page) {
+                    0 -> AlbumCoverPage(
+                        currentSong = currentSong,
+                        isPlaying = isPlaying,
+                        playbackState = playbackState,
+                        playMode = viewModel.playMode.value,
+                        onTogglePlay = { viewModel.togglePlayPause() },
+                        onSeek = { pos ->
+                            isSeeking = true
+                            viewModel.seekTo(pos)
+                            coroutineScope.launch {
+                                delay(500L)
+                                isSeeking = false
+                            }
+                        },
+                        onDrag = { pos -> viewModel.updateProgress(pos, playbackState.duration) },
+                        onPrevious = { viewModel.playPrevious() },
+                        onNext = { viewModel.playNext() }
+                    )
+                    1 -> LyricPage(
+                        currentSong = currentSong,
+                        lyricState = lyricState,
+                        playbackState = playbackState,
+                        isPlaying = isPlaying,
+                        onTogglePlay = { viewModel.togglePlayPause() },
+                        onPrevious = { viewModel.playPrevious() },
+                        onNext = { viewModel.playNext() },
+                        onSeek = { viewModel.seekTo(it) }
+                    )
+                }
             }
         }
 
