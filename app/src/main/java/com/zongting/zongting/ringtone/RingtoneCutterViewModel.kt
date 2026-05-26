@@ -55,7 +55,8 @@ class RingtoneCutterViewModel @Inject constructor(
             durationMs = durationMs,
             startMs = start,
             endMs = start + fixedDuration,
-            hasWriteSettings = AudioRingtoneHelper.hasWriteSettingsPermission(context)
+            hasWriteSettings = AudioRingtoneHelper.hasWriteSettingsPermission(context),
+            playbackPositionMs = 0L  // 重置，避免残留上次的播放进度
         )
     }
 
