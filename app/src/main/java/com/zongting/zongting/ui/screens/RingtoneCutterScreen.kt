@@ -3,6 +3,7 @@ package com.zongting.zongting.ui.screens
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.*
 import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -163,23 +164,6 @@ fun RingtoneCutterScreen(
                     .padding(horizontal = 16.dp)
             )
 
-            Spacer(modifier = Modifier.height(8.dp))
-
-            // ===== 截取时长信息 =====
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp),
-                horizontalArrangement = Arrangement.Center
-            ) {
-                Text(
-                    text = formatDurationLabel(state.clipDurationMs),
-                    style = MaterialTheme.typography.bodyMedium,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onSurface
-                )
-            }
-
             Spacer(modifier = Modifier.height(16.dp))
 
             // ===== 预览播放按钮（紧凑）=====
@@ -216,6 +200,7 @@ fun RingtoneCutterScreen(
                     playbackPositionMs = state.playbackPositionMs,
                     isPlaying = state.isPlaying,
                     startMs = state.startMs,
+                    endMs = state.endMs,
                     modifier = Modifier
                         .fillMaxWidth()
                         .weight(1f)
@@ -339,6 +324,8 @@ private fun TimelineEditor(
     // 纯本地拖动状态，拖完才上报 ViewModel
     var localStartMs by remember(startMs) { mutableLongStateOf(startMs) }
     var isDragging by remember { mutableStateOf(false) }
+    var dragStartMs by remember { mutableLongStateOf(0L) }
+    var lastDragAmountPx by remember { mutableFloatStateOf(0f) }
 
     // 同步外部 startMs 变化到本地（仅当非拖动时）
     LaunchedEffect(startMs) {
@@ -417,19 +404,12 @@ private fun TimelineEditor(
                     RoundedCornerShape(6.dp)
                 )
                 .pointerInput(Unit, trackWidthPx) {
-                    detectDragGestures(
+                    detectHorizontalDragGestures(
                         onDragStart = { _ ->
                             android.util.Log.d("HermesDebug", "HermesDebug DRAG_START: trackWidthPx=$trackWidthPx localStartMs=$localStartMs")
                             isDragging = true
-                        },
-                        onDrag = { change, dragAmount ->
-                            change.consume()
-                            android.util.Log.d("HermesDebug", "HermesDebug DRAG: trackWidthPx=$trackWidthPx durationMs=$durationMs deltaPx=${dragAmount.x}")
-                            if (trackWidthPx <= 0f || durationMs <= 0L) return@detectDragGestures
-                            val deltaMs = pxToMs(dragAmount.x)
-                            val newStart = (localStartMs + deltaMs).coerceIn(1_000L, maxStartMs)
-                            android.util.Log.d("HermesDebug", "HermesDebug DRAG: deltaMs=$deltaMs newStart=$newStart")
-                            localStartMs = newStart
+                            dragStartMs = localStartMs
+                            lastDragAmountPx = 0f
                         },
                         onDragEnd = {
                             android.util.Log.d("HermesDebug", "HermesDebug DRAG_END: localStartMs=$localStartMs startMs=$startMs")
@@ -444,6 +424,17 @@ private fun TimelineEditor(
                             android.util.Log.d("HermesDebug", "HermesDebug DRAG_CANCEL")
                             localStartMs = startMs
                             isDragging = false
+                        },
+                        onHorizontalDrag = { change, dragAmount ->
+                            change.consume()
+                            val deltaPx = dragAmount - lastDragAmountPx
+                            lastDragAmountPx = dragAmount
+                            android.util.Log.d("HermesDebug", "HermesDebug DRAG: trackWidthPx=$trackWidthPx durationMs=$durationMs totalDragPx=$dragAmount deltaPx=$deltaPx")
+                            if (trackWidthPx <= 0f || durationMs <= 0L) return@detectHorizontalDragGestures
+                            val deltaMs = pxToMs(deltaPx)
+                            val newStart = (localStartMs + deltaMs).coerceIn(1_000L, maxStartMs)
+                            android.util.Log.d("HermesDebug", "HermesDebug DRAG: deltaMs=$deltaMs newStart=$newStart")
+                            localStartMs = newStart
                         }
                     )
                 },
@@ -497,10 +488,12 @@ private fun RingtoneLyricView(
     playbackPositionMs: Long,
     isPlaying: Boolean,
     startMs: Long,
+    endMs: Long,
     modifier: Modifier = Modifier
 ) {
     val lazyListState = rememberLazyListState()
     val RED = Color(0xFFFF3B30)
+    val CLIP_DURATION_MS = 50_000L
 
     // 播放中用实际位置，非播放时对齐截取块起点
     val effectivePos = if (isPlaying && playbackPositionMs > 0L) playbackPositionMs else startMs
@@ -530,11 +523,18 @@ private fun RingtoneLyricView(
         ) {
             itemsIndexed(lyrics) { index, lyricLine ->
                 val isCurrentLine = index == currentLineIndex
+                // 截取范围内（当前行除外）字体变红
+                val isInClipRange = lyricLine.timestamp in startMs..endMs
+                val textColor = when {
+                    isCurrentLine -> RED
+                    isInClipRange -> RED.copy(alpha = 0.85f)
+                    else -> MaterialTheme.colorScheme.onSurfaceVariant
+                }
                 Text(
                     text = lyricLine.text.ifEmpty { "♪" },
                     fontSize = if (isCurrentLine) 18.sp else 14.sp,
                     fontWeight = if (isCurrentLine) FontWeight.Bold else FontWeight.Normal,
-                    color = if (isCurrentLine) RED else MaterialTheme.colorScheme.onSurfaceVariant,
+                    color = textColor,
                     textAlign = TextAlign.Center,
                     modifier = Modifier
                         .fillMaxWidth()
