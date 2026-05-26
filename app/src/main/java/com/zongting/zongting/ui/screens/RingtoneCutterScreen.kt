@@ -358,8 +358,8 @@ private fun TimelineEditor(
     }
 
     fun pxToMs(px: Float): Long {
-        if (trackWidthPx <= 0f || durationMs <= 0L) return 0L
-        return ((px / trackWidthPx) * durationMs).toLong().coerceIn(0L, durationMs)
+        if (trackWidthPx <= 0f || durationMs <= 0L) return 1_000L
+        return ((px / trackWidthPx) * durationMs).toLong().coerceIn(1_000L, durationMs)
     }
 
     BoxWithConstraints(
@@ -373,7 +373,7 @@ private fun TimelineEditor(
         val maxW = constraints.maxWidth.toFloat().coerceAtLeast(1f)
         LaunchedEffect(maxW) { if (trackWidthPx == 0f) trackWidthPx = maxW }
 
-        val maxStartMs = (durationMs - CLIP_DURATION_MS).coerceAtLeast(0L)
+        val maxStartMs = (durationMs - CLIP_DURATION_MS).coerceAtLeast(1_000L)
 
         // ===== 背景轨道 =====
         Box(
@@ -428,13 +428,14 @@ private fun TimelineEditor(
                             change.consume()
                             if (trackWidthPx <= 0f || durationMs <= 0L) return@detectDragGestures
                             val deltaMs = pxToMs(dragAmount.x)
-                            val newStart = (localStartMs + deltaMs).coerceIn(0L, maxStartMs)
+                            val newStart = (localStartMs + deltaMs).coerceIn(1_000L, maxStartMs)
                             localStartMs = newStart
                         },
                         onDragEnd = {
                             if (localStartMs != startMs) {
                                 onStartChange(localStartMs)
-                                onEndChange((localStartMs + CLIP_DURATION_MS).coerceAtMost(durationMs))
+                                // end固定为start+50秒
+                                onEndChange(localStartMs + CLIP_DURATION_MS)
                             }
                             onDragEnd()
                             isDragging = false

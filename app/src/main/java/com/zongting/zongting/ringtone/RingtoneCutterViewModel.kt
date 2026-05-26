@@ -46,26 +46,41 @@ class RingtoneCutterViewModel @Inject constructor(
     val state: StateFlow<RingtoneCutterState> = _state.asStateFlow()
 
     fun initialize(song: Song?, durationMs: Long, lyrics: List<LyricLine>) {
+        val fixedDuration = 50_000L
+        val minStart = 1_000L
+        val maxStart = (durationMs - fixedDuration).coerceAtLeast(minStart)
+        val start = minOf(1_000L, maxStart)
         _state.value = RingtoneCutterState(
             song = song,
             durationMs = durationMs,
-            startMs = 0L,
-            endMs = minOf(durationMs, 50_000L),
+            startMs = start,
+            endMs = start + fixedDuration,
             hasWriteSettings = AudioRingtoneHelper.hasWriteSettingsPermission(context)
         )
     }
 
     fun updateStart(ms: Long) {
+        val fixedDuration = 50_000L
+        val minStart = 1_000L
+        val maxStart = (_state.value.durationMs - fixedDuration).coerceAtLeast(minStart)
+        val newStart = ms.coerceIn(minStart, maxStart)
         _state.value = _state.value.copy(
-            startMs = ms.coerceIn(0, _state.value.durationMs),
-            endMs = maxOf(_state.value.endMs, ms + 1000) // 保证最小1秒间隔
+            startMs = newStart,
+            endMs = newStart + fixedDuration
         )
     }
 
     fun updateEnd(ms: Long) {
-        val maxEnd = minOf(_state.value.durationMs, _state.value.startMs + 50_000L)
+        // 固定50秒，end跟随start变化
+        val fixedDuration = 50_000L
+        val minStart = 1_000L
+        val maxStart = (_state.value.durationMs - fixedDuration).coerceAtLeast(minStart)
+        // 先算newEnd对应的newStart
+        val newEnd = ms.coerceIn(minStart + fixedDuration, _state.value.durationMs)
+        val newStart = (newEnd - fixedDuration).coerceIn(minStart, maxStart)
         _state.value = _state.value.copy(
-            endMs = ms.coerceIn(_state.value.startMs + 1000, maxEnd)
+            startMs = newStart,
+            endMs = newStart + fixedDuration
         )
     }
 
