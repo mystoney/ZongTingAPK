@@ -170,23 +170,13 @@ fun RingtoneCutterScreen(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 16.dp),
-                horizontalArrangement = Arrangement.SpaceBetween
+                horizontalArrangement = Arrangement.Center
             ) {
                 Text(
-                    text = "起点 ${formatTime(state.startMs)}",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.primary
-                )
-                Text(
-                    text = "时长 ${formatDurationLabel(state.clipDurationMs)}",
+                    text = formatDurationLabel(state.clipDurationMs),
                     style = MaterialTheme.typography.bodyMedium,
                     fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.onSurface
-                )
-                Text(
-                    text = "终点 ${formatTime(state.endMs)}",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.primary
                 )
             }
 
@@ -497,16 +487,6 @@ private fun TimelineEditor(
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier
                 .align(Alignment.BottomEnd)
-        )
-
-        // ===== 选中块起点时间 =====
-        Text(
-            text = formatTime(localStartMs),
-            style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.primary,
-            modifier = Modifier
-                .offset(x = with(density) { (msToPx(localStartMs) - 2f).toDp() })
-                .align(Alignment.TopStart)
         )
     }
 }
