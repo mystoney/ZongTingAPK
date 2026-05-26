@@ -2,8 +2,6 @@ package com.zongting.zongting.ringtone
 
 import android.content.Context
 import android.content.Intent
-import android.media.MediaCodec
-import android.media.MediaCodecInfo
 import android.media.MediaExtractor
 import android.media.MediaFormat
 import android.media.MediaMuxer
@@ -18,7 +16,6 @@ import java.io.File
 import java.io.FileOutputStream
 import java.net.HttpURLConnection
 import java.net.URL
-import kotlin.coroutines.resume
 
 /**
  * 铃声裁剪与设置管理器
@@ -108,8 +105,8 @@ object AudioRingtoneHelper {
     }
 
     /**
-     * 使用 MediaCodec 解码 → 重新编码为 AAC，加 ADTS 头封装 → MediaMuxer 输出
-     * 裁剪通过 startUs/endUs 参数控制 extractor 读取范围实现
+     * 音频裁剪：Extractor 直接 remux 音频轨道到 Muxer
+     * 适用于 MP3/AAC 等已编码格式，无需解码重编码
      */
     private suspend fun trimToMp3(
         context: Context,
@@ -121,188 +118,73 @@ object AudioRingtoneHelper {
         Log.d(TAG, "trimToMp3: $input → $output (${startMs}ms → ${endMs}ms)")
 
         var extractor: MediaExtractor? = null
-        var decoder: MediaCodec? = null
-        var encoder: MediaCodec? = null
         var muxer: MediaMuxer? = null
-        var muxerTrackIndex = -1
+
         val startUs = startMs * 1000L
         val endUs = endMs * 1000L
 
-        val decOutInfo = MediaCodec.BufferInfo()
-        val encOutInfo = MediaCodec.BufferInfo()
-        val TIMEOUT_US = 10_000L
-
         try {
-            // --- Setup Extractor ---
             extractor = MediaExtractor()
             extractor.setDataSource(input)
+
             var audioTrack = -1
             for (i in 0 until extractor.trackCount) {
                 val fmt = extractor.getTrackFormat(i)
                 val mime = fmt.getString(MediaFormat.KEY_MIME) ?: continue
                 if (mime.startsWith("audio/")) { audioTrack = i; break }
             }
-            if (audioTrack < 0) { Log.e(TAG, "No audio track"); return@withContext false }
+            if (audioTrack < 0) {
+                Log.e(TAG, "No audio track found")
+                return@withContext false
+            }
 
             extractor.selectTrack(audioTrack)
-            val inFmt = extractor.getTrackFormat(audioTrack)
-            val inMime = inFmt.getString(MediaFormat.KEY_MIME)!!
-            val sampleRate = inFmt.getInteger(MediaFormat.KEY_SAMPLE_RATE)
-            val chCount = inFmt.getInteger(MediaFormat.KEY_CHANNEL_COUNT)
+            val trackFmt = extractor.getTrackFormat(audioTrack)
+            Log.d(TAG, "Audio track format: $trackFmt")
+
+            // Seek to start position (closest sync point before startUs)
             extractor.seekTo(startUs, MediaExtractor.SEEK_TO_CLOSEST_SYNC)
-            Log.d(TAG, "Input: $inMime, rate=$sampleRate, ch=$chCount")
 
-            // --- Decoder ---
-            decoder = MediaCodec.createDecoderByType(inMime)
-            decoder.configure(inFmt, null, null, 0)
-            decoder.start()
-
-            // --- Encoder (AAC) ---
-            val outFmt = MediaFormat.createAudioFormat(MediaFormat.MIMETYPE_AUDIO_AAC, sampleRate, chCount).apply {
-                setInteger(MediaFormat.KEY_BIT_RATE, 192_000)
-                setInteger(MediaFormat.KEY_AAC_PROFILE, MediaCodecInfo.CodecProfileLevel.AACObjectLC)
-            }
-            encoder = MediaCodec.createEncoderByType(MediaFormat.MIMETYPE_AUDIO_AAC)
-            encoder.configure(outFmt, null, null, MediaCodec.CONFIGURE_FLAG_ENCODE)
-            encoder.start()
-
-            // --- Muxer (MPEG-4, needs ADTS framing) ---
             File(output).delete()
             muxer = MediaMuxer(output, MediaMuxer.OutputFormat.MUXER_OUTPUT_MPEG_4)
-            muxerTrackIndex = muxer.addTrack(outFmt)
+            val muxerTrack = muxer.addTrack(trackFmt)
             muxer.start()
 
-            var pendingDecoderEOS = false
-            var pendingEncoderEOS = false
-            var pendingEncoderDrainEOS = false
-            var firstPtsUs = Long.MAX_VALUE
-            val pcmBuf = ByteArray(32768)
+            val buf = java.nio.ByteBuffer.allocate(32768)
+            val info = android.media.MediaCodec.BufferInfo()
+            var totalBytes = 0L
 
-            // Encoder timestamp: convert decoder PTS to encoder timeline (relative to first frame)
-            fun toEncoderPts(decoderPtsUs: Long): Long {
-                if (firstPtsUs == Long.MAX_VALUE) firstPtsUs = decoderPtsUs
-                return (decoderPtsUs - firstPtsUs).coerceAtLeast(0)
+            while (true) {
+                val sampleSize = extractor.readSampleData(buf, 0)
+                if (sampleSize < 0) break
+
+                val sampleTime = extractor.sampleTime
+                if (sampleTime > endUs) break
+
+                if (sampleTime >= startUs) {
+                    info.offset = 0
+                    info.size = sampleSize
+                    info.presentationTimeUs = sampleTime - startUs
+                    info.flags = extractor.sampleFlags
+                    muxer.writeSampleData(muxerTrack, buf, info)
+                    totalBytes += sampleSize
+                }
+
+                if (!extractor.advance()) break
             }
 
-            loop@ while (true) {
-                // --- Feed decoder ---
-                var decoderFed = false
-                if (!pendingDecoderEOS) {
-                    val inIdx = decoder.dequeueInputBuffer(TIMEOUT_US)
-                    if (inIdx >= 0) {
-                        decoderFed = true
-                        val inBuf = decoder.getInputBuffer(inIdx)!!
-                        val sz = extractor.readSampleData(inBuf, 0)
-                        val t = extractor.sampleTime
-                        if (sz < 0 || t > endUs) {
-                            decoder.queueInputBuffer(inIdx, 0, 0, 0, MediaCodec.BUFFER_FLAG_END_OF_STREAM)
-                            pendingDecoderEOS = true
-                        } else {
-                            decoder.queueInputBuffer(inIdx, 0, sz, t, 0)
-                            extractor.advance()
-                        }
-                    }
-                }
-
-                // --- Drain decoder → PCM → encoder ---
-                val decIdx = decoder.dequeueOutputBuffer(decOutInfo, TIMEOUT_US)
-                if (decIdx >= 0) {
-                    if ((decOutInfo.flags and MediaCodec.BUFFER_FLAG_END_OF_STREAM) != 0) {
-                        decoder.releaseOutputBuffer(decIdx, false)
-                        // Queue EOS to encoder
-                        val encInIdx = encoder.dequeueInputBuffer(TIMEOUT_US)
-                        if (encInIdx >= 0) {
-                            encoder.queueInputBuffer(encInIdx, 0, 0, 0, MediaCodec.BUFFER_FLAG_END_OF_STREAM)
-                        } else {
-                            pendingEncoderDrainEOS = true
-                        }
-                    } else {
-                        val pcmSize = decOutInfo.size
-                        if (pcmSize > 0) {
-                            val pcm = decoder.getOutputBuffer(decIdx)!!
-                            pcm.position(decOutInfo.offset)
-                            pcm.limit(decOutInfo.offset + pcmSize)
-                            val copySize = minOf(pcmSize, pcmBuf.size)
-                            pcm.get(pcmBuf, 0, copySize)
-                            decoder.releaseOutputBuffer(decIdx, false)
-
-                            // Try to feed encoder, drain first if needed
-                            var encInIdx = encoder.dequeueInputBuffer(0)
-                            while (encInIdx < 0 && !pendingEncoderDrainEOS) {
-                                val dummyInfo = MediaCodec.BufferInfo()
-                                val drainIdx = encoder.dequeueOutputBuffer(dummyInfo, 0)
-                                if (drainIdx == MediaCodec.INFO_TRY_AGAIN_LATER) break
-                                if (drainIdx == MediaCodec.INFO_OUTPUT_FORMAT_CHANGED) continue
-                                if (drainIdx >= 0) {
-                                    if (dummyInfo.size > 0) {
-                                        val encOut = encoder.getOutputBuffer(drainIdx)!!
-                                        muxer!!.writeSampleData(muxerTrackIndex, encOut, dummyInfo)
-                                    }
-                                    encoder.releaseOutputBuffer(drainIdx, false)
-                                    if ((dummyInfo.flags and MediaCodec.BUFFER_FLAG_END_OF_STREAM) != 0) {
-                                        pendingEncoderEOS = true
-                                    }
-                                }
-                                encInIdx = encoder.dequeueInputBuffer(0)
-                            }
-                            if (encInIdx >= 0) {
-                                val encIn = encoder.getInputBuffer(encInIdx)!!
-                                encIn.clear()
-                                encIn.put(pcmBuf, 0, copySize)
-                                encoder.queueInputBuffer(encInIdx, 0, copySize, toEncoderPts(decOutInfo.presentationTimeUs), 0)
-                            }
-                        } else {
-                            decoder.releaseOutputBuffer(decIdx, false)
-                        }
-                    }
-                }
-
-                // --- Drain encoder → muxer ---
-                val drainIdx = encoder.dequeueOutputBuffer(encOutInfo, 0)
-                when {
-                    drainIdx == MediaCodec.INFO_TRY_AGAIN_LATER -> {}
-                    drainIdx == MediaCodec.INFO_OUTPUT_FORMAT_CHANGED -> {}
-                    drainIdx >= 0 -> {
-                        if ((encOutInfo.flags and MediaCodec.BUFFER_FLAG_END_OF_STREAM) != 0) {
-                            encoder.releaseOutputBuffer(drainIdx, false)
-                            pendingEncoderEOS = true
-                        } else if (encOutInfo.size > 0) {
-                            val encOut = encoder.getOutputBuffer(drainIdx)!!
-                            muxer!!.writeSampleData(muxerTrackIndex, encOut, encOutInfo)
-                            encoder.releaseOutputBuffer(drainIdx, false)
-                        } else {
-                            encoder.releaseOutputBuffer(drainIdx, false)
-                        }
-                    }
-                }
-
-                // Check if we need to signal EOS to encoder because input buffer wasn't available
-                if (pendingDecoderEOS && !pendingEncoderDrainEOS) {
-                    val encInIdx = encoder.dequeueInputBuffer(0)
-                    if (encInIdx >= 0) {
-                        encoder.queueInputBuffer(encInIdx, 0, 0, 0, MediaCodec.BUFFER_FLAG_END_OF_STREAM)
-                        pendingEncoderDrainEOS = true
-                    }
-                }
-
-                if (pendingEncoderEOS) break@loop
-                // Safety: if we can't make progress, break
-                if (!decoderFed && decIdx < 0 && drainIdx < 0) {
-                    Log.w(TAG, "Decoder/encoder stall, breaking")
-                    break@loop
-                }
-            }
+            muxer.stop()
+            muxer.release()
+            muxer = null
 
             val result = File(output).length() > 1000
-            Log.d(TAG, "trimToMp3 done: result=$result, size=${File(output).length()}")
+            Log.d(TAG, "trimToMp3 done: result=$result, bytes=$totalBytes, fileSize=${File(output).length()}")
             return@withContext result
 
         } catch (e: Exception) {
             Log.e(TAG, "trimToMp3 EXCEPTION", e)
             return@withContext false
         } finally {
-            try { decoder?.stop(); decoder?.release() } catch (e: Exception) {}
-            try { encoder?.stop(); encoder?.release() } catch (e: Exception) {}
             try { muxer?.stop(); muxer?.release() } catch (e: Exception) {}
             try { extractor?.release() } catch (e: Exception) {}
         }
