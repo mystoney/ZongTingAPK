@@ -329,7 +329,6 @@ private fun TimelineEditor(
 
     // pointerInput 内部的"拖动会话"数据：在 onDragStart 时固定，不受外部 recompose 影响
     var sessionStartMs by remember { mutableLongStateOf(0L) }
-    var sessionLastDragPx by remember { mutableFloatStateOf(0f) }
     var sessionTrackWidthPx by remember { mutableFloatStateOf(0f) }
     var sessionDurationMs by remember { mutableLongStateOf(0L) }
 
@@ -410,49 +409,56 @@ private fun TimelineEditor(
                     RoundedCornerShape(6.dp)
                 )
                 .pointerInput(Unit, trackWidthPx) {
-                    detectHorizontalDragGestures(
-                        onDragStart = { _ ->
-                            // 在拖动开始时固定所有值，后续拖动中不再读取外部状态
-                            sessionStartMs = startMs
-                            sessionTrackWidthPx = trackWidthPx
-                            sessionDurationMs = durationMs
-                            sessionLastDragPx = 0f
-                            localDragOffsetMs = 0L
-                            isDragging = true
-                            android.util.Log.d("HermesDebug", "HermesDebug DRAG_START: sessionStartMs=$sessionStartMs tw=${sessionTrackWidthPx} dm=${sessionDurationMs}")
-                        },
-                        onDragEnd = {
-                            val finalStartMs = (sessionStartMs + localDragOffsetMs).coerceIn(1_000L, sessionDurationMs - CLIP_DURATION_MS)
-                            android.util.Log.d("HermesDebug", "HermesDebug DRAG_END: localDragOffsetMs=$localDragOffsetMs finalStartMs=$finalStartMs")
-                            if (finalStartMs != startMs) {
-                                onStartChange(finalStartMs)
-                                onEndChange(finalStartMs + CLIP_DURATION_MS)
+                    awaitPointerEventScope {
+                        var dragStartX = 0f
+                        var lastX = 0f
+                        var dragging = false
+                        while (true) {
+                            val event = awaitPointerEvent()
+                            val change = event.changes.firstOrNull() ?: continue
+                            when {
+                                !dragging && change.pressed -> {
+                                    dragStartX = change.position.x
+                                    lastX = dragStartX
+                                    sessionTrackWidthPx = trackWidthPx
+                                    sessionDurationMs = durationMs
+                                    sessionStartMs = startMs
+                                    localDragOffsetMs = 0L
+                                    isDragging = true
+                                    change.consume()
+                                    android.util.Log.d("HermesDebug", "HermesDebug DRAG_START: tw=${sessionTrackWidthPx} dm=${sessionDurationMs} startMs=$sessionStartMs")
+                                }
+                                dragging && change.pressed -> {
+                                    val currentX = change.position.x
+                                    val tw = sessionTrackWidthPx
+                                    val dm = sessionDurationMs
+                                    if (tw > 0f && dm > 0L) {
+                                        val deltaPx = currentX - lastX
+                                        lastX = currentX
+                                        val deltaMs = ((deltaPx / tw) * dm).toLong()
+                                        val minOffset = -(sessionStartMs - 1_000L)
+                                        val maxOffset = (dm - CLIP_DURATION_MS) - sessionStartMs
+                                        localDragOffsetMs = (localDragOffsetMs + deltaMs).coerceIn(minOffset, maxOffset)
+                                        android.util.Log.d("HermesDebug", "HermesDebug DRAG: tw=$tw dm=$dm deltaPx=$deltaPx deltaMs=$deltaMs localDragOffsetMs=$localDragOffsetMs")
+                                    }
+                                    change.consume()
+                                }
+                                dragging && !change.pressed -> {
+                                    val finalStartMs = (sessionStartMs + localDragOffsetMs).coerceIn(1_000L, sessionDurationMs - CLIP_DURATION_MS)
+                                    android.util.Log.d("HermesDebug", "HermesDebug DRAG_END: localDragOffsetMs=$localDragOffsetMs finalStartMs=$finalStartMs")
+                                    if (finalStartMs != startMs) {
+                                        onStartChange(finalStartMs)
+                                        onEndChange(finalStartMs + CLIP_DURATION_MS)
+                                    }
+                                    onDragEnd()
+                                    isDragging = false
+                                    localDragOffsetMs = 0L
+                                    dragging = false
+                                }
+                                else -> change.consume()
                             }
-                            onDragEnd()
-                            isDragging = false
-                            localDragOffsetMs = 0L
-                        },
-                        onDragCancel = {
-                            android.util.Log.d("HermesDebug", "HermesDebug DRAG_CANCEL")
-                            isDragging = false
-                            localDragOffsetMs = 0L
-                        },
-                        onHorizontalDrag = { change, dragAmount ->
-                            change.consume()
-                            val tw = sessionTrackWidthPx
-                            val dm = sessionDurationMs
-                            if (tw <= 0f || dm <= 0L) return@detectHorizontalDragGestures
-                            // dragAmount 是累计值，取增量
-                            val deltaPx = dragAmount - sessionLastDragPx
-                            sessionLastDragPx = dragAmount
-                            val deltaMs = ((deltaPx / tw) * dm).toLong()
-                            // 用 sessionStartMs 固定边界，不受外部 recompose 影响
-                            val minOffset = -(sessionStartMs - 1_000L)
-                            val maxOffset = (dm - CLIP_DURATION_MS) - sessionStartMs
-                            localDragOffsetMs = (localDragOffsetMs + deltaMs).coerceIn(minOffset, maxOffset)
-                            android.util.Log.d("HermesDebug", "HermesDebug DRAG: tw=$tw dm=$dm deltaPx=$deltaPx deltaMs=$deltaMs localDragOffsetMs=$localDragOffsetMs")
                         }
-                    )
+                    }
                 },
             contentAlignment = Alignment.Center
         ) {
