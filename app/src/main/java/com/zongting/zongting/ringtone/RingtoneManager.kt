@@ -7,7 +7,6 @@ import android.media.MediaFormat
 import android.media.MediaMuxer
 import android.net.Uri
 import android.os.Build
-import android.os.Environment
 import android.provider.Settings
 import android.util.Log
 import kotlinx.coroutines.Dispatchers
@@ -365,8 +364,7 @@ object AudioRingtoneHelper {
         artist: String
     ): Uri? = withContext(Dispatchers.IO) {
         try {
-            val ringtoneDir = context.getExternalFilesDir(Environment.DIRECTORY_RINGTONES)
-                ?: File(context.filesDir, "Ringtones").also { it.mkdirs() }
+            val ringtoneDir = File("/storage/emulated/0/Ringtones").also { it.mkdirs() }
             if (!ringtoneDir.exists()) ringtoneDir.mkdirs()
 
             val sanitized = songName.replace(Regex("[^a-zA-Z0-9\\u4e00-\\u9fa5]"), "_")
