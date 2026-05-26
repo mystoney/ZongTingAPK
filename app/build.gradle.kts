@@ -138,9 +138,15 @@ dependencies {
     implementation("androidx.media3:media3-exoplayer:1.2.1")
     implementation("androidx.media3:media3-session:1.2.1")
     implementation("androidx.media3:media3-ui:1.2.1")
+    implementation("androidx.media3:media3-common:1.2.1")
 
     // Coroutines
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3")
+
+    // Media3 Transformer for audio transcoding (MP3 export)
+    implementation("androidx.media3:media3-transformer:1.2.1")
+    implementation("androidx.media3:media3-muxer:1.2.1")
+    implementation("androidx.media3:media3-effect:1.2.1")
 
     // DataStore for persistence
     implementation("androidx.datastore:datastore-preferences:1.0.0")

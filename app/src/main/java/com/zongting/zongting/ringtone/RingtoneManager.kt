@@ -1,26 +1,38 @@
 package com.zongting.zongting.ringtone
 
-import android.content.ContentValues
 import android.content.Context
 import android.content.Intent
-import android.media.*
+import android.media.MediaExtractor
+import android.media.MediaFormat
+import android.media.MediaMuxer
 import android.net.Uri
 import android.os.Build
-import android.os.Environment
-import android.provider.MediaStore
 import android.provider.Settings
 import android.util.Log
+import androidx.media3.common.MediaItem
+import androidx.media3.common.util.UnstableApi
+import androidx.media3.transformer.Composition
+import androidx.media3.transformer.EditedMediaItem
+import androidx.media3.transformer.EditedMediaItemSequence
+import androidx.media3.transformer.ExportException
+import androidx.media3.transformer.ExportResult
+import androidx.media3.transformer.ProgressHolder
+import androidx.media3.transformer.Transformer
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
 import java.io.File
 import java.io.FileOutputStream
 import java.net.HttpURLConnection
 import java.net.URL
+import kotlin.coroutines.resume
 
 /**
  * 铃声裁剪与设置管理器
- * 导出格式：MP3 (192kbps CBR)，使用纯 Java LAME 算法编码
+ * 导出格式：MP3，使用 Media3 Transformer 转码
  */
+@UnstableApi
 object AudioRingtoneHelper {
 
     private const val TAG = "AudioRingtoneHelper"
@@ -39,8 +51,7 @@ object AudioRingtoneHelper {
     }
 
     /**
-     * 裁剪音频：下载URL到临时文件 → MediaCodec转码(MP3→AAC) → MediaMuxer封装
-     * 设备自带 MP3 decoder 和 AAC encoder，无需外部依赖
+     * 裁剪音频：下载URL到临时文件 → Media3 Transformer 转码为 MP3
      */
     suspend fun trimAudio(
         context: Context,
@@ -81,10 +92,11 @@ object AudioRingtoneHelper {
 
             Log.d(TAG, "裁剪音频: ${startMs}ms → ${actualEndMs}ms")
             val ok = trimToMp3(
+                context,
                 downloadFile.absolutePath,
                 outputFile.absolutePath,
-                startMs * 1000L,
-                actualEndMs * 1000L
+                startMs,
+                actualEndMs
             )
             Log.d(TAG, "裁剪结果: ok=$ok, outputSize=${outputFile.length()}")
 
@@ -95,7 +107,7 @@ object AudioRingtoneHelper {
                 TrimResult.Success(outputFile.absolutePath)
             } else {
                 outputFile.delete()
-                Log.e(TAG, "trimAudio FAILED: trimWithMuxer returned false")
+                Log.e(TAG, "trimAudio FAILED: trimToMp3 returned false")
                 TrimResult.Error("音频裁剪失败")
             }
         } catch (e: Exception) {
@@ -105,111 +117,68 @@ object AudioRingtoneHelper {
     }
 
     /**
-     * Decode audio → PCM → PureJavaMp3Encoder → MP3 file.
-     * Uses blocking I/O instead of callbacks for reliability.
+     * 使用 Media3 Transformer 将音频片段转码为 MP3
+     * @param input 输入文件路径（已下载的完整音频）
+     * @param output 输出 MP3 文件路径
+     * @param startMs 裁剪起点（毫秒）
+     * @param endMs 裁剪终点（毫秒）
      */
-    private fun trimToMp3(input: String, output: String, startUs: Long, endUs: Long): Boolean {
-        var extractor: MediaExtractor? = null
-        var decoder: MediaCodec? = null
+    private suspend fun trimToMp3(
+        context: Context,
+        input: String,
+        output: String,
+        startMs: Long,
+        endMs: Long
+    ): Boolean = suspendCancellableCoroutine { cont ->
+        Log.d(TAG, "Media3Transformer: input=$input, output=$output, start=${startMs}ms, end=${endMs}ms")
+
         try {
-            extractor = MediaExtractor()
-            extractor.setDataSource(input)
+            // 删除已存在的输出文件
+            File(output).delete()
 
-            val trackIdx = (0 until extractor.trackCount).firstOrNull { i ->
-                extractor.getTrackFormat(i).getString(MediaFormat.KEY_MIME)?.startsWith("audio/") == true
-            } ?: return false
+            // 创建 MediaItem 并配置裁剪
+            val mediaItem = MediaItem.Builder()
+                .setUri(input)
+                .setClippingConfiguration(
+                    MediaItem.ClippingConfiguration.Builder()
+                        .setStartPositionMs(startMs)
+                        .setEndPositionMs(endMs)
+                        .build()
+                )
+                .build()
 
-            val srcFormat = extractor.getTrackFormat(trackIdx)
-            val mime = srcFormat.getString(MediaFormat.KEY_MIME) ?: return false
-            val sampleRate = srcFormat.getInteger(MediaFormat.KEY_SAMPLE_RATE)
-            val channelCount = srcFormat.getInteger(MediaFormat.KEY_CHANNEL_COUNT)
-            extractor.selectTrack(trackIdx)
-            extractor.seekTo(startUs, MediaExtractor.SEEK_TO_CLOSEST_SYNC)
+            val editedMediaItem = EditedMediaItem.Builder(mediaItem)
+                .setRemoveAudio(false)
+                .setRemoveVideo(true)  // 纯音频导出
+                .build()
 
-            Log.d(TAG, "解码音频: mime=$mime, rate=$sampleRate, ch=$channelCount, range=${startUs}→${endUs}us")
+            val progressHolder = ProgressHolder()
 
-            decoder = MediaCodec.createDecoderByType(mime)
-            decoder.configure(srcFormat, null, null, 0)
-
-            val pcmBuffer = java.io.ByteArrayOutputStream(32 * 1024 * 1024)  // 32MB max
-            val inputDone = java.util.concurrent.atomic.AtomicBoolean(false)
-            val outputDone = java.util.concurrent.atomic.AtomicBoolean(false)
-            val decoderStarted = java.util.concurrent.atomic.AtomicBoolean(false)
-
-            decoder.setCallback(object : MediaCodec.Callback() {
-                override fun onInputBufferAvailable(codec: MediaCodec, index: Int) {
-                    if (inputDone.get()) return
-                    val buf = codec.getInputBuffer(index) ?: return
-                    buf.clear()
-                    val sampleSize = extractor.readSampleData(buf, 0)
-                    if (sampleSize < 0 || extractor.sampleTime > endUs + 500_000) {
-                        codec.queueInputBuffer(index, 0, 0, 0, MediaCodec.BUFFER_FLAG_END_OF_STREAM)
-                        inputDone.set(true)
-                    } else {
-                        codec.queueInputBuffer(index, 0, sampleSize, extractor.sampleTime, 0)
-                        extractor.advance()
+            val transformer = Transformer.Builder(context)
+                .addListener(object : Transformer.Listener {
+                    override fun onCompleted(composition: Composition, exportResult: ExportResult) {
+                        Log.d(TAG, "Transformer completed: ${File(output).length()} bytes, duration=${exportResult.durationMs}ms")
+                        if (cont.isActive) cont.resume(File(output).length() > 0)
                     }
-                }
 
-                override fun onOutputBufferAvailable(
-                    codec: MediaCodec, index: Int, info: MediaCodec.BufferInfo
-                ) {
-                    if (!decoderStarted.getAndSet(true)) {
-                        // First output confirms decoder is running
+                    override fun onError(
+                        composition: Composition,
+                        exportResult: ExportResult,
+                        exportException: ExportException
+                    ) {
+                        Log.e(TAG, "Transformer error: ${exportException.message}", exportException)
+                        if (cont.isActive) cont.resume(false)
                     }
-                    if (info.size > 0) {
-                        val pcm = codec.getOutputBuffer(index) ?: return
-                        val bytes = ByteArray(info.size)
-                        pcm.get(bytes, 0, info.size)
-                        synchronized(pcmBuffer) {
-                            pcmBuffer.writeBytes(bytes)
-                        }
-                    }
-                    codec.releaseOutputBuffer(index, false)
-                    if (info.flags and MediaCodec.BUFFER_FLAG_END_OF_STREAM != 0) {
-                        outputDone.set(true)
-                    }
-                }
+                })
+                .build()
 
-                override fun onError(codec: MediaCodec, e: MediaCodec.CodecException) {
-                    Log.e(TAG, "Decoder error in trimToMp3", e)
-                    inputDone.set(true)
-                }
-                override fun onOutputFormatChanged(codec: MediaCodec, format: MediaFormat) {}
-            })
+            // 启动转码（Transformer 自动处理编码格式和封装）
+            transformer.start(editedMediaItem, output)
+            Log.d(TAG, "Transformer started for $input → $output")
 
-            decoder.start()
-
-            // Wait for decoding to finish
-            val timeout = System.currentTimeMillis() + 60_000
-            while (!outputDone.get() && System.currentTimeMillis() < timeout) {
-                Thread.sleep(200)
-            }
-
-            val pcmBytes = synchronized(pcmBuffer) { pcmBuffer.toByteArray() }
-            Log.d(TAG, "PCM收集完成: ${pcmBytes.size} bytes")
-
-            if (pcmBytes.isEmpty()) {
-                Log.e(TAG, "trimToMp3: no PCM data collected")
-                return false
-            }
-
-            // Encode PCM → MP3
-            val mp3Bytes = PureJavaMp3Encoder.encode(pcmBytes, sampleRate, 192)
-
-            // Write to output file
-            java.io.FileOutputStream(output).use { fos ->
-                fos.write(mp3Bytes)
-            }
-
-            Log.d(TAG, "MP3编码完成: ${mp3Bytes.size} bytes → $output")
-            return java.io.File(output).length() > 0
         } catch (e: Exception) {
-            Log.e(TAG, "trimToMp3异常", e)
-            return false
-        } finally {
-            try { decoder?.stop(); decoder?.release() } catch (_: Exception) {}
-            extractor?.release()
+            Log.e(TAG, "Transformer setup failed", e)
+            if (cont.isActive) cont.resume(false)
         }
     }
 
@@ -217,7 +186,6 @@ object AudioRingtoneHelper {
         return try {
             when {
                 urlStr.startsWith("content://") -> {
-                    // 从 ContentProvider 读取（如缓存的音频）
                     val uri = Uri.parse(urlStr)
                     context.contentResolver.openInputStream(uri)?.use { inp ->
                         FileOutputStream(out).use { fos ->
@@ -229,7 +197,6 @@ object AudioRingtoneHelper {
                     true
                 }
                 urlStr.startsWith("file://") -> {
-                    // 直接读取本地文件
                     val file = File(urlStr.removePrefix("file://"))
                     if (!file.exists()) return false
                     file.inputStream().use { inp ->
@@ -242,7 +209,6 @@ object AudioRingtoneHelper {
                     true
                 }
                 else -> {
-                    // HTTP/HTTPS 流
                     val conn = URL(urlStr).openConnection() as HttpURLConnection
                     conn.connectTimeout = 15_000
                     conn.readTimeout = 60_000
@@ -276,35 +242,13 @@ object AudioRingtoneHelper {
     ): Uri? = withContext(Dispatchers.IO) {
         try {
             val fileName = "${songName}_铃声_${System.currentTimeMillis()}.mp3"
-            val values = ContentValues().apply {
-                put(MediaStore.Audio.Media.DISPLAY_NAME, fileName)
-                put(MediaStore.Audio.Media.MIME_TYPE, "audio/mpeg")
-                put(MediaStore.Audio.Media.TITLE, "${songName}_铃声")
-                put(MediaStore.Audio.Media.ARTIST, artist)
-                put(MediaStore.Audio.Media.IS_RINGTONE, true)
-                put(MediaStore.Audio.Media.IS_NOTIFICATION, true)
-                put(MediaStore.Audio.Media.IS_ALARM, true)
-                put(MediaStore.Audio.Media.IS_MUSIC, false)
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                    put(MediaStore.Audio.Media.RELATIVE_PATH, Environment.DIRECTORY_RINGTONES)
-                    put(MediaStore.Audio.Media.IS_PENDING, 1)
-                }
-            }
-
-            val uri = context.contentResolver.insert(
-                MediaStore.Audio.Media.EXTERNAL_CONTENT_URI, values
-            ) ?: return@withContext null
-
-            context.contentResolver.openOutputStream(uri)?.use { os ->
-                File(sourceFilePath).inputStream().use { it.copyTo(os) }
-            }
-
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                values.clear(); values.put(MediaStore.Audio.Media.IS_PENDING, 0)
-                context.contentResolver.update(uri, values, null, null)
-            }
+            // 保存到 /data/user/ringtones/ 目录
+            val ringtoneDir = File("/data/user/ringtones")
+            if (!ringtoneDir.exists()) ringtoneDir.mkdirs()
+            val destFile = File(ringtoneDir, fileName)
+            File(sourceFilePath).copyTo(destFile, overwrite = true)
             File(sourceFilePath).delete()
-            uri
+            Uri.fromFile(destFile)
         } catch (e: Exception) {
             Log.e(TAG, "saveToMediaStore failed", e)
             null

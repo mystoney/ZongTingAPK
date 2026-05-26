@@ -3,8 +3,10 @@ package com.zongting.zongting.ringtone
 import android.content.Context
 import android.net.Uri
 import android.util.Log
+import androidx.annotation.OptIn
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import androidx.media3.common.util.UnstableApi
 import com.zongting.zongting.data.model.Song
 import com.zongting.zongting.player.PlayerManager
 import com.zongting.zongting.ui.LyricLine
@@ -39,6 +41,7 @@ enum class ResultType {
     NONE, SUCCESS, ERROR
 }
 
+@OptIn(UnstableApi::class)
 @HiltViewModel
 class RingtoneCutterViewModel @Inject constructor(
     @ApplicationContext private val context: Context

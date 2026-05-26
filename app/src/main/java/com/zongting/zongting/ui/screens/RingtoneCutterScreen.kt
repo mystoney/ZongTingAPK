@@ -36,6 +36,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.media3.common.util.UnstableApi
 import coil.compose.AsyncImage
 import com.zongting.zongting.data.model.Song
 import com.zongting.zongting.player.PlayerManager
@@ -48,7 +49,7 @@ import java.text.SimpleDateFormat
 import java.util.*
 import kotlin.math.roundToInt
 
-@OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class, UnstableApi::class)
 @Composable
 fun RingtoneCutterScreen(
     onBackClick: () -> Unit,
@@ -654,6 +655,7 @@ private fun LyricTimelineView(
 }
 
 // ===== 铃声类型选择弹窗 =====
+@OptIn(UnstableApi::class)
 @Composable
 private fun RingtoneTypeDialog(
     onDismiss: () -> Unit,
