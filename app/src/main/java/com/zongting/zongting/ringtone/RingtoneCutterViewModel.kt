@@ -93,13 +93,17 @@ class RingtoneCutterViewModel @Inject constructor(
         if (s.isPlaying) {
             PlayerManager.pause()
             positionJob?.cancel()
-            _state.value = s.copy(isPlaying = false, playbackPositionMs = 0L)
+            _state.value = s.copy(isPlaying = false, playbackPositionMs = s.startMs)
         } else {
             PlayerManager.seekTo(s.startMs)
             PlayerManager.play()
             // 轮询播放进度
             positionJob?.cancel()
             positionJob = viewModelScope.launch {
+                // 等 seekTo 生效再开始轮询，避免读到旧位置
+                kotlinx.coroutines.delay(80L)
+                val initialPos = PlayerManager.currentPosition
+                _state.value = _state.value.copy(playbackPositionMs = initialPos)
                 while (true) {
                     val pos = PlayerManager.currentPosition
                     val end = _state.value.endMs
