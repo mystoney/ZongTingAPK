@@ -392,13 +392,13 @@ private fun TimelineEditor(
                 )
         )
 
-        // ===== 播放进度覆盖层（白线始终对齐截取块起点） =====
+        // ===== 播放进度覆盖层（白线始终对齐截取块起点，+4dp偏移避免被拖动块遮挡） =====
         android.util.Log.d("HermesDebug", "HermesDebug timelineEditor: startMs=$startMs localStartMs=$localStartMs")
         val whiteLineMs = startMs
         if (trackWidthPx > 0f && durationMs > 0L && whiteLineMs > 0L) {
             Box(
                 modifier = Modifier
-                    .offset(x = with(density) { msToPx(whiteLineMs).toDp() })
+                    .offset(x = with(density) { (msToPx(whiteLineMs) + 4f).toDp() })
                     .width(2.dp)
                     .height(6.dp)
                     .align(Alignment.TopStart)
@@ -434,9 +434,11 @@ private fun TimelineEditor(
                         },
                         onDrag = { change, dragAmount ->
                             change.consume()
+                            android.util.Log.d("HermesDebug", "HermesDebug drag: trackWidthPx=$trackWidthPx durationMs=$durationMs deltaPx=${dragAmount.x}")
                             if (trackWidthPx <= 0f || durationMs <= 0L) return@detectDragGestures
                             val deltaMs = pxToMs(dragAmount.x)
                             val newStart = (localStartMs + deltaMs).coerceIn(1_000L, maxStartMs)
+                            android.util.Log.d("HermesDebug", "HermesDebug drag: deltaMs=$deltaMs newStart=$newStart")
                             localStartMs = newStart
                         },
                         onDragEnd = {
