@@ -63,7 +63,6 @@ import com.zongting.zongting.data.model.UserPlaylist
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.positionChanged
 import androidx.compose.foundation.gestures.detectDragGestures
-import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
@@ -1014,9 +1013,6 @@ private fun LyricPage(
 ) {
     val lazyListState = rememberLazyListState()
     var isUserScrolling by remember { mutableStateOf(false) }
-    var isDraggingLyric by remember { mutableStateOf(false) }
-    var dragProgress by remember { mutableFloatStateOf(0f) }
-    var dragIndicatorY by remember { mutableFloatStateOf(0f) }
 
     val progress = if (playbackState.duration > 0) {
         playbackState.position.toFloat() / playbackState.duration.toFloat()
@@ -1078,34 +1074,6 @@ private fun LyricPage(
                                 )
                         )
                     }
-                    // 拖动热区
-                    Box(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .pointerInput(Unit) {
-                                detectVerticalDragGestures(
-                                    onDragStart = { offset ->
-                                        isDraggingLyric = true
-                                        val h = size.height.toFloat()
-                                        val p = (offset.y / h).coerceIn(0f, 1f)
-                                        dragProgress = p
-                                    },
-                                    onVerticalDrag = { change: androidx.compose.ui.input.pointer.PointerInputChange, dragAmount: Float ->
-                                        change.consume()
-                                        val h = size.height.toFloat()
-                                        val p = (change.position.y / h).coerceIn(0f, 1f)
-                                        dragProgress = p
-                                    },
-                                    onDragEnd = {
-                                        isDraggingLyric = false
-                                        onSeek((dragProgress * playbackState.duration).toLong())
-                                    },
-                                    onDragCancel = {
-                                        isDraggingLyric = false
-                                    }
-                                )
-                            }
-                    )
                 }
                 // 右侧时间标签列
                 Column(
@@ -1171,32 +1139,7 @@ private fun LyricPage(
                         }
 
                         Box(
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .pointerInput(lines, playbackState.duration) {
-                                    detectDragGestures(
-                                        onDragStart = { offset ->
-                                            isDraggingLyric = true
-                                            val progress = (offset.y / size.height).coerceIn(0f, 1f)
-                                            dragProgress = progress
-                                            dragIndicatorY = offset.y
-                                        },
-                                        onDrag = { change: androidx.compose.ui.input.pointer.PointerInputChange, _ ->
-                                            change.consume()
-                                            val progress = (change.position.y / size.height).coerceIn(0f, 1f)
-                                            dragProgress = progress
-                                            dragIndicatorY = change.position.y
-                                        },
-                                        onDragEnd = {
-                                            isDraggingLyric = false
-                                            val seekPos = (dragProgress * playbackState.duration).toLong()
-                                            onSeek(seekPos)
-                                        },
-                                        onDragCancel = {
-                                            isDraggingLyric = false
-                                        }
-                                    )
-                                }
+                            modifier = Modifier.fillMaxSize()
                         ) {
                             val verticalPadding = with(LocalDensity.current) { ((boxHeightPx - lineHeightPx) / 2).toDp() }
                             LazyColumn(
@@ -1234,25 +1177,6 @@ private fun LyricPage(
                                             .clickable { onSeek(lyricLine.timestamp) }
                                     )
                                 }
-                            }
-
-                            // 拖动指示线（纵向）
-                            if (isDraggingLyric) {
-                                val seekPos = (dragProgress * playbackState.duration).toLong()
-                                // 时间标签在顶部右侧
-                                Text(
-                                    text = formatDuration(seekPos),
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    color = Color(0xFFE53935),
-                                    modifier = Modifier
-                                        .align(Alignment.TopEnd)
-                                        .padding(end = 8.dp, top = 4.dp)
-                                        .background(
-                                            Color(0xFF1A1A1A).copy(alpha = 0.7f),
-                                            RoundedCornerShape(4.dp)
-                                        )
-                                        .padding(horizontal = 6.dp, vertical = 2.dp)
-                                )
                             }
 
                             // 顶部渐变遮罩
