@@ -75,27 +75,21 @@ fun HomeScreen(
     }
 
     if (isExpanded) {
-        // 平板横屏：BoxWithConstraints 居中，限制最大内容宽度
-        BoxWithConstraints(
-            modifier = Modifier.fillMaxSize(),
-            contentAlignment = Alignment.TopCenter
-        ) {
-            val maxWidthDp = maxWidth.coerceAtMost(PAD_MAX_CONTENT_WIDTH_DP.dp)
-            HomeScreenContent(
-                uiState = uiState,
-                updatePhase = updatePhase,
-                updateEvent = updateEvent,
-                viewModel = viewModel,
-                updateViewModel = updateViewModel,
-                onPlaylistClick = onPlaylistClick,
-                onSongClick = onSongClick,
-                onPlaylistPlay = onPlaylistPlay,
-                onSongPlay = onSongPlay,
-                onBangClick = onBangClick,
-                isExpanded = true,
-                availableWidthDp = maxWidthDp
-            )
-        }
+        // 平板横屏：内容区固定高度 + Column 撑满，miniplayer 自然遮挡底部（5列2行网格）
+        HomeScreenContent(
+            uiState = uiState,
+            updatePhase = updatePhase,
+            updateEvent = updateEvent,
+            viewModel = viewModel,
+            updateViewModel = updateViewModel,
+            onPlaylistClick = onPlaylistClick,
+            onSongClick = onSongClick,
+            onPlaylistPlay = onPlaylistPlay,
+            onSongPlay = onSongPlay,
+            onBangClick = onBangClick,
+            isExpanded = true,
+            availableWidthDp = PAD_MAX_CONTENT_WIDTH_DP.dp
+        )
     } else {
         // 手机布局：保持原有行为
         HomeScreenContent(
@@ -129,18 +123,15 @@ private fun HomeScreenContent(
     onSongPlay: (Song) -> Unit,
     onBangClick: (String) -> Unit,
     isExpanded: Boolean,
-    availableWidthDp: Dp?
+    availableWidthDp: Dp?,
 ) {
     val barWidthDp = 90.dp
     val barHeightDp = 22.dp
-
-    val miniPlayerBottomPadding = if (isExpanded) 144.dp else 0.dp
 
     Column(
         modifier = Modifier
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.background)
-            .padding(bottom = miniPlayerBottomPadding)
     ) {
         // 顶部标题
         TopAppBar(
@@ -754,65 +745,80 @@ private fun RecommendPage(
     }
     val cardHeight = cardWidth + 48
 
+    // 平板横屏 Expanded 模式：5列 x 2行 固定网格（10首歌单），miniplayer 自然遮挡底部
     if (isExpanded) {
-        // Expanded：纵向多行，每行 LazyRow 横向滑动
-        val rows = playlists.chunked(5).ifEmpty {
-            if (hotSongs.isNotEmpty()) listOf(hotSongs) else listOf()
-        }
-        val songRows = hotSongs.chunked(5)
+        // Expanded 模式固定 5 列 2 行
+        val gridColumns = 5
+        val gridRows = 2
+        val gridItems = playlists.take(gridColumns * gridRows)
+        val columnSpacing = 8 * (gridColumns - 1)
+        val cardWidth = ((effectiveWidth - horizontalPadding - columnSpacing) / gridColumns).toInt()
+        val cardHeight = cardWidth + 48
 
-        LazyColumn(
+        Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .heightIn(max = 700.dp)
-                .padding(horizontal = 16.dp, vertical = 8.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
+                .padding(horizontal = 16.dp, vertical = 8.dp)
         ) {
-            // 推荐歌单行
-            if (playlists.isNotEmpty()) {
-                item {
-                    Text(
-                        text = "推荐歌单",
-                        style = MaterialTheme.typography.titleMedium,
-                        color = MaterialTheme.colorScheme.onSurface,
-                        modifier = Modifier.padding(bottom = 8.dp)
-                    )
-                    LazyRow(
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        items(playlists.size) { index ->
-                            PlaylistCard(
-                                playlists[index],
-                                { onPlaylistClick(playlists[index].id) },
-                                { onPlaylistPlay(playlists[index].id) },
-                                cardWidth,
-                                cardWidth
-                            )
-                        }
+            Text(
+                text = "推荐歌单",
+                style = MaterialTheme.typography.titleMedium,
+                color = MaterialTheme.colorScheme.onSurface,
+                modifier = Modifier.padding(bottom = 8.dp)
+            )
+            // 5列 x 2行网格
+            gridItems.chunked(gridColumns).forEachIndexed { rowIndex, rowItems ->
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    rowItems.forEach { playlist ->
+                        PlaylistCard(
+                            playlist,
+                            { onPlaylistClick(playlist.id) },
+                            { onPlaylistPlay(playlist.id) },
+                            cardWidth,
+                            cardHeight
+                        )
+                    }
+                    // 补齐空白格子
+                    repeat(gridColumns - rowItems.size) {
+                        Spacer(Modifier.weight(1f))
                     }
                 }
+                if (rowIndex < gridRows - 1) {
+                    Spacer(modifier = Modifier.height(12.dp))
+                }
             }
-            // 热门歌曲行
+            // 热门歌曲（2行）
             if (hotSongs.isNotEmpty()) {
-                item {
-                    Text(
-                        text = "热门歌曲",
-                        style = MaterialTheme.typography.titleMedium,
-                        color = MaterialTheme.colorScheme.onSurface,
-                        modifier = Modifier.padding(bottom = 8.dp, top = if (playlists.isNotEmpty()) 8.dp else 0.dp)
-                    )
-                    LazyRow(
+                Spacer(modifier = Modifier.height(16.dp))
+                Text(
+                    text = "热门歌曲",
+                    style = MaterialTheme.typography.titleMedium,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    modifier = Modifier.padding(bottom = 8.dp)
+                )
+                hotSongs.take(gridColumns * gridRows).chunked(gridColumns).forEachIndexed { rowIndex, rowItems ->
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        items(hotSongs.size) { index ->
+                        rowItems.forEach { song ->
                             SongCard(
-                                song = hotSongs[index],
+                                song = song,
                                 allSongs = hotSongs,
-                                onClick = { onSongClick(hotSongs[index], hotSongs) },
-                                onPlayClick = { onSongPlay(hotSongs[index]) },
+                                onClick = { onSongClick(song, hotSongs) },
+                                onPlayClick = { onSongPlay(song) },
                                 cardWidth = cardWidth
                             )
                         }
+                        repeat(gridColumns - rowItems.size) {
+                            Spacer(Modifier.weight(1f))
+                        }
+                    }
+                    if (rowIndex < 1) {
+                        Spacer(modifier = Modifier.height(12.dp))
                     }
                 }
             }
