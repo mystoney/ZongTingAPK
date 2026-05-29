@@ -256,40 +256,29 @@ private fun HomeScreenContent(
                     .weight(1f),
                 contentPadding = PaddingValues(bottom = 165.dp)
             ) {
-                // 轮播图
+                // 轮播图（所有模式都显示）
                 if (uiState.banners.isNotEmpty()) {
                     item {
                         BannerCarousel(banners = uiState.banners)
                     }
                 }
 
-                // 推荐内容横向翻页（每日推荐 / 推荐歌单 / 热门歌曲 / 排行榜）
-                item {
-                    HotBangsRow(
-                        bangs = uiState.hotBangs,
-                        onBangClick = onBangClick
-                    )
-                }
-                item {
-                    DailyRecommendRow(
-                        playlists = uiState.playlists.take(6),
-                        onPlaylistClick = onPlaylistClick,
-                        onPlaylistPlay = onPlaylistPlay
-                    )
-                }
-                item {
-                    RecommendPager(
-                        playlists = uiState.playlists,
-                        hotSongs = uiState.hotSongs,
-                        hotBangs = uiState.hotBangs,
-                        onPlaylistClick = onPlaylistClick,
-                        onPlaylistPlay = onPlaylistPlay,
-                        onSongClick = onSongClick,
-                        onSongPlay = onSongPlay,
-                        onBangClick = onBangClick,
-                        isExpanded = isExpanded,
-                        availableWidthDp = availableWidthDp
-                    )
+                // Expanded 平板横屏：内容区由 AdaptiveLayout 接管，此处不再渲染推荐内容
+                if (!isExpanded) {
+                    item {
+                        RecommendPager(
+                            playlists = uiState.playlists,
+                            hotSongs = uiState.hotSongs,
+                            hotBangs = uiState.hotBangs,
+                            onPlaylistClick = onPlaylistClick,
+                            onPlaylistPlay = onPlaylistPlay,
+                            onSongClick = onSongClick,
+                            onSongPlay = onSongPlay,
+                            onBangClick = onBangClick,
+                            isExpanded = isExpanded,
+                            availableWidthDp = availableWidthDp
+                        )
+                    }
                 }
 
                 // 错误提示
@@ -597,11 +586,11 @@ fun RecommendPager(
     isExpanded: Boolean = false,
     availableWidthDp: Dp? = null
 ) {
-    // 顺序：热门歌曲(0) / 每日推荐(1) / 推荐歌单(2) / 排行榜(3)
+    // 顺序：热门歌曲(0) / 推荐(1) / 排行榜(2)
     // Expanded 模式：合并为 3 页（热门歌曲 / 推荐 / 排行榜）
     val pagerState = rememberPagerState(
         initialPage = if (isExpanded) 1 else 1,
-        pageCount = { if (isExpanded) 3 else 4 }
+        pageCount = { if (isExpanded) 3 else 3 }
     )
     val scope = rememberCoroutineScope()
 
@@ -613,8 +602,8 @@ fun RecommendPager(
                 .padding(horizontal = 16.dp, vertical = 8.dp),
             horizontalArrangement = Arrangement.spacedBy(0.dp)
         ) {
-            // Expanded：热门歌曲(0) / 推荐(1) / 排行榜(2)；普通：热门歌曲(0) / 每日推荐(1) / 推荐歌单(2) / 排行榜(3)
-            val titles = if (isExpanded) listOf("热门歌曲", "推荐", "排行榜") else listOf("热门歌曲", "每日推荐", "推荐歌单", "排行榜")
+            // Expanded：热门歌曲(0) / 推荐(1) / 排行榜(2)；普通：热门歌曲(0) / 推荐(1) / 排行榜(2)
+            val titles = if (isExpanded) listOf("热门歌曲", "推荐", "排行榜") else listOf("热门歌曲", "推荐", "排行榜")
             titles.forEachIndexed { index, title ->
                 val isSelected = pagerState.currentPage == index
                 Box(
@@ -645,8 +634,8 @@ fun RecommendPager(
                 .padding(horizontal = 16.dp)
         ) {
             Row(modifier = Modifier.fillMaxWidth()) {
-                repeat(if (isExpanded) 3 else 4) { index ->
-                    val widthFraction = if (pagerState.currentPage == index) 1f / (if (isExpanded) 3 else 4) else 0f
+                repeat(3) { index ->
+                    val widthFraction = if (pagerState.currentPage == index) 1f / 3 else 0f
                     Box(
                         modifier = Modifier
                             .weight(1f)
@@ -662,18 +651,12 @@ fun RecommendPager(
             }
         }
 
-        // 计算每页高度，避免 HorizontalPager 高度不确定
-        // 使用 availableWidthDp 计算卡片尺寸，与 RecommendPage 保持一致
-        val effW = availableWidthDp?.value ?: 1920f
-        val cardW = ((effW - 32 - 40) / 6).toInt()
-        val pageHeight = 60 + cardW * 2 + 12 + 24  // 标题 + 2行网格 + 行间距 + 底部padding
-
-        // 横向翻页内容
+        // 横向翻页内容（高度由内容撑起，可滚动）
         HorizontalPager(
             state = pagerState,
             modifier = Modifier
                 .fillMaxWidth()
-                .height(pageHeight.dp),
+                .height(IntrinsicSize.Min),
             beyondBoundsPageCount = 0
         ) { page ->
             if (isExpanded) {
@@ -720,7 +703,7 @@ fun RecommendPager(
                     )
                 }
             } else {
-                // 普通模式：4页（热门歌曲 / 每日推荐 / 推荐歌单 / 排行榜）
+                // 普通模式：3页（热门歌曲 / 推荐 / 排行榜）
                 when (page) {
                     0 -> RecommendPage(
                         playlists = emptyList(),
@@ -736,7 +719,7 @@ fun RecommendPager(
                         availableWidthDp = availableWidthDp
                     )
                     1 -> RecommendPage(
-                        playlists = playlists.take(6),
+                        playlists = playlists,
                         hotSongs = emptyList(),
                         hotBangs = hotBangs,
                         onPlaylistClick = onPlaylistClick,
@@ -744,24 +727,11 @@ fun RecommendPager(
                         onSongClick = onSongClick,
                         onSongPlay = onSongPlay,
                         onBangClick = onBangClick,
-                        pageType = PageType.DAILY,
+                        pageType = PageType.DAILY_PLAYLIST,
                         isExpanded = isExpanded,
                         availableWidthDp = availableWidthDp
                     )
                     2 -> RecommendPage(
-                        playlists = playlists.drop(6),
-                        hotSongs = emptyList(),
-                        hotBangs = hotBangs,
-                        onPlaylistClick = onPlaylistClick,
-                        onPlaylistPlay = onPlaylistPlay,
-                        onSongClick = onSongClick,
-                        onSongPlay = onSongPlay,
-                        onBangClick = onBangClick,
-                        pageType = PageType.PLAYLIST,
-                        isExpanded = isExpanded,
-                        availableWidthDp = availableWidthDp
-                    )
-                    3 -> RecommendPage(
                         playlists = emptyList(),
                         hotSongs = emptyList(),
                         hotBangs = hotBangs,
@@ -780,7 +750,7 @@ fun RecommendPager(
     }
 }
 
-enum class PageType { DAILY, PLAYLIST, HOT_SONG, RANKINGS }
+enum class PageType { DAILY, PLAYLIST, HOT_SONG, RANKINGS, DAILY_PLAYLIST }
 
 /** 单页推荐内容（复用现有 PlaylistCard 样式） */
 @Composable
@@ -882,7 +852,7 @@ private fun RecommendPage(
                             }
                         }
                     }
-                    PageType.PLAYLIST, PageType.DAILY -> {
+                    PageType.PLAYLIST, PageType.DAILY, PageType.DAILY_PLAYLIST -> {
                         val gridItems = playlists.take(gridColumns * gridRows)
                         Text(
                             text = if (pageType == PageType.DAILY) "每日推荐" else "推荐歌单",
@@ -1005,7 +975,7 @@ private fun RecommendPage(
                         }
                     }
                 }
-                PageType.PLAYLIST, PageType.DAILY -> {
+                PageType.PLAYLIST, PageType.DAILY, PageType.DAILY_PLAYLIST -> {
                     val rows = playlists.chunked(3)
                     rows.forEach { rowItems ->
                         item {

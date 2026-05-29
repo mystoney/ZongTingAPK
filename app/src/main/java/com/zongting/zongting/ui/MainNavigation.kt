@@ -129,7 +129,7 @@ fun MainNavigation(
                                     saveState = true
                                 }
                                 launchSingleTop = true
-                                restoreState = true
+                                restoreState = false
                             }
                         }
                     )
@@ -164,7 +164,7 @@ fun MainNavigation(
                                             saveState = true
                                         }
                                         launchSingleTop = true
-                                        restoreState = true
+                                        restoreState = false
                                     }
                                 }
                             )
@@ -325,7 +325,8 @@ private fun NavHostContent(
                 mainViewModel = mainViewModel,
                 onSongClick = { _, _ -> },
                 initialBangId = bangId,
-                windowSizeClass = windowSizeClass
+                windowSizeClass = windowSizeClass,
+                onBackClick = { navController.popBackStack() }
             )
         }
         composable(

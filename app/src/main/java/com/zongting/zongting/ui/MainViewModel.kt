@@ -1,8 +1,11 @@
 package com.zongting.zongting.ui
 
+import android.app.Application
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.media3.common.Player
+import coil.ImageLoader
+import coil.request.ImageRequest
 import com.zongting.zongting.data.model.Song
 import com.zongting.zongting.data.model.UserPlaylist
 import com.zongting.zongting.data.repository.FavoriteRepository
@@ -23,11 +26,15 @@ import javax.inject.Inject
 
 @HiltViewModel
 class MainViewModel @Inject constructor(
+    private val application: Application,
     private val repository: MusicRepository,
     private val favoriteRepository: FavoriteRepository,
     private val playlistRepository: PlaylistRepository,
     private val playbackStateRepository: PlaybackStateRepository
 ) : ViewModel() {
+
+    // 复用 ImageLoader，避免 VinylRecord 每次重组都新建实例
+    val cachedImageLoader: ImageLoader by lazy { ImageLoader(application) }
 
     private val _currentSong = MutableStateFlow<Song?>(null)
     val currentSong: StateFlow<Song?> = _currentSong.asStateFlow()
@@ -204,6 +211,9 @@ class MainViewModel @Inject constructor(
         _currentIndex.value = targetIndex
         _isPlaying.value = true
 
+        // 预取当前歌及接下来2首的封面（playSong直接调用时不走updateCurrentSong）
+        prefetchUpcomingCovers(targetIndex)
+
         // 最近播放由 PlayerManager 的10秒计时器在播放超过10秒后自动添加
 
         // 异步获取播放地址并开始播放
@@ -225,9 +235,12 @@ class MainViewModel @Inject constructor(
 
     /** 将歌曲添加到队列末尾并立即播放 */
     fun appendToQueueAndPlay(song: Song) {
+        val currentSize = _currentPlaylist.value.size
         val newPlaylist = _currentPlaylist.value + song
         _currentPlaylist.value = newPlaylist
         _currentSong.value = song
+        // 预取封面（song在末尾，index=currentSize）
+        prefetchUpcomingCovers(currentSize)
         // 最近播放由 PlayerManager 的10秒计时器在播放超过10秒后自动添加
         val seq = ++_playUrlFetchSeq
         viewModelScope.launch {
@@ -310,6 +323,8 @@ class MainViewModel @Inject constructor(
         val idx = _currentPlaylist.value.indexOfFirst { it.rid == song.rid }
         _currentSong.value = song
         if (idx >= 0) {
+            // 预取封面
+            prefetchUpcomingCovers(idx)
             viewModelScope.launch {
                 _playbackState.value = PlaybackState(isLoading = true)
                 val url = getPlayUrl(song.rid, song.source)
@@ -332,6 +347,8 @@ class MainViewModel @Inject constructor(
         _currentPlaylist.value = songs
         val song = songs[index]
         _currentSong.value = song
+        // 预取封面
+        prefetchUpcomingCovers(index)
         viewModelScope.launch {
             _playbackState.value = PlaybackState(isLoading = true)
             val url = getPlayUrl(song.rid, song.source)
@@ -398,6 +415,8 @@ class MainViewModel @Inject constructor(
                             _currentIndex.value = insertPos
                             _currentSong.value = newSongs.first()
                             _isPlaying.value = true
+                            // 预取封面
+                            prefetchUpcomingCovers(insertPos)
                             val seq = ++_playUrlFetchSeq
                             _playbackState.value = PlaybackState(isLoading = true)
                             val url = getPlayUrl(newSongs.first().rid, newSongs.first().source)
@@ -440,6 +459,39 @@ class MainViewModel @Inject constructor(
         _currentIndex.value = index
         // 切歌时重置播放进度，避免新歌显示旧歌的结束位置
         _playbackState.value = _playbackState.value.copy(position = 0L, duration = 0L)
+        // 预取接下来几首歌的封面
+        prefetchUpcomingCovers(index)
+    }
+
+    /**
+     * 预取接下来几首歌的封面到 Coil 磁盘缓存，
+     * 使得切换到播放页时封面能从本地缓存秒开，无需等待网络。
+     * 每次只取 2 首，避免浪费流量和内存。
+     */
+    private fun prefetchUpcomingCovers(currentIndex: Int) {
+        val playlist = _currentPlaylist.value
+        val toPrefetch = mutableListOf<Song>()
+        for (i in 1..2) {
+            val nextIdx = currentIndex + i
+            if (nextIdx < playlist.size) {
+                toPrefetch.add(playlist[nextIdx])
+            }
+        }
+        if (toPrefetch.isEmpty()) return
+
+        // 在后台线程通过 Coil 预取，图片会写入磁盘缓存
+        viewModelScope.launch {
+            val ctx = application.applicationContext
+            toPrefetch.forEach { song ->
+                val url = song.coverUrl ?: song.pic120 ?: song.pic
+                if (url.isNotBlank()) {
+                    val request = ImageRequest.Builder(ctx)
+                        .data(url)
+                        .build()
+                    cachedImageLoader.enqueue(request)
+                }
+            }
+        }
     }
 
     fun playNext() {

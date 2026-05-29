@@ -8,6 +8,8 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.runtime.Composable
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.pager.HorizontalPager
@@ -257,7 +259,8 @@ fun PlayerScreen(
                         },
                         onDrag = { pos -> viewModel.updateProgress(pos, playbackState.duration) },
                         onPrevious = { viewModel.playPrevious() },
-                        onNext = { viewModel.playNext() }
+                        onNext = { viewModel.playNext() },
+                        imageLoader = viewModel.cachedImageLoader
                     )
                     1 -> LyricPage(
                         currentSong = currentSong,
@@ -590,6 +593,154 @@ private fun PlayerBottomBar(
     }
 }
 
+// ===== 唱片封面组件 =====
+
+@Composable
+private fun VinylRecord(
+    albumArtUrl: Any?,
+    isPlaying: Boolean,
+    modifier: Modifier = Modifier,
+    imageLoader: coil.ImageLoader
+) {
+    val context = LocalContext.current
+    val cachedLoader = androidx.compose.runtime.remember { imageLoader }
+
+    val rotation = remember { androidx.compose.runtime.mutableFloatStateOf(0f) }
+    val animatedRotation by androidx.compose.animation.core.animateFloatAsState(
+        targetValue = if (isPlaying) rotation.floatValue + 360f else rotation.floatValue,
+        animationSpec = androidx.compose.animation.core.tween(durationMillis = 6000, easing = androidx.compose.animation.core.LinearEasing),
+        label = "vinyl_rotation"
+    )
+
+    // 持续旋转角度（播放时累加，暂停时保持）
+    androidx.compose.runtime.LaunchedEffect(isPlaying) {
+        if (isPlaying) {
+            while (true) {
+                kotlinx.coroutines.delay(6000)
+                rotation.floatValue += 360f
+            }
+        }
+    }
+
+    // 异步加载封面：图片加载前先显示纯色唱片，旋转不等待
+    val loadedBmp: androidx.compose.runtime.State<android.graphics.Bitmap?> =
+        androidx.compose.runtime.produceState<android.graphics.Bitmap?>(null, albumArtUrl, cachedLoader) {
+            if (albumArtUrl == null) {
+                value = null
+                return@produceState
+            }
+            val request = coil.request.ImageRequest.Builder(context)
+                .data(albumArtUrl)
+                .allowHardware(false)
+                .crossfade(true)
+                .build()
+            val result = cachedLoader.execute(request)
+            value = (result.drawable as? android.graphics.drawable.BitmapDrawable)?.bitmap
+        }
+
+    Box(modifier = modifier, contentAlignment = Alignment.Center) {
+        Canvas(modifier = Modifier.fillMaxSize()) {
+            val cx = size.width / 2
+            val cy = size.height / 2
+            val outerR = size.minDimension / 2
+            val artR = outerR - outerR * 0.06f   // 封面半径，比唱片略小，留出黑色边缘
+            val labelR = outerR * 0.36f
+            val holeR = outerR * 0.04f
+
+            val nc = drawContext.canvas.nativeCanvas
+
+            // --- 黑色边缘（旋转前先画，定在底部不随唱片转） ---
+            nc.drawCircle(cx, cy, outerR, android.graphics.Paint().apply {
+                isAntiAlias = true
+                style = android.graphics.Paint.Style.FILL
+                color = android.graphics.Color.parseColor("#0D0D0D")
+            })
+
+            // --- 旋转的唱片主体 ---
+            nc.save()
+            nc.rotate(animatedRotation, cx, cy)
+
+            // 封面图片：裁剪为圆形铺满整张唱片
+            val bmp = loadedBmp.value
+            if (bmp != null && !bmp.isRecycled) {
+                val path = android.graphics.Path().apply {
+                    addCircle(cx, cy, artR, android.graphics.Path.Direction.CW)
+                }
+                nc.clipPath(path)
+                val src = android.graphics.Rect(0, 0, bmp.width, bmp.height)
+                val dstRect = android.graphics.Rect(
+                    (cx - artR).toInt(), (cy - artR).toInt(),
+                    (cx + artR).toInt(), (cy + artR).toInt()
+                )
+                nc.drawBitmap(bmp, src, dstRect, android.graphics.Paint().apply { isAntiAlias = true })
+            } else {
+                nc.drawCircle(cx, cy, artR, android.graphics.Paint().apply {
+                    isAntiAlias = true
+                    color = android.graphics.Color.parseColor("#1A1A1A")
+                })
+            }
+
+            // 唱片纹理：同心圆细线叠加在封面上（模拟凹槽）
+            nc.save()
+            nc.clipRect((cx - artR).toFloat(), (cy - artR).toFloat(),
+                        (cx + artR).toFloat(), (cy + artR).toFloat())
+            val groovePaint = android.graphics.Paint().apply {
+                isAntiAlias = true
+                style = android.graphics.Paint.Style.STROKE
+                strokeWidth = 1.2f
+                color = android.graphics.Color.parseColor("#40000000")
+            }
+            val grooveStep = (artR - labelR - artR * 0.04f) / 16
+            var g = labelR + artR * 0.04f
+            while (g <= artR - artR * 0.02f) {
+                nc.drawCircle(cx, cy, g, groovePaint)
+                g += grooveStep
+            }
+            nc.restore()
+
+            // 封面之上的光泽高光（半透明渐变）
+            val hlX = cx - artR * 0.25f
+            val hlY = cy - artR * 0.25f
+            val highlightPaint = android.graphics.Paint().apply {
+                isAntiAlias = true
+                style = android.graphics.Paint.Style.FILL
+                shader = android.graphics.RadialGradient(
+                    hlX, hlY, artR * 0.9f,
+                    android.graphics.Color.parseColor("#25FFFFFF"),
+                    android.graphics.Color.TRANSPARENT,
+                    android.graphics.Shader.TileMode.CLAMP
+                )
+            }
+            nc.drawCircle(cx, cy, artR, highlightPaint)
+
+            // 唱片外圈描边（贴合黑色边缘内侧）
+            nc.drawCircle(cx, cy, artR, android.graphics.Paint().apply {
+                isAntiAlias = true
+                style = android.graphics.Paint.Style.STROKE
+                strokeWidth = 2f
+                color = android.graphics.Color.parseColor("#333344")
+            })
+
+            // 中心标签区域（无封面时为深色纯圆，有封面时画一小圈深色衬托中心孔）
+            nc.drawCircle(cx, cy, labelR, android.graphics.Paint().apply {
+                isAntiAlias = true
+                style = android.graphics.Paint.Style.STROKE
+                strokeWidth = 1f
+                color = android.graphics.Color.parseColor("#60FFFFFF")
+            })
+
+            // 中心孔（黑色）
+            nc.drawCircle(cx, cy, holeR, android.graphics.Paint().apply {
+                isAntiAlias = true
+                style = android.graphics.Paint.Style.FILL
+                color = android.graphics.Color.BLACK
+            })
+
+            nc.restore()
+        }
+    }
+}
+
 // ===== 专辑封面页面（内容区） =====
 @Composable
 private fun AlbumCoverPage(
@@ -601,7 +752,8 @@ private fun AlbumCoverPage(
     onSeek: (Long) -> Unit,
     onDrag: (Long) -> Unit,
     onPrevious: () -> Unit,
-    onNext: () -> Unit
+    onNext: () -> Unit,
+    imageLoader: coil.ImageLoader
 ) {
     Column(
         modifier = Modifier
@@ -614,21 +766,22 @@ private fun AlbumCoverPage(
         if (currentSong != null) {
             val song = currentSong
 
-            // 专辑封面
+            // 专辑封面 - 唱片样式（横屏缩小到1/3）
             Box(
                 modifier = Modifier
                     .weight(1f)
                     .fillMaxWidth(),
                 contentAlignment = Alignment.Center
             ) {
-                AsyncImage(
-                    model = song.pic,
-                    contentDescription = null,
+                val configuration = LocalConfiguration.current
+                val isLandscape = configuration.orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE
+                VinylRecord(
+                    albumArtUrl = song.pic,
+                    isPlaying = isPlaying,
                     modifier = Modifier
-                        .fillMaxWidth(0.75f)
-                        .aspectRatio(1f)
-                        .clip(RoundedCornerShape(12.dp)),
-                    contentScale = ContentScale.Crop
+                        .fillMaxWidth(if (isLandscape) 0.27f else 0.8f)
+                        .aspectRatio(1f),
+                    imageLoader = imageLoader
                 )
             }
 
@@ -739,8 +892,14 @@ private fun LyricPage(
                     val lineHeightDp = 44.dp
 
                     BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
+                        val configuration = LocalConfiguration.current
+                        val isLandscape = configuration.orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE
+                        // 横屏时歌词字体更大，当前行改为淡粉色
+                        val currentLineFontSize = if (isLandscape) 32.sp else 20.sp
+                        val otherLineFontSize = if (isLandscape) 24.sp else 15.sp
+                        val lineHeightDp2 = if (isLandscape) 60.dp else 44.dp
                         val boxHeightPx = with(LocalDensity.current) { maxHeight.toPx() }
-                        val lineHeightPx = with(LocalDensity.current) { lineHeightDp.toPx() }
+                        val lineHeightPx = with(LocalDensity.current) { lineHeightDp2.toPx() }
 
                         // position 变化时强制重新触发滚动
                         LaunchedEffect(position, currentLineIndex) {
@@ -779,10 +938,10 @@ private fun LyricPage(
                                     )
                                     Text(
                                         text = lyricLine.text,
-                                        fontSize = if (isCurrentLine) 20.sp else 15.sp,
+                                        fontSize = if (isCurrentLine) currentLineFontSize else otherLineFontSize,
                                         fontWeight = if (isCurrentLine) FontWeight.Bold else FontWeight.Normal,
                                         color = if (isCurrentLine)
-                                            MaterialTheme.colorScheme.primary.copy(alpha = alpha)
+                                            Color(0xFFFF9EBF).copy(alpha = alpha)
                                         else
                                             MaterialTheme.colorScheme.onSurface.copy(alpha = alpha),
                                         textAlign = TextAlign.Center,

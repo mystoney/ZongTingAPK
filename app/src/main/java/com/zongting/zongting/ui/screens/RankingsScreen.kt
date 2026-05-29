@@ -9,6 +9,7 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.*
 
@@ -33,7 +34,8 @@ fun RankingsScreen(
     mainViewModel: MainViewModel,
     onSongClick: (Song, List<Song>) -> Unit = { _, _ -> },
     initialBangId: String? = null,
-    windowSizeClass: WindowSizeClass? = null
+    windowSizeClass: WindowSizeClass? = null,
+    onBackClick: (() -> Unit)? = null
 ) {
     val leftPanelWidth = when (windowSizeClass?.widthSizeClass) {
         WindowWidthSizeClass.Expanded -> 260.dp
@@ -59,6 +61,13 @@ fun RankingsScreen(
     ) {
         TopAppBar(
             title = { Text("排行榜") },
+            navigationIcon = {
+                if (onBackClick != null) {
+                    IconButton(onClick = onBackClick) {
+                        Icon(Icons.Default.ArrowBack, contentDescription = "返回")
+                    }
+                }
+            },
             colors = TopAppBarDefaults.topAppBarColors(
                 containerColor = MaterialTheme.colorScheme.background
             )
