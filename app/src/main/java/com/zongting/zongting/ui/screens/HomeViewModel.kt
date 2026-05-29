@@ -99,13 +99,13 @@ class HomeViewModel @Inject constructor(
 
     private suspend fun loadPlaylists() {
         Log.d("HomeDebug", "loadPlaylists: START")
-        repository.getRecommendPlaylists(pn = 1, rn = 20)
+        repository.getRecommendPlaylists(pn = 1, rn = 50)
             .onSuccess { playlists ->
                 Log.d("HomeDebug", "loadPlaylists: SUCCESS playlists.size=${playlists.size}")
                 _uiState.value = _uiState.value.copy(playlists = playlists)
-                // 后台预取前6个歌单详情，用户点击时直接命中缓存
+                // 后台预取前12个歌单详情，用户点击时直接命中缓存
                 viewModelScope.launch {
-                    playlists.take(6).forEach { playlist ->
+                    playlists.take(12).forEach { playlist ->
                         repository.prefetchPlaylistDetail(playlist.id)
                     }
                 }
@@ -120,8 +120,8 @@ class HomeViewModel @Inject constructor(
         Log.d("HomeDebug", "loadHotBangs: START")
         repository.getBangMenu()
             .onSuccess { categories ->
-                // 取第一个分类（官方榜）的前8个
-                val bangs = categories.firstOrNull()?.list?.take(8) ?: emptyList()
+                // 取第一个分类（官方榜）的全部榜单
+                val bangs = categories.firstOrNull()?.list ?: emptyList()
                 Log.d("HomeDebug", "loadHotBangs: SUCCESS bangs.size=${bangs.size}")
                 _uiState.value = _uiState.value.copy(hotBangs = bangs)
             }

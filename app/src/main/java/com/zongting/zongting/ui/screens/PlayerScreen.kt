@@ -30,6 +30,7 @@ import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+
 import androidx.compose.ui.graphics.asComposeRenderEffect
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
@@ -59,6 +60,10 @@ import com.zongting.zongting.ui.MainViewModel
 import com.zongting.zongting.ui.PlaybackState
 import com.zongting.zongting.data.model.Song
 import com.zongting.zongting.data.model.UserPlaylist
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.input.pointer.positionChanged
+import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
@@ -180,7 +185,7 @@ fun PlayerScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .drawBehind {
-                    drawRect(Color(0xCC000000)) // 80% 透明黑色
+                    drawRect(Color(0xB3000000)) // 70% 透明黑色
                 }
         )
 
@@ -629,13 +634,17 @@ private fun VinylRecord(
                 value = null
                 return@produceState
             }
-            val request = coil.request.ImageRequest.Builder(context)
-                .data(albumArtUrl)
-                .allowHardware(false)
-                .crossfade(true)
-                .build()
-            val result = cachedLoader.execute(request)
-            value = (result.drawable as? android.graphics.drawable.BitmapDrawable)?.bitmap
+            try {
+                val request = coil.request.ImageRequest.Builder(context)
+                    .data(albumArtUrl)
+                    .allowHardware(false)
+                    .crossfade(true)
+                    .build()
+                val result = cachedLoader.execute(request)
+                value = (result.drawable as? android.graphics.drawable.BitmapDrawable)?.bitmap
+            } catch (e: Exception) {
+                value = null
+            }
         }
 
     Box(modifier = modifier, contentAlignment = Alignment.Center) {
@@ -643,18 +652,38 @@ private fun VinylRecord(
             val cx = size.width / 2
             val cy = size.height / 2
             val outerR = size.minDimension / 2
-            val artR = outerR - outerR * 0.06f   // 封面半径，比唱片略小，留出黑色边缘
+            val artR = outerR - outerR * 0.02f   // 封面半径，边缘缩窄为原来的1/3（原6%→现2%）
             val labelR = outerR * 0.36f
-            val holeR = outerR * 0.04f
+            val holeR = outerR * 0.08f  // 中心孔直径翻倍（原0.04→现0.08）
 
             val nc = drawContext.canvas.nativeCanvas
 
-            // --- 黑色边缘（旋转前先画，定在底部不随唱片转） ---
-            nc.drawCircle(cx, cy, outerR, android.graphics.Paint().apply {
+            // 限制所有绘制只在唱片圆形区域内，唱片外保持透明（露出页面背景）
+            val vinylClip = android.graphics.Path().apply {
+                addCircle(cx, cy, outerR, android.graphics.Path.Direction.CW)
+            }
+            nc.save()
+            nc.clipPath(vinylClip)
+
+            // --- 第1层：金属质感边缘：白色高光 -> 银灰 -> 黑色（径向渐变，左上光源） ---
+            val lightX = cx - outerR * 0.3f   // 光源偏左上
+            val lightY = cy - outerR * 0.3f
+            val edgePaint = android.graphics.Paint().apply {
                 isAntiAlias = true
                 style = android.graphics.Paint.Style.FILL
-                color = android.graphics.Color.parseColor("#0D0D0D")
-            })
+                shader = android.graphics.RadialGradient(
+                    lightX, lightY, outerR,
+                    intArrayOf(
+                        android.graphics.Color.parseColor("#F5F5F5"),  // 高光白
+                        android.graphics.Color.parseColor("#BDBDBD"),  // 银灰
+                        android.graphics.Color.parseColor("#1A1A1A"),  // 暗面
+                        android.graphics.Color.parseColor("#0D0D0D")   // 边缘黑
+                    ),
+                    floatArrayOf(0f, 0.35f, 0.7f, 1f),
+                    android.graphics.Shader.TileMode.CLAMP
+                )
+            }
+            nc.drawCircle(cx, cy, outerR, edgePaint)
 
             // --- 旋转的唱片主体 ---
             nc.save()
@@ -713,12 +742,18 @@ private fun VinylRecord(
             }
             nc.drawCircle(cx, cy, artR, highlightPaint)
 
-            // 唱片外圈描边（贴合黑色边缘内侧）
+            // 封面中心孔（画实心页面背景色，模拟透明效果）
+            nc.drawCircle(cx, cy, holeR, android.graphics.Paint().apply {
+                isAntiAlias = true
+                color = android.graphics.Color.parseColor("#121212")
+            })
+
+            // 唱片外圈描边（银灰色描边，贴合金属边缘内侧）
             nc.drawCircle(cx, cy, artR, android.graphics.Paint().apply {
                 isAntiAlias = true
                 style = android.graphics.Paint.Style.STROKE
                 strokeWidth = 2f
-                color = android.graphics.Color.parseColor("#333344")
+                color = android.graphics.Color.parseColor("#AAAAAA")
             })
 
             // 中心标签区域（无封面时为深色纯圆，有封面时画一小圈深色衬托中心孔）
@@ -729,14 +764,8 @@ private fun VinylRecord(
                 color = android.graphics.Color.parseColor("#60FFFFFF")
             })
 
-            // 中心孔（黑色）
-            nc.drawCircle(cx, cy, holeR, android.graphics.Paint().apply {
-                isAntiAlias = true
-                style = android.graphics.Paint.Style.FILL
-                color = android.graphics.Color.BLACK
-            })
-
-            nc.restore()
+            nc.restore() // 恢复旋转
+            nc.restore() // 恢复clip（唱片外保持透明）
         }
     }
 }
@@ -755,95 +784,218 @@ private fun AlbumCoverPage(
     onNext: () -> Unit,
     imageLoader: coil.ImageLoader
 ) {
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(horizontal = 16.dp),
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
-        Spacer(modifier = Modifier.height(4.dp))
+    val configuration = LocalConfiguration.current
+    val isLandscape = configuration.orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE
 
-        if (currentSong != null) {
-            val song = currentSong
+    if (isLandscape) {
+        // ===== 横屏布局：左边文字信息，右边唱片 =====
+        Row(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(horizontal = 24.dp, vertical = 8.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            // 左侧：歌曲信息（竖向排列，字号加大，底部对齐）
+            Column(
+                modifier = Modifier
+                    .weight(0.4f)
+                    .fillMaxHeight(),
+                horizontalAlignment = Alignment.Start,
+                verticalArrangement = Arrangement.SpaceBetween
+            ) {
+                if (currentSong != null) {
+                    val song = currentSong
+                    // 上部：歌曲信息（字号加大）
+                    Column(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalArrangement = Arrangement.Top,
+                        horizontalAlignment = Alignment.Start
+                    ) {
+                        Text(
+                            text = song.name,
+                            style = MaterialTheme.typography.displayMedium,
+                            fontSize = 34.sp,
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        Spacer(modifier = Modifier.height(10.dp))
+                        Text(
+                            text = song.artist,
+                            style = MaterialTheme.typography.headlineMedium,
+                            fontSize = 22.sp,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Spacer(modifier = Modifier.height(6.dp))
+                        Text(
+                            text = song.album,
+                            style = MaterialTheme.typography.titleLarge,
+                            fontSize = 18.sp,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+                        )
+                    }
 
-            // 专辑封面 - 唱片样式（横屏缩小到1/3）
+                    // 下部：进度条和时间（底部对齐）
+                    Column(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalArrangement = Arrangement.Bottom
+                    ) {
+                        // 进度条
+                        var isDragging by remember { mutableStateOf(false) }
+                        var dragProgress by remember { mutableFloatStateOf(0f) }
+
+                        Slider(
+                            value = if (isDragging) dragProgress else {
+                                if (playbackState.duration > 0) {
+                                    playbackState.position.toFloat() / playbackState.duration.toFloat()
+                                } else 0f
+                            },
+                            onValueChange = { newProgress ->
+                                if (!isDragging) isDragging = true
+                                dragProgress = newProgress
+                                onDrag((newProgress * playbackState.duration).toLong())
+                            },
+                            onValueChangeFinished = {
+                                onSeek((dragProgress * playbackState.duration).toLong())
+                                isDragging = false
+                            },
+                            valueRange = 0f..1f,
+                        )
+
+                        // 时间显示
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Text(
+                                text = formatDuration((if (isDragging) dragProgress * playbackState.duration else playbackState.position).toLong()),
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            Text(
+                                text = formatDuration(playbackState.duration),
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+                }
+            }
+
+            // 右侧：唱片
             Box(
                 modifier = Modifier
-                    .weight(1f)
-                    .fillMaxWidth(),
+                    .weight(0.55f)
+                    .fillMaxHeight(),
                 contentAlignment = Alignment.Center
             ) {
-                val configuration = LocalConfiguration.current
-                val isLandscape = configuration.orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE
-                VinylRecord(
-                    albumArtUrl = song.pic,
-                    isPlaying = isPlaying,
-                    modifier = Modifier
-                        .fillMaxWidth(if (isLandscape) 0.27f else 0.8f)
-                        .aspectRatio(1f),
-                    imageLoader = imageLoader
-                )
+                currentSong?.let { song ->
+                    VinylRecord(
+                        albumArtUrl = song.pic,
+                        isPlaying = isPlaying,
+                        modifier = Modifier
+                            .fillMaxWidth(0.72f)
+                            .aspectRatio(1f),
+                        imageLoader = imageLoader
+                    )
+                }
             }
-
-            // 歌曲信息
-            Text(
-                text = song.name,
-                style = MaterialTheme.typography.titleMedium,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                textAlign = TextAlign.Center
-            )
-
-            Text(
-                text = "${song.artist} - ${song.album}",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
-
+        }
+    } else {
+        // ===== 竖屏布局：上下排列，唱片居中 =====
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(horizontal = 16.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
             Spacer(modifier = Modifier.height(4.dp))
 
-            // 进度条
-            var isDragging by remember { mutableStateOf(false) }
-            var dragProgress by remember { mutableFloatStateOf(0f) }
+            if (currentSong != null) {
+                val song = currentSong
 
-            Slider(
-                value = if (isDragging) dragProgress else {
-                    if (playbackState.duration > 0) {
-                        playbackState.position.toFloat() / playbackState.duration.toFloat()
-                    } else 0f
-                },
-                onValueChange = { newProgress ->
-                    if (!isDragging) isDragging = true
-                    dragProgress = newProgress
-                    onDrag((newProgress * playbackState.duration).toLong())
-                },
-                onValueChangeFinished = {
-                    onSeek((dragProgress * playbackState.duration).toLong())
-                    isDragging = false
-                },
-                valueRange = 0f..1f,
-            )
+                // 专辑封面 - 唱片样式
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxWidth(),
+                    contentAlignment = Alignment.Center
+                ) {
+                    VinylRecord(
+                        albumArtUrl = song.pic,
+                        isPlaying = isPlaying,
+                        modifier = Modifier
+                            .fillMaxWidth(0.8f)
+                            .aspectRatio(1f),
+                        imageLoader = imageLoader
+                    )
+                }
 
-            // 时间显示
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
+                // 歌曲信息
                 Text(
-                    text = formatDuration((if (isDragging) dragProgress * playbackState.duration else playbackState.position).toLong()),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    text = song.name,
+                    style = MaterialTheme.typography.titleMedium,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    textAlign = TextAlign.Center
                 )
+
                 Text(
-                    text = formatDuration(playbackState.duration),
+                    text = "${song.artist} - ${song.album}",
                     style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
                 )
+
+                Spacer(modifier = Modifier.height(4.dp))
+
+                // 进度条
+                var isDragging by remember { mutableStateOf(false) }
+                var dragProgress by remember { mutableFloatStateOf(0f) }
+
+                Slider(
+                    value = if (isDragging) dragProgress else {
+                        if (playbackState.duration > 0) {
+                            playbackState.position.toFloat() / playbackState.duration.toFloat()
+                        } else 0f
+                    },
+                    onValueChange = { newProgress ->
+                        if (!isDragging) isDragging = true
+                        dragProgress = newProgress
+                        onDrag((newProgress * playbackState.duration).toLong())
+                    },
+                    onValueChangeFinished = {
+                        onSeek((dragProgress * playbackState.duration).toLong())
+                        isDragging = false
+                    },
+                    valueRange = 0f..1f,
+                )
+
+                // 时间显示
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Text(
+                        text = formatDuration((if (isDragging) dragProgress * playbackState.duration else playbackState.position).toLong()),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Text(
+                        text = formatDuration(playbackState.duration),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(8.dp))
             }
-
-            Spacer(modifier = Modifier.height(8.dp))
         }
     }
 }
@@ -862,12 +1014,122 @@ private fun LyricPage(
 ) {
     val lazyListState = rememberLazyListState()
     var isUserScrolling by remember { mutableStateOf(false) }
+    var isDraggingLyric by remember { mutableStateOf(false) }
+    var dragProgress by remember { mutableFloatStateOf(0f) }
+    var dragIndicatorY by remember { mutableFloatStateOf(0f) }
+
+    val progress = if (playbackState.duration > 0) {
+        playbackState.position.toFloat() / playbackState.duration.toFloat()
+    } else 0f
 
     Surface(
         modifier = Modifier.fillMaxSize(),
         color = MaterialTheme.colorScheme.background.copy(alpha = 0.1f)
     ) {
         Box(modifier = Modifier.fillMaxSize()) {
+            // 纵向进度条 + 时间标签（Row布局：左侧进度条，右侧上下各一个时间）
+            Row(
+                modifier = Modifier
+                    .align(Alignment.CenterStart)
+                    .padding(start = 8.dp)
+                    .fillMaxHeight(0.7f),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                // 左侧纵向进度条
+                Box(
+                    modifier = Modifier
+                        .width(6.dp)
+                        .fillMaxHeight()
+                ) {
+                    // 轨道背景（白色半透明，圆角）
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .background(
+                                Color.White.copy(alpha = 0.15f),
+                                RoundedCornerShape(3.dp)
+                            )
+                    )
+                    // 已播放进度（从顶部向下填充：align=TopCenter + fillMaxHeight）
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .fillMaxHeight(progress)
+                            .align(Alignment.TopCenter)
+                            .background(
+                                Color(0xFFE53935),
+                                RoundedCornerShape(3.dp)
+                            )
+                    )
+                    // 当前播放位置圆点（progress * height 从顶部算）
+                    BoxWithConstraints(
+                        modifier = Modifier.fillMaxSize()
+                    ) {
+                        val thumbOffset = with(LocalDensity.current) {
+                            (maxHeight.toPx() * progress).toDp()
+                        }
+                        Box(
+                            modifier = Modifier
+                                .offset(x = 1.dp, y = thumbOffset - 5.dp)
+                                .size(10.dp)
+                                .background(
+                                    Color.White,
+                                    CircleShape
+                                )
+                        )
+                    }
+                    // 拖动热区
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .pointerInput(Unit) {
+                                detectVerticalDragGestures(
+                                    onDragStart = { offset ->
+                                        isDraggingLyric = true
+                                        val h = size.height.toFloat()
+                                        val p = (offset.y / h).coerceIn(0f, 1f)
+                                        dragProgress = p
+                                    },
+                                    onVerticalDrag = { change: androidx.compose.ui.input.pointer.PointerInputChange, dragAmount: Float ->
+                                        change.consume()
+                                        val h = size.height.toFloat()
+                                        val p = (change.position.y / h).coerceIn(0f, 1f)
+                                        dragProgress = p
+                                    },
+                                    onDragEnd = {
+                                        isDraggingLyric = false
+                                        onSeek((dragProgress * playbackState.duration).toLong())
+                                    },
+                                    onDragCancel = {
+                                        isDraggingLyric = false
+                                    }
+                                )
+                            }
+                    )
+                }
+                // 右侧时间标签列
+                Column(
+                    modifier = Modifier
+                        .padding(start = 8.dp)
+                        .fillMaxHeight(),
+                    verticalArrangement = Arrangement.SpaceBetween
+                ) {
+                    // 总时长（上方）
+                    Text(
+                        text = formatDuration(playbackState.duration),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(top = 2.dp)
+                    )
+                    // 当前时间（下方）
+                    Text(
+                        text = formatDuration(playbackState.position),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = Color(0xFFE53935),
+                        modifier = Modifier.padding(bottom = 2.dp)
+                    )
+                }
+            }
             when (lyricState) {
                 is LyricState.Loading -> {
                     Box(
@@ -894,7 +1156,7 @@ private fun LyricPage(
                     BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
                         val configuration = LocalConfiguration.current
                         val isLandscape = configuration.orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE
-                        // 横屏时歌词字体更大，当前行改为淡粉色
+                        // 横屏时歌词字体更大，当前行和下一行字体相同
                         val currentLineFontSize = if (isLandscape) 32.sp else 20.sp
                         val otherLineFontSize = if (isLandscape) 24.sp else 15.sp
                         val lineHeightDp2 = if (isLandscape) 60.dp else 44.dp
@@ -908,18 +1170,34 @@ private fun LyricPage(
                             }
                         }
 
-                        LaunchedEffect(lazyListState) {
-                            snapshotFlow { lazyListState.isScrollInProgress }
-                                .collect { isScrolling ->
-                                    if (isScrolling) isUserScrolling = true
-                                    else if (isUserScrolling) {
-                                        kotlinx.coroutines.delay(500)
-                                        if (!lazyListState.isScrollInProgress) isUserScrolling = false
-                                    }
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .pointerInput(lines, playbackState.duration) {
+                                    detectDragGestures(
+                                        onDragStart = { offset ->
+                                            isDraggingLyric = true
+                                            val progress = (offset.y / size.height).coerceIn(0f, 1f)
+                                            dragProgress = progress
+                                            dragIndicatorY = offset.y
+                                        },
+                                        onDrag = { change: androidx.compose.ui.input.pointer.PointerInputChange, _ ->
+                                            change.consume()
+                                            val progress = (change.position.y / size.height).coerceIn(0f, 1f)
+                                            dragProgress = progress
+                                            dragIndicatorY = change.position.y
+                                        },
+                                        onDragEnd = {
+                                            isDraggingLyric = false
+                                            val seekPos = (dragProgress * playbackState.duration).toLong()
+                                            onSeek(seekPos)
+                                        },
+                                        onDragCancel = {
+                                            isDraggingLyric = false
+                                        }
+                                    )
                                 }
-                        }
-
-                        Box(modifier = Modifier.fillMaxSize()) {
+                        ) {
                             val verticalPadding = with(LocalDensity.current) { ((boxHeightPx - lineHeightPx) / 2).toDp() }
                             LazyColumn(
                                 state = lazyListState,
@@ -931,6 +1209,7 @@ private fun LyricPage(
                             ) {
                                 itemsIndexed(lines) { index, lyricLine ->
                                     val isCurrentLine = index == currentLineIndex
+                                    val isNextLine = index == currentLineIndex + 1
                                     val alpha by animateFloatAsState(
                                         targetValue = if (isCurrentLine) 1f else 0.45f,
                                         animationSpec = tween(300),
@@ -938,10 +1217,10 @@ private fun LyricPage(
                                     )
                                     Text(
                                         text = lyricLine.text,
-                                        fontSize = if (isCurrentLine) currentLineFontSize else otherLineFontSize,
+                                        fontSize = if (isCurrentLine || isNextLine) currentLineFontSize else otherLineFontSize,
                                         fontWeight = if (isCurrentLine) FontWeight.Bold else FontWeight.Normal,
                                         color = if (isCurrentLine)
-                                            Color(0xFFFF9EBF).copy(alpha = alpha)
+                                            Color(0xFFE53935).copy(alpha = alpha)
                                         else
                                             MaterialTheme.colorScheme.onSurface.copy(alpha = alpha),
                                         textAlign = TextAlign.Center,
@@ -955,6 +1234,25 @@ private fun LyricPage(
                                             .clickable { onSeek(lyricLine.timestamp) }
                                     )
                                 }
+                            }
+
+                            // 拖动指示线（纵向）
+                            if (isDraggingLyric) {
+                                val seekPos = (dragProgress * playbackState.duration).toLong()
+                                // 时间标签在顶部右侧
+                                Text(
+                                    text = formatDuration(seekPos),
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = Color(0xFFE53935),
+                                    modifier = Modifier
+                                        .align(Alignment.TopEnd)
+                                        .padding(end = 8.dp, top = 4.dp)
+                                        .background(
+                                            Color(0xFF1A1A1A).copy(alpha = 0.7f),
+                                            RoundedCornerShape(4.dp)
+                                        )
+                                        .padding(horizontal = 6.dp, vertical = 2.dp)
+                                )
                             }
 
                             // 顶部渐变遮罩

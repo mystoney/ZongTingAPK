@@ -6,6 +6,7 @@ import androidx.lifecycle.viewModelScope
 import androidx.media3.common.Player
 import coil.ImageLoader
 import coil.request.ImageRequest
+import com.zongting.zongting.data.model.Bang
 import com.zongting.zongting.data.model.Song
 import com.zongting.zongting.data.model.UserPlaylist
 import com.zongting.zongting.data.repository.FavoriteRepository
@@ -341,6 +342,19 @@ class MainViewModel @Inject constructor(
     }
 
     /** 播放整个列表（用于"播放全部"按钮） */
+    fun playBang(bang: Bang) {
+        viewModelScope.launch {
+            val source = bang.source.ifEmpty { "kuwo" }
+            val sourceId = bang.sourceId.ifEmpty { bang.id }
+            val result = repository.getBangMusicList(bang.id, source, sourceId = sourceId)
+            result.onSuccess { songs ->
+                if (songs.isNotEmpty()) {
+                    playSongs(songs, 0)
+                }
+            }
+        }
+    }
+
     fun playSongs(songs: List<Song>, startIndex: Int = 0) {
         if (songs.isEmpty()) return
         val index = startIndex.coerceIn(0, songs.size - 1)

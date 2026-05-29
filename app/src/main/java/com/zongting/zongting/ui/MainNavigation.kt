@@ -31,6 +31,7 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.zongting.zongting.ui.screens.*
+import com.zongting.zongting.data.model.Bang
 import com.zongting.zongting.data.model.UserPlaylist
 import com.zongting.zongting.data.repository.UpdateEvent
 import com.zongting.zongting.data.repository.UpdatePhase
@@ -231,6 +232,9 @@ private fun NavHostContent(
                 },
                 onBangClick = { bangId ->
                     navController.navigate(Screen.Rankings.createRoute(bangId))
+                },
+                onBangPlay = { bang ->
+                    mainViewModel.playBang(bang)
                 }
             )
         }
