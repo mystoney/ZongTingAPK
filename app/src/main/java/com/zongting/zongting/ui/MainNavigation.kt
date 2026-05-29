@@ -368,7 +368,8 @@ private fun NavHostContent(
                 onPrevious = { mainViewModel.playPrevious() },
                 onNext = { mainViewModel.playNext() },
                 onClick = { navController.navigate(Screen.Player.route) },
-                modifier = Modifier.align(Alignment.BottomCenter)
+                modifier = Modifier.align(Alignment.BottomCenter),
+                windowSizeClass = windowSizeClass
             )
         }
     }
