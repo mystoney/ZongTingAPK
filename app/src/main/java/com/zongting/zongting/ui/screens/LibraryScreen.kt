@@ -30,6 +30,7 @@ import com.zongting.zongting.data.model.UserPlaylist
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
 fun LibraryScreen(
+    windowSizeClass: androidx.compose.material3.windowsizeclass.WindowSizeClass,
     favoriteSongs: List<Song>,
     recentlyPlayed: List<Song>,
     userPlaylists: List<UserPlaylist>,

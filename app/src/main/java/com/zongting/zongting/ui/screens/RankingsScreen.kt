@@ -12,6 +12,8 @@ import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.*
 
+import androidx.compose.material3.windowsizeclass.WindowSizeClass
+import androidx.compose.material3.windowsizeclass.WindowWidthSizeClass
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -30,8 +32,13 @@ fun RankingsScreen(
     rankingsViewModel: RankingsViewModel = hiltViewModel(),
     mainViewModel: MainViewModel,
     onSongClick: (Song, List<Song>) -> Unit = { _, _ -> },
-    initialBangId: String? = null
+    initialBangId: String? = null,
+    windowSizeClass: WindowSizeClass? = null
 ) {
+    val leftPanelWidth = when (windowSizeClass?.widthSizeClass) {
+        WindowWidthSizeClass.Expanded -> 260.dp
+        else -> 130.dp
+    }
     val uiState by rankingsViewModel.uiState.collectAsState()
 
     LaunchedEffect(Unit) {
@@ -150,7 +157,7 @@ fun RankingsScreen(
                 // ── 左侧：榜单列表 ─────────────────────────────────────
                 LazyColumn(
                     modifier = Modifier
-                        .width(130.dp)
+                        .width(leftPanelWidth)
                         .fillMaxHeight(),
                     contentPadding = PaddingValues(start = 6.dp, top = 0.dp, end = 6.dp, bottom = 165.dp),
                     verticalArrangement = Arrangement.spacedBy(4.dp)

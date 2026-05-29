@@ -26,6 +26,7 @@ import com.zongting.zongting.data.model.Song
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun PlaylistScreen(
+    windowSizeClass: androidx.compose.material3.windowsizeclass.WindowSizeClass,
     playlistId: Long,
     viewModel: PlaylistViewModel = hiltViewModel(),
     onBackClick: () -> Unit,

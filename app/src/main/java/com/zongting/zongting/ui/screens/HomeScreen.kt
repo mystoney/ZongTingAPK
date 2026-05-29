@@ -30,6 +30,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlin.math.ceil
 import kotlin.collections.chunked
+import androidx.compose.material3.windowsizeclass.WindowSizeClass
+import androidx.compose.material3.windowsizeclass.WindowWidthSizeClass
 import androidx.hilt.navigation.compose.hiltViewModel
 import coil.compose.AsyncImage
 import android.util.Log
@@ -37,6 +39,8 @@ import com.zongting.zongting.data.model.Banner
 import com.zongting.zongting.data.model.Bang
 import com.zongting.zongting.data.model.Playlist
 import com.zongting.zongting.data.model.Song
+import com.zongting.zongting.ui.AdaptiveLayout
+import com.zongting.zongting.ui.PAD_MAX_CONTENT_WIDTH_DP
 import com.zongting.zongting.ui.MainViewModel
 import com.zongting.zongting.data.repository.UpdatePhase
 import com.zongting.zongting.data.repository.UpdateEvent
@@ -52,8 +56,10 @@ fun HomeScreen(
     onSongClick: (Song, List<Song>) -> Unit,
     onPlaylistPlay: (Long) -> Unit,
     onSongPlay: (Song) -> Unit,
-    onBangClick: (String) -> Unit  // 热门榜单点击 → 跳转排行榜
+    onBangClick: (String) -> Unit,  // 热门榜单点击 → 跳转排行榜
+    windowSizeClass: WindowSizeClass? = null
 ) {
+    val isExpanded = windowSizeClass?.widthSizeClass == WindowWidthSizeClass.Expanded
     val uiState by viewModel.uiState.collectAsState()
     val updatePhase by updateViewModel.updatePhase.collectAsState()
     val updateEvent by updateViewModel.updateEvent.collectAsState()
@@ -67,6 +73,66 @@ fun HomeScreen(
         Log.d("HomeDebug", "HomeScreen: LaunchedEffect fired, calling loadHomeDataIfNeeded")
         viewModel.loadHomeDataIfNeeded()
     }
+
+    if (isExpanded) {
+        // 平板横屏：BoxWithConstraints 居中，限制最大内容宽度
+        BoxWithConstraints(
+            modifier = Modifier.fillMaxSize(),
+            contentAlignment = Alignment.TopCenter
+        ) {
+            val maxWidthDp = maxWidth.coerceAtMost(PAD_MAX_CONTENT_WIDTH_DP.dp)
+            HomeScreenContent(
+                uiState = uiState,
+                updatePhase = updatePhase,
+                updateEvent = updateEvent,
+                viewModel = viewModel,
+                updateViewModel = updateViewModel,
+                onPlaylistClick = onPlaylistClick,
+                onSongClick = onSongClick,
+                onPlaylistPlay = onPlaylistPlay,
+                onSongPlay = onSongPlay,
+                onBangClick = onBangClick,
+                isExpanded = true,
+                availableWidthDp = maxWidthDp
+            )
+        }
+    } else {
+        // 手机布局：保持原有行为
+        HomeScreenContent(
+            uiState = uiState,
+            updatePhase = updatePhase,
+            updateEvent = updateEvent,
+            viewModel = viewModel,
+            updateViewModel = updateViewModel,
+            onPlaylistClick = onPlaylistClick,
+            onSongClick = onSongClick,
+            onPlaylistPlay = onPlaylistPlay,
+            onSongPlay = onSongPlay,
+            onBangClick = onBangClick,
+            isExpanded = false,
+            availableWidthDp = null
+        )
+    }
+}
+
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+private fun HomeScreenContent(
+    uiState: HomeUiState,
+    updatePhase: UpdatePhase,
+    updateEvent: UpdateEvent?,
+    viewModel: HomeViewModel,
+    updateViewModel: UpdateViewModel,
+    onPlaylistClick: (Long) -> Unit,
+    onSongClick: (Song, List<Song>) -> Unit,
+    onPlaylistPlay: (Long) -> Unit,
+    onSongPlay: (Song) -> Unit,
+    onBangClick: (String) -> Unit,
+    isExpanded: Boolean,
+    availableWidthDp: Dp?
+) {
+    val barWidthDp = 90.dp
+    val barHeightDp = 22.dp
 
     Column(
         modifier = Modifier
@@ -211,7 +277,9 @@ fun HomeScreen(
                         onPlaylistClick = onPlaylistClick,
                         onPlaylistPlay = onPlaylistPlay,
                         onSongClick = onSongClick,
-                        onSongPlay = onSongPlay
+                        onSongPlay = onSongPlay,
+                        isExpanded = isExpanded,
+                        availableWidthDp = availableWidthDp
                     )
                 }
 
@@ -512,7 +580,9 @@ fun RecommendPager(
     onPlaylistClick: (Long) -> Unit,
     onPlaylistPlay: (Long) -> Unit,
     onSongClick: (Song, List<Song>) -> Unit,
-    onSongPlay: (Song) -> Unit
+    onSongPlay: (Song) -> Unit,
+    isExpanded: Boolean = false,
+    availableWidthDp: Dp? = null
 ) {
     // 顺序：热门歌曲(0) / 每日推荐(1) / 推荐歌单(2)，默认显示每日推荐
     val pagerState = rememberPagerState(initialPage = 1, pageCount = { 3 })
@@ -591,7 +661,9 @@ fun RecommendPager(
                     onPlaylistPlay = onPlaylistPlay,
                     onSongClick = onSongClick,
                     onSongPlay = onSongPlay,
-                    pageType = PageType.HOT_SONG
+                    pageType = PageType.HOT_SONG,
+                    isExpanded = isExpanded,
+                    availableWidthDp = availableWidthDp
                 )
                 1 -> RecommendPage(
                     playlists = playlists.take(6),
@@ -600,7 +672,9 @@ fun RecommendPager(
                     onPlaylistPlay = onPlaylistPlay,
                     onSongClick = onSongClick,
                     onSongPlay = onSongPlay,
-                    pageType = PageType.DAILY
+                    pageType = PageType.DAILY,
+                    isExpanded = isExpanded,
+                    availableWidthDp = availableWidthDp
                 )
                 2 -> RecommendPage(
                     playlists = playlists.drop(6),
@@ -609,7 +683,9 @@ fun RecommendPager(
                     onPlaylistPlay = onPlaylistPlay,
                     onSongClick = onSongClick,
                     onSongPlay = onSongPlay,
-                    pageType = PageType.PLAYLIST
+                    pageType = PageType.PLAYLIST,
+                    isExpanded = isExpanded,
+                    availableWidthDp = availableWidthDp
                 )
             }
         }
@@ -627,10 +703,17 @@ private fun RecommendPage(
     onPlaylistPlay: (Long) -> Unit,
     onSongClick: (Song, List<Song>) -> Unit,
     onSongPlay: (Song) -> Unit,
-    pageType: PageType
+    pageType: PageType,
+    isExpanded: Boolean = false,
+    availableWidthDp: Dp? = null
 ) {
-    val screenWidth = LocalConfiguration.current.screenWidthDp
-    val cardWidth = (screenWidth - 32 - 16) / 3
+    // 平板横屏模式下使用限制的最大内容宽度计算卡片宽度
+    val effectiveWidth = availableWidthDp?.value ?: LocalConfiguration.current.screenWidthDp.toFloat()
+    // 固定3列网格，间距16dp（左右各16dp padding + 8dp * 2列间距）
+    val columns = 3
+    val horizontalPadding = 32 // 16dp * 2
+    val columnSpacing = 8 * (columns - 1) // 8dp * 2
+    val cardWidth = ((effectiveWidth - horizontalPadding - columnSpacing) / columns).toInt()
     // 估算每行卡片高度（图片+文字），用于约束 LazyColumn 高度避免无限约束
     val cardHeight = (cardWidth + 48).dp
     val rowHeight = cardHeight + 12.dp

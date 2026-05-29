@@ -1,3 +1,5 @@
+@file:OptIn(androidx.compose.material3.windowsizeclass.ExperimentalMaterial3WindowSizeClassApi::class, androidx.compose.material3.ExperimentalMaterial3Api::class)
+
 package com.zongting.zongting
 
 import android.content.ComponentName
@@ -18,6 +20,8 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.windowsizeclass.calculateWindowSizeClass
+import androidx.compose.material3.windowsizeclass.WindowSizeClass
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextAlign
@@ -66,6 +70,7 @@ class MainActivity : ComponentActivity() {
         initializeMediaController()
 
         setContent {
+            val windowSizeClass = calculateWindowSizeClass(this)
             ZongTingTheme {
                 Surface(
                     modifier = Modifier.fillMaxSize(),
@@ -86,7 +91,7 @@ class MainActivity : ComponentActivity() {
                             }
                         )
                     } else {
-                        MainNavigation()
+                        MainNavigation(windowSizeClass = windowSizeClass)
                     }
 
                     // 安装权限对话框

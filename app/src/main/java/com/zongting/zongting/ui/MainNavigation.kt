@@ -4,6 +4,8 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
+import androidx.compose.material3.windowsizeclass.WindowSizeClass
+import androidx.compose.material3.windowsizeclass.WindowWidthSizeClass
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -22,6 +24,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavDestination.Companion.hierarchy
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.NavType
+import androidx.navigation.NavController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
@@ -55,9 +58,11 @@ val bottomNavItems = listOf(
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MainNavigation(
+    windowSizeClass: WindowSizeClass,
     mainViewModel: MainViewModel = hiltViewModel(),
     updateViewModel: com.zongting.zongting.ui.screens.UpdateViewModel = hiltViewModel()
 ) {
+    val isExpanded = windowSizeClass.widthSizeClass == WindowWidthSizeClass.Expanded
     val navController = rememberNavController()
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentDestination = navBackStackEntry?.destination
@@ -103,203 +108,280 @@ fun MainNavigation(
         }
     } ?: true
 
-    Scaffold(
-        bottomBar = {
-            if (showBottomBar) {
-                NavigationBar {
-                    bottomNavItems.forEach { screen ->
-                        val isSelected = currentDestination?.route == screen.route ||
-                            (screen.route != "rankings" && currentDestination?.route?.startsWith(screen.route) == true)
-                        NavigationBarItem(
-                            icon = { Icon(screen.icon, contentDescription = screen.title) },
-                            label = { Text(screen.title) },
-                            selected = isSelected,
-                            onClick = {
-                                navController.navigate(screen.route) {
-                                    popUpTo(navController.graph.findStartDestination().id) {
-                                        saveState = true
-                                    }
-                                    launchSingleTop = true
-                                    restoreState = true
+    if (isExpanded) {
+        // ── 平板横屏：侧边 NavigationRail ────────────────────────────
+        Row(modifier = Modifier.fillMaxSize()) {
+            NavigationRail(
+                containerColor = MaterialTheme.colorScheme.surface,
+                modifier = Modifier.fillMaxHeight()
+            ) {
+                Spacer(Modifier.weight(1f))
+                bottomNavItems.forEach { screen ->
+                    val isSelected = currentDestination?.route == screen.route ||
+                        (screen.route != "rankings" && currentDestination?.route?.startsWith(screen.route) == true)
+                    NavigationRailItem(
+                        icon = { Icon(screen.icon, contentDescription = screen.title) },
+                        label = { Text(screen.title, maxLines = 1) },
+                        selected = isSelected,
+                        onClick = {
+                            navController.navigate(screen.route) {
+                                popUpTo(navController.graph.findStartDestination().id) {
+                                    saveState = true
                                 }
+                                launchSingleTop = true
+                                restoreState = true
                             }
-                        )
+                        }
+                    )
+                }
+                Spacer(Modifier.weight(1f))
+            }
+            // 主内容区
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxHeight()
+            ) {
+                NavHostContent(navController, mainViewModel, updateViewModel, currentSong, isPlaying, favoriteSongs, favoriteSongList, recentlyPlayed, userPlaylists, expandedPlaylist, pendingVersionInfo.value, updateEvent, updatePhase, windowSizeClass, onPlaylistExpandChange = { expandedPlaylist = it })
+            }
+        }
+    } else {
+        // ── 手机 / 平板竖屏：底部 NavigationBar ───────────────────────
+        Scaffold(
+            bottomBar = {
+                if (showBottomBar) {
+                    NavigationBar {
+                        bottomNavItems.forEach { screen ->
+                            val isSelected = currentDestination?.route == screen.route ||
+                                (screen.route != "rankings" && currentDestination?.route?.startsWith(screen.route) == true)
+                            NavigationBarItem(
+                                icon = { Icon(screen.icon, contentDescription = screen.title) },
+                                label = { Text(screen.title) },
+                                selected = isSelected,
+                                onClick = {
+                                    navController.navigate(screen.route) {
+                                        popUpTo(navController.graph.findStartDestination().id) {
+                                            saveState = true
+                                        }
+                                        launchSingleTop = true
+                                        restoreState = true
+                                    }
+                                }
+                            )
+                        }
                     }
                 }
             }
-        }
-    ) { paddingValues ->
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(paddingValues)
-        ) {
-            NavHost(
-                navController = navController,
-                startDestination = Screen.Home.route,
-                modifier = Modifier.fillMaxSize()
+        ) { paddingValues ->
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(paddingValues)
             ) {
-                composable(Screen.Home.route) {
-                    HomeScreen(
-                        viewModel = hiltViewModel(),
-                        updateViewModel = updateViewModel,
-                        onPlaylistClick = { playlistId ->
-                            navController.navigate(Screen.Playlist.createRoute(playlistId))
-                        },
-                        onSongClick = { song, playlist ->
-                            mainViewModel.playSongPrev(song)
-                        },
-                        onPlaylistPlay = { playlistId ->
-                            mainViewModel.playPlaylist(playlistId)
-                        },
-                        onSongPlay = { song ->
-                            mainViewModel.playSongPrev(song)
-                        },
-                        onBangClick = { bangId ->
-                            navController.navigate(Screen.Rankings.createRoute(bangId))
-                        }
-                    )
-                }
-                composable(Screen.Search.route) {
-                    SearchScreen(
-                        userPlaylists = userPlaylists.value,
-                        onSongClick = { song, playlist ->
-                            mainViewModel.playSongPrev(song)
-                        },
-                        onPlayAll = { songs ->
-                            mainViewModel.playSongs(songs, 0)
-                        },
-                        onAddToPlaylist = { playlistId, song ->
-                            mainViewModel.addSongToPlaylist(playlistId, song) {}
-                        },
-                        onCreateAndAdd = { name, song ->
-                            mainViewModel.createPlaylistAndAddSong(name, song)
-                        }
-                    )
-                }
-                composable(Screen.Library.route) {
-                    LibraryScreen(
-                        favoriteSongs = favoriteSongList.value,
-                        recentlyPlayed = recentlyPlayed.value,
-                        userPlaylists = userPlaylists.value,
-                        currentPlaylist = mainViewModel.currentPlaylist.value,
-                        currentPlayingSong = currentSong.value,
-                        onSongClick = { song ->
-                            mainViewModel.playSongPrev(song)
-                        },
-                        onSongLongPress = { song ->
-                            mainViewModel.playSongPrev(song)
-                        },
-                        onPlayAll = { songs, startIndex ->
-                            if (songs.isNotEmpty()) {
-                                mainViewModel.playSongs(songs, startIndex)
-                            }
-                        },
-                        onToggleFavorite = { song ->
-                            mainViewModel.toggleFavorite(song)
-                        },
-                        onCreatePlaylist = { name ->
-                            mainViewModel.createPlaylist(name)
-                        },
-                        onRenamePlaylist = { id, name ->
-                            mainViewModel.renamePlaylist(id, name)
-                        },
-                        onDeletePlaylist = { id ->
-                            mainViewModel.deletePlaylist(id)
-                        },
-                        onAddSongToPlaylist = { playlistId, song ->
-                            mainViewModel.addSongToPlaylist(playlistId, song) {
-                                expandedPlaylist = userPlaylists.value.find { it.id == playlistId }
-                            }
-                        },
-                        onAddSongsToPlaylist = { playlistId, songs ->
-                            mainViewModel.addSongsToPlaylist(playlistId, songs) {
-                                expandedPlaylist = userPlaylists.value.find { it.id == playlistId }
-                            }
-                        },
-                        onCreateAndAddSongs = { name, songs ->
-                            mainViewModel.createPlaylistAndAddSongs(name, songs) { newId ->
-                                expandedPlaylist = userPlaylists.value.find { it.id == newId }
-                            }
-                        },
-                        onSongsAdded = { playlistId ->
-                            expandedPlaylist = userPlaylists.value.find { it.id == playlistId }
-                        },
-                        onRemoveSongFromPlaylist = { playlistId, songRid ->
-                            mainViewModel.removeSongFromPlaylist(playlistId, songRid)
-                        }
-                    )
-                }
-                composable("rankings") {
-                    RankingsScreen(
-                        mainViewModel = mainViewModel,
-                        onSongClick = { _, _ -> },
-                        initialBangId = null
-                    )
-                }
-                composable(
-                    route = "rankings/{bangId}",
-                    arguments = listOf(navArgument("bangId") { type = NavType.StringType })
-                ) { backStackEntry ->
-                    val bangId = backStackEntry.arguments?.getString("bangId")
-                    RankingsScreen(
-                        mainViewModel = mainViewModel,
-                        onSongClick = { _, _ -> },
-                        initialBangId = bangId
-                    )
-                }
-                composable(
-                    route = Screen.Playlist.route,
-                    arguments = listOf(navArgument("playlistId") { type = NavType.LongType })
-                ) { backStackEntry ->
-                    val playlistId = backStackEntry.arguments?.getLong("playlistId") ?: 0L
-                    PlaylistScreen(
-                        playlistId = playlistId,
-                        onBackClick = { navController.popBackStack() },
-                        onSongClick = { song, playlist ->
-                            mainViewModel.playSongPrev(song)
-                        },
-                        currentPlaylist = mainViewModel.currentPlaylist.value,
-                        onPlayAll = {
-                            mainViewModel.playPlaylist(playlistId)
-                        }
-                    )
-                }
-                composable(Screen.Player.route) {
-                    PlayerScreen(
-                        onBackClick = { navController.popBackStack() },
-                        viewModel = mainViewModel
-                    )
-                }
-            }
-
-            val showMiniPlayer = currentSong.value != null &&
-                currentDestination?.route != Screen.Player.route
-            if (showMiniPlayer) {
-                MiniPlayer(
-                    song = currentSong.value!!,
-                    isPlaying = isPlaying.value,
-                    isFavorite = favoriteSongs.value.contains(currentSong.value!!.rid),
-                    onPlayPause = { mainViewModel.togglePlayPause() },
-                    onToggleFavorite = { mainViewModel.toggleFavorite(currentSong.value!!) },
-                    onPrevious = { mainViewModel.playPrevious() },
-                    onNext = { mainViewModel.playNext() },
-                    onClick = { navController.navigate(Screen.Player.route) },
-                    modifier = Modifier.align(Alignment.BottomCenter)
-                )
-            }
-            // 更新弹窗（有新版本时自动弹出）
-            pendingVersionInfo.value?.let { versionInfo ->
-                UpdateDialog(
-                    versionInfo = versionInfo,
-                    updateEvent = updateEvent,
-                    onConfirmDownload = { updateViewModel.onConfirmDownload() },
-                    onDismiss = { updateViewModel.onDismiss() },
-                    onConfirmInstall = { updateViewModel.onConfirmInstall() },
-                    onDeferInstall = { updateViewModel.onDeferInstall() }
-                )
+                NavHostContent(navController, mainViewModel, updateViewModel, currentSong, isPlaying, favoriteSongs, favoriteSongList, recentlyPlayed, userPlaylists, expandedPlaylist, pendingVersionInfo.value, updateEvent, updatePhase, windowSizeClass, onPlaylistExpandChange = { expandedPlaylist = it })
             }
         }
     }
-
 }
+// ── NavHost + MiniPlayer + UpdateDialog（手机/平板共用） ──────────────────────────
+@Composable
+private fun NavHostContent(
+    navController: androidx.navigation.NavHostController,
+    mainViewModel: MainViewModel,
+    updateViewModel: com.zongting.zongting.ui.screens.UpdateViewModel,
+    currentSong: State<com.zongting.zongting.data.model.Song?>,
+    isPlaying: State<Boolean>,
+    favoriteSongs: State<Set<Long>>,
+    favoriteSongList: State<List<com.zongting.zongting.data.model.Song>>,
+    recentlyPlayed: State<List<com.zongting.zongting.data.model.Song>>,
+    userPlaylists: State<List<UserPlaylist>>,
+    expandedPlaylist: UserPlaylist?,
+    pendingVersionInfo: com.zongting.zongting.data.model.VersionInfo?,
+    updateEvent: com.zongting.zongting.data.repository.UpdateEvent?,
+    updatePhase: UpdatePhase,
+    windowSizeClass: WindowSizeClass,
+    onPlaylistExpandChange: (UserPlaylist?) -> Unit
+) {
+    val navBackStackEntry by navController.currentBackStackEntryAsState()
+    val currentDestination = navBackStackEntry?.destination
+    val eventState = remember(updateEvent) { updateEvent }
+    val phaseState = remember(updatePhase) { updatePhase }
+
+    NavHost(
+        navController = navController,
+        startDestination = Screen.Home.route,
+        modifier = Modifier.fillMaxSize()
+    ) {
+        composable(Screen.Home.route) {
+            HomeScreen(
+                viewModel = hiltViewModel(),
+                updateViewModel = updateViewModel,
+                windowSizeClass = windowSizeClass,
+                onPlaylistClick = { playlistId ->
+                    navController.navigate(Screen.Playlist.createRoute(playlistId))
+                },
+                onSongClick = { song, playlist ->
+                    mainViewModel.playSongPrev(song)
+                },
+                onPlaylistPlay = { playlistId ->
+                    mainViewModel.playPlaylist(playlistId)
+                },
+                onSongPlay = { song ->
+                    mainViewModel.playSongPrev(song)
+                },
+                onBangClick = { bangId ->
+                    navController.navigate(Screen.Rankings.createRoute(bangId))
+                }
+            )
+        }
+        composable(Screen.Search.route) {
+            SearchScreen(
+                windowSizeClass = windowSizeClass,
+                userPlaylists = userPlaylists.value,
+                onSongClick = { song, playlist ->
+                    mainViewModel.playSongPrev(song)
+                },
+                onPlayAll = { songs ->
+                    mainViewModel.playSongs(songs, 0)
+                },
+                onAddToPlaylist = { playlistId, song ->
+                    mainViewModel.addSongToPlaylist(playlistId, song) {}
+                },
+                onCreateAndAdd = { name, song ->
+                    mainViewModel.createPlaylistAndAddSong(name, song)
+                }
+            )
+        }
+        composable(Screen.Library.route) {
+            LibraryScreen(
+                windowSizeClass = windowSizeClass,
+                favoriteSongs = favoriteSongList.value,
+                recentlyPlayed = recentlyPlayed.value,
+                userPlaylists = userPlaylists.value,
+                currentPlaylist = mainViewModel.currentPlaylist.value,
+                currentPlayingSong = currentSong.value,
+                onSongClick = { song ->
+                    mainViewModel.playSongPrev(song)
+                },
+                onSongLongPress = { song ->
+                    mainViewModel.playSongPrev(song)
+                },
+                onPlayAll = { songs, startIndex ->
+                    if (songs.isNotEmpty()) {
+                        mainViewModel.playSongs(songs, startIndex)
+                    }
+                },
+                onToggleFavorite = { song ->
+                    mainViewModel.toggleFavorite(song)
+                },
+                onCreatePlaylist = { name ->
+                    mainViewModel.createPlaylist(name)
+                },
+                onRenamePlaylist = { id, name ->
+                    mainViewModel.renamePlaylist(id, name)
+                },
+                onDeletePlaylist = { id ->
+                    mainViewModel.deletePlaylist(id)
+                },
+                onAddSongToPlaylist = { playlistId, song ->
+                    mainViewModel.addSongToPlaylist(playlistId, song) {
+                        onPlaylistExpandChange(userPlaylists.value.find { it.id == playlistId })
+                    }
+                },
+                onAddSongsToPlaylist = { playlistId, songs ->
+                    mainViewModel.addSongsToPlaylist(playlistId, songs) {
+                        onPlaylistExpandChange(userPlaylists.value.find { it.id == playlistId })
+                    }
+                },
+                onCreateAndAddSongs = { name, songs ->
+                    mainViewModel.createPlaylistAndAddSongs(name, songs) { newId ->
+                        onPlaylistExpandChange(userPlaylists.value.find { it.id == newId })
+                    }
+                },
+                onSongsAdded = { playlistId ->
+                    onPlaylistExpandChange(userPlaylists.value.find { it.id == playlistId })
+                },
+                onRemoveSongFromPlaylist = { playlistId, songRid ->
+                    mainViewModel.removeSongFromPlaylist(playlistId, songRid)
+                }
+            )
+        }
+        composable("rankings") {
+            RankingsScreen(
+                rankingsViewModel = hiltViewModel(),
+                mainViewModel = mainViewModel,
+                onSongClick = { _, _ -> },
+                initialBangId = null,
+                windowSizeClass = windowSizeClass
+            )
+        }
+        composable(
+            route = "rankings/{bangId}",
+            arguments = listOf(navArgument("bangId") { type = NavType.StringType })
+        ) { backStackEntry ->
+            val bangId = backStackEntry.arguments?.getString("bangId")
+            RankingsScreen(
+                rankingsViewModel = hiltViewModel(),
+                mainViewModel = mainViewModel,
+                onSongClick = { _, _ -> },
+                initialBangId = bangId,
+                windowSizeClass = windowSizeClass
+            )
+        }
+        composable(
+            route = Screen.Playlist.route,
+            arguments = listOf(navArgument("playlistId") { type = NavType.LongType })
+        ) { backStackEntry ->
+            val playlistId = backStackEntry.arguments?.getLong("playlistId") ?: 0L
+            PlaylistScreen(
+                windowSizeClass = windowSizeClass,
+                playlistId = playlistId,
+                onBackClick = { navController.popBackStack() },
+                onSongClick = { song, playlist ->
+                    mainViewModel.playSongPrev(song)
+                },
+                currentPlaylist = mainViewModel.currentPlaylist.value,
+                onPlayAll = {
+                    mainViewModel.playPlaylist(playlistId)
+                }
+            )
+        }
+        composable(Screen.Player.route) {
+            PlayerScreen(
+                windowSizeClass = windowSizeClass,
+                onBackClick = { navController.popBackStack() },
+                viewModel = mainViewModel
+            )
+        }
+    }
+
+    val showMiniPlayer = currentSong.value != null &&
+        currentDestination?.route != Screen.Player.route
+    if (showMiniPlayer) {
+        Box(modifier = Modifier.fillMaxSize()) {
+            MiniPlayer(
+                song = currentSong.value!!,
+                isPlaying = isPlaying.value,
+                isFavorite = favoriteSongs.value.contains(currentSong.value!!.rid),
+                onPlayPause = { mainViewModel.togglePlayPause() },
+                onToggleFavorite = { mainViewModel.toggleFavorite(currentSong.value!!) },
+                onPrevious = { mainViewModel.playPrevious() },
+                onNext = { mainViewModel.playNext() },
+                onClick = { navController.navigate(Screen.Player.route) },
+                modifier = Modifier.align(Alignment.BottomCenter)
+            )
+        }
+    }
+    // 更新弹窗（有新版本时自动弹出）
+    pendingVersionInfo?.let { versionInfo ->
+        UpdateDialog(
+            versionInfo = versionInfo,
+            updateEvent = updateEvent,
+            onConfirmDownload = { updateViewModel.onConfirmDownload() },
+            onDismiss = { updateViewModel.onDismiss() },
+            onConfirmInstall = { updateViewModel.onConfirmInstall() },
+            onDeferInstall = { updateViewModel.onDeferInstall() }
+        )
+    }
+}
+

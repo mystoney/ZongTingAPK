@@ -38,6 +38,7 @@ import androidx.compose.material3.LocalTextStyle
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SearchScreen(
+    windowSizeClass: androidx.compose.material3.windowsizeclass.WindowSizeClass,
     viewModel: SearchViewModel = hiltViewModel(),
     userPlaylists: List<UserPlaylist>,
     onSongClick: (Song, List<Song>) -> Unit,

@@ -63,6 +63,7 @@ import kotlinx.coroutines.launch
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
 fun PlayerScreen(
+    windowSizeClass: androidx.compose.material3.windowsizeclass.WindowSizeClass,
     onBackClick: () -> Unit,
     viewModel: MainViewModel
 ) {
