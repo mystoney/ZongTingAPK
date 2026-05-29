@@ -263,15 +263,30 @@ private fun HomeScreenContent(
                     }
                 }
 
-                // 推荐内容横向翻页（每日推荐 / 推荐歌单 / 热门歌曲）
+                // 推荐内容横向翻页（每日推荐 / 推荐歌单 / 热门歌曲 / 排行榜）
+                item {
+                    HotBangsRow(
+                        bangs = uiState.hotBangs,
+                        onBangClick = onBangClick
+                    )
+                }
+                item {
+                    DailyRecommendRow(
+                        playlists = uiState.playlists.take(6),
+                        onPlaylistClick = onPlaylistClick,
+                        onPlaylistPlay = onPlaylistPlay
+                    )
+                }
                 item {
                     RecommendPager(
                         playlists = uiState.playlists,
                         hotSongs = uiState.hotSongs,
+                        hotBangs = uiState.hotBangs,
                         onPlaylistClick = onPlaylistClick,
                         onPlaylistPlay = onPlaylistPlay,
                         onSongClick = onSongClick,
                         onSongPlay = onSongPlay,
+                        onBangClick = onBangClick,
                         isExpanded = isExpanded,
                         availableWidthDp = availableWidthDp
                     )
@@ -312,7 +327,7 @@ fun BannerCarousel(banners: List<Banner>) {
             state = pagerState,
             modifier = Modifier
                 .fillMaxWidth()
-                .height(180.dp)
+                .height(140.dp)
                 .padding(horizontal = 16.dp)
         ) { page ->
             val banner = banners[page]
@@ -436,6 +451,8 @@ fun PlaylistCard(
 /** 热门榜单 — 横向滚动卡片 */
 @Composable
 fun HotBangsRow(bangs: List<Bang>, onBangClick: (String) -> Unit) {
+    val screenWidth = LocalConfiguration.current.screenWidthDp
+    val cardWidth = (screenWidth - 32 - 24) / 3
     LazyRow(
         modifier = Modifier
             .fillMaxWidth()
@@ -444,7 +461,7 @@ fun HotBangsRow(bangs: List<Bang>, onBangClick: (String) -> Unit) {
         horizontalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         items(bangs) { bang ->
-            BangCard(bang = bang, onClick = { onBangClick(bang.id) })
+            BangCard(bang = bang, onClick = { onBangClick(bang.id) }, cardWidth = cardWidth)
         }
     }
 }
@@ -571,18 +588,20 @@ fun SongListItem(
 fun RecommendPager(
     playlists: List<Playlist>,
     hotSongs: List<Song>,
+    hotBangs: List<Bang>,
     onPlaylistClick: (Long) -> Unit,
     onPlaylistPlay: (Long) -> Unit,
     onSongClick: (Song, List<Song>) -> Unit,
     onSongPlay: (Song) -> Unit,
+    onBangClick: (String) -> Unit,
     isExpanded: Boolean = false,
     availableWidthDp: Dp? = null
 ) {
-    // 顺序：热门歌曲(0) / 每日推荐(1) / 推荐歌单(2)
-    // Expanded 模式：合并为 2 页（热门歌曲 / 推荐）
+    // 顺序：热门歌曲(0) / 每日推荐(1) / 推荐歌单(2) / 排行榜(3)
+    // Expanded 模式：合并为 3 页（热门歌曲 / 推荐 / 排行榜）
     val pagerState = rememberPagerState(
         initialPage = if (isExpanded) 1 else 1,
-        pageCount = { if (isExpanded) 2 else 3 }
+        pageCount = { if (isExpanded) 3 else 4 }
     )
     val scope = rememberCoroutineScope()
 
@@ -594,8 +613,8 @@ fun RecommendPager(
                 .padding(horizontal = 16.dp, vertical = 8.dp),
             horizontalArrangement = Arrangement.spacedBy(0.dp)
         ) {
-            // Expanded：热门歌曲(0) / 推荐(1)；普通：热门歌曲(0) / 每日推荐(1) / 推荐歌单(2)
-            val titles = if (isExpanded) listOf("热门歌曲", "推荐") else listOf("热门歌曲", "每日推荐", "推荐歌单")
+            // Expanded：热门歌曲(0) / 推荐(1) / 排行榜(2)；普通：热门歌曲(0) / 每日推荐(1) / 推荐歌单(2) / 排行榜(3)
+            val titles = if (isExpanded) listOf("热门歌曲", "推荐", "排行榜") else listOf("热门歌曲", "每日推荐", "推荐歌单", "排行榜")
             titles.forEachIndexed { index, title ->
                 val isSelected = pagerState.currentPage == index
                 Box(
@@ -626,8 +645,8 @@ fun RecommendPager(
                 .padding(horizontal = 16.dp)
         ) {
             Row(modifier = Modifier.fillMaxWidth()) {
-                repeat(if (isExpanded) 2 else 3) { index ->
-                    val widthFraction = if (pagerState.currentPage == index) 1f / (if (isExpanded) 2 else 3) else 0f
+                repeat(if (isExpanded) 3 else 4) { index ->
+                    val widthFraction = if (pagerState.currentPage == index) 1f / (if (isExpanded) 3 else 4) else 0f
                     Box(
                         modifier = Modifier
                             .weight(1f)
@@ -643,22 +662,32 @@ fun RecommendPager(
             }
         }
 
+        // 计算每页高度，避免 HorizontalPager 高度不确定
+        // 使用 availableWidthDp 计算卡片尺寸，与 RecommendPage 保持一致
+        val effW = availableWidthDp?.value ?: 1920f
+        val cardW = ((effW - 32 - 40) / 6).toInt()
+        val pageHeight = 60 + cardW * 2 + 12 + 24  // 标题 + 2行网格 + 行间距 + 底部padding
+
         // 横向翻页内容
         HorizontalPager(
             state = pagerState,
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(pageHeight.dp),
             beyondBoundsPageCount = 0
         ) { page ->
             if (isExpanded) {
-                // Expanded：2页（热门歌曲 / 推荐）
+                // Expanded：3页（热门歌曲 / 推荐 / 排行榜）
                 when (page) {
                     0 -> RecommendPage(
                         playlists = emptyList(),
                         hotSongs = hotSongs,
+                        hotBangs = hotBangs,
                         onPlaylistClick = onPlaylistClick,
                         onPlaylistPlay = onPlaylistPlay,
                         onSongClick = onSongClick,
                         onSongPlay = onSongPlay,
+                        onBangClick = onBangClick,
                         pageType = PageType.HOT_SONG,
                         isExpanded = isExpanded,
                         availableWidthDp = availableWidthDp
@@ -666,25 +695,42 @@ fun RecommendPager(
                     1 -> RecommendPage(
                         playlists = playlists,
                         hotSongs = emptyList(),
+                        hotBangs = hotBangs,
                         onPlaylistClick = onPlaylistClick,
                         onPlaylistPlay = onPlaylistPlay,
                         onSongClick = onSongClick,
                         onSongPlay = onSongPlay,
+                        onBangClick = onBangClick,
                         pageType = PageType.PLAYLIST,
+                        isExpanded = isExpanded,
+                        availableWidthDp = availableWidthDp
+                    )
+                    2 -> RecommendPage(
+                        playlists = emptyList(),
+                        hotSongs = emptyList(),
+                        hotBangs = hotBangs,
+                        onPlaylistClick = onPlaylistClick,
+                        onPlaylistPlay = onPlaylistPlay,
+                        onSongClick = onSongClick,
+                        onSongPlay = onSongPlay,
+                        onBangClick = onBangClick,
+                        pageType = PageType.RANKINGS,
                         isExpanded = isExpanded,
                         availableWidthDp = availableWidthDp
                     )
                 }
             } else {
-                // 普通模式：3页（热门歌曲 / 每日推荐 / 推荐歌单）
+                // 普通模式：4页（热门歌曲 / 每日推荐 / 推荐歌单 / 排行榜）
                 when (page) {
                     0 -> RecommendPage(
                         playlists = emptyList(),
                         hotSongs = hotSongs,
+                        hotBangs = hotBangs,
                         onPlaylistClick = onPlaylistClick,
                         onPlaylistPlay = onPlaylistPlay,
                         onSongClick = onSongClick,
                         onSongPlay = onSongPlay,
+                        onBangClick = onBangClick,
                         pageType = PageType.HOT_SONG,
                         isExpanded = isExpanded,
                         availableWidthDp = availableWidthDp
@@ -692,10 +738,12 @@ fun RecommendPager(
                     1 -> RecommendPage(
                         playlists = playlists.take(6),
                         hotSongs = emptyList(),
+                        hotBangs = hotBangs,
                         onPlaylistClick = onPlaylistClick,
                         onPlaylistPlay = onPlaylistPlay,
                         onSongClick = onSongClick,
                         onSongPlay = onSongPlay,
+                        onBangClick = onBangClick,
                         pageType = PageType.DAILY,
                         isExpanded = isExpanded,
                         availableWidthDp = availableWidthDp
@@ -703,11 +751,26 @@ fun RecommendPager(
                     2 -> RecommendPage(
                         playlists = playlists.drop(6),
                         hotSongs = emptyList(),
+                        hotBangs = hotBangs,
                         onPlaylistClick = onPlaylistClick,
                         onPlaylistPlay = onPlaylistPlay,
                         onSongClick = onSongClick,
                         onSongPlay = onSongPlay,
+                        onBangClick = onBangClick,
                         pageType = PageType.PLAYLIST,
+                        isExpanded = isExpanded,
+                        availableWidthDp = availableWidthDp
+                    )
+                    3 -> RecommendPage(
+                        playlists = emptyList(),
+                        hotSongs = emptyList(),
+                        hotBangs = hotBangs,
+                        onPlaylistClick = onPlaylistClick,
+                        onPlaylistPlay = onPlaylistPlay,
+                        onSongClick = onSongClick,
+                        onSongPlay = onSongPlay,
+                        onBangClick = onBangClick,
+                        pageType = PageType.RANKINGS,
                         isExpanded = isExpanded,
                         availableWidthDp = availableWidthDp
                     )
@@ -717,17 +780,19 @@ fun RecommendPager(
     }
 }
 
-enum class PageType { DAILY, PLAYLIST, HOT_SONG }
+enum class PageType { DAILY, PLAYLIST, HOT_SONG, RANKINGS }
 
 /** 单页推荐内容（复用现有 PlaylistCard 样式） */
 @Composable
 private fun RecommendPage(
     playlists: List<Playlist>,
     hotSongs: List<Song>,
+    hotBangs: List<Bang>,
     onPlaylistClick: (Long) -> Unit,
     onPlaylistPlay: (Long) -> Unit,
     onSongClick: (Song, List<Song>) -> Unit,
     onSongPlay: (Song) -> Unit,
+    onBangClick: (String) -> Unit,
     pageType: PageType,
     isExpanded: Boolean = false,
     availableWidthDp: Dp? = null
@@ -739,91 +804,148 @@ private fun RecommendPage(
     val horizontalPadding = 32 // 16dp * 2
     // Expanded 固定卡片宽度（高度约160dp，按1:1比例）
     val cardSize = 160
-    val cardWidth = if (isExpanded) cardSize else {
-        val columnSpacing = 8 * 2
-        ((effectiveWidth - horizontalPadding - columnSpacing) / 3).toInt()
-    }
-    val cardHeight = cardWidth + 48
-
-    // 平板横屏 Expanded 模式：5列 x 2行 固定网格（10首歌单），miniplayer 自然遮挡底部
-    if (isExpanded) {
-        // Expanded 模式固定 5 列 2 行
-        val gridColumns = 5
-        val gridRows = 2
-        val gridItems = playlists.take(gridColumns * gridRows)
-        val columnSpacing = 8 * (gridColumns - 1)
-        val cardWidth = ((effectiveWidth - horizontalPadding - columnSpacing) / gridColumns).toInt()
-        val cardHeight = cardWidth + 48
-
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 8.dp)
-        ) {
-            Text(
-                text = "推荐歌单",
-                style = MaterialTheme.typography.titleMedium,
-                color = MaterialTheme.colorScheme.onSurface,
-                modifier = Modifier.padding(bottom = 8.dp)
-            )
-            // 5列 x 2行网格
-            gridItems.chunked(gridColumns).forEachIndexed { rowIndex, rowItems ->
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    rowItems.forEach { playlist ->
-                        PlaylistCard(
-                            playlist,
-                            { onPlaylistClick(playlist.id) },
-                            { onPlaylistPlay(playlist.id) },
-                            cardWidth,
-                            cardHeight
-                        )
-                    }
-                    // 补齐空白格子
-                    repeat(gridColumns - rowItems.size) {
-                        Spacer(Modifier.weight(1f))
-                    }
-                }
-                if (rowIndex < gridRows - 1) {
-                    Spacer(modifier = Modifier.height(12.dp))
-                }
-            }
-            // 热门歌曲（2行）
-            if (hotSongs.isNotEmpty()) {
-                Spacer(modifier = Modifier.height(16.dp))
-                Text(
-                    text = "热门歌曲",
-                    style = MaterialTheme.typography.titleMedium,
-                    color = MaterialTheme.colorScheme.onSurface,
-                    modifier = Modifier.padding(bottom = 8.dp)
-                )
-                hotSongs.take(gridColumns * gridRows).chunked(gridColumns).forEachIndexed { rowIndex, rowItems ->
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        rowItems.forEach { song ->
-                            SongCard(
-                                song = song,
-                                allSongs = hotSongs,
-                                onClick = { onSongClick(song, hotSongs) },
-                                onPlayClick = { onSongPlay(song) },
-                                cardWidth = cardWidth
-                            )
-                        }
-                        repeat(gridColumns - rowItems.size) {
-                            Spacer(Modifier.weight(1f))
-                        }
-                    }
-                    if (rowIndex < 1) {
-                        Spacer(modifier = Modifier.height(12.dp))
-                    }
-                }
-            }
+        val cardWidth = if (isExpanded) cardSize else {
+            val columnSpacing = 8 * 2
+            ((effectiveWidth - horizontalPadding - columnSpacing) / 3).toInt()
         }
-    } else {
+
+        // 平板横屏 Expanded 模式：6列 x 2行 固定网格，miniplayer 自然遮挡底部
+        if (isExpanded) {
+            val gridColumns = 6
+            val gridRows = 2
+
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 8.dp)
+            ) {
+                when (pageType) {
+                    PageType.HOT_SONG -> {
+                        val gridItems = playlists.take(gridColumns * gridRows)
+                        Text(
+                            text = "推荐歌单",
+                            style = MaterialTheme.typography.titleMedium,
+                            color = MaterialTheme.colorScheme.onSurface,
+                            modifier = Modifier.padding(bottom = 8.dp)
+                        )
+                        gridItems.chunked(gridColumns).forEachIndexed { rowIndex, rowItems ->
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                rowItems.forEach { playlist ->
+                                    PlaylistCard(
+                                        playlist,
+                                        { onPlaylistClick(playlist.id) },
+                                        { onPlaylistPlay(playlist.id) },
+                                        cardWidth,
+                                        cardWidth
+                                    )
+                                }
+                                repeat(gridColumns - rowItems.size) {
+                                    Spacer(Modifier.weight(1f))
+                                }
+                            }
+                            if (rowIndex < gridRows - 1) {
+                                Spacer(modifier = Modifier.height(12.dp))
+                            }
+                        }
+                        if (hotSongs.isNotEmpty()) {
+                            Spacer(modifier = Modifier.height(16.dp))
+                            Text(
+                                text = "热门歌曲",
+                                style = MaterialTheme.typography.titleMedium,
+                                color = MaterialTheme.colorScheme.onSurface,
+                                modifier = Modifier.padding(bottom = 8.dp)
+                            )
+                            hotSongs.take(gridColumns * gridRows).chunked(gridColumns).forEachIndexed { rowIndex, rowItems ->
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    rowItems.forEach { song ->
+                                        SongCard(
+                                            song = song,
+                                            allSongs = hotSongs,
+                                            onClick = { onSongClick(song, hotSongs) },
+                                            onPlayClick = { onSongPlay(song) },
+                                            cardWidth = cardWidth
+                                        )
+                                    }
+                                    repeat(gridColumns - rowItems.size) {
+                                        Spacer(Modifier.weight(1f))
+                                    }
+                                }
+                                if (rowIndex < 1) {
+                                    Spacer(modifier = Modifier.height(12.dp))
+                                }
+                            }
+                        }
+                    }
+                    PageType.PLAYLIST, PageType.DAILY -> {
+                        val gridItems = playlists.take(gridColumns * gridRows)
+                        Text(
+                            text = if (pageType == PageType.DAILY) "每日推荐" else "推荐歌单",
+                            style = MaterialTheme.typography.titleMedium,
+                            color = MaterialTheme.colorScheme.onSurface,
+                            modifier = Modifier.padding(bottom = 8.dp)
+                        )
+                        gridItems.chunked(gridColumns).forEachIndexed { rowIndex, rowItems ->
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                rowItems.forEach { playlist ->
+                                    PlaylistCard(
+                                        playlist,
+                                        { onPlaylistClick(playlist.id) },
+                                        { onPlaylistPlay(playlist.id) },
+                                        cardWidth,
+                                        cardWidth
+                                    )
+                                }
+                                repeat(gridColumns - rowItems.size) {
+                                    Spacer(Modifier.weight(1f))
+                                }
+                            }
+                            if (rowIndex < gridRows - 1) {
+                                Spacer(modifier = Modifier.height(12.dp))
+                            }
+                        }
+                    }
+                    PageType.RANKINGS -> {
+                        val gridItems = hotBangs.take(gridColumns * gridRows)
+                        Text(
+                            text = "排行榜",
+                            style = MaterialTheme.typography.titleMedium,
+                            color = MaterialTheme.colorScheme.onSurface,
+                            modifier = Modifier.padding(bottom = 8.dp)
+                        )
+                        gridItems.chunked(gridColumns).forEachIndexed { rowIndex, rowItems ->
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                rowItems.forEach { bang ->
+                                    BangCard(
+                                        bang = bang,
+                                        onClick = { onBangClick(bang.id) },
+                                        cardWidth = cardWidth
+                                    )
+                                }
+                                repeat(gridColumns - rowItems.size) {
+                                    Spacer(Modifier.weight(1f))
+                                }
+                            }
+                            if (rowIndex < gridRows - 1) {
+                                Spacer(modifier = Modifier.height(12.dp))
+                            }
+                        }
+                    }
+                }
+            }
+            val cardHeight = cardWidth + 48
+        } else {
         // 普通模式：固定3列网格
         val columnSpacing = 8 * 2
         val actualCardWidth = ((effectiveWidth - horizontalPadding - columnSpacing) / 3).toInt()
@@ -861,9 +983,31 @@ private fun RecommendPage(
                         }
                     }
                 }
-                else -> {
+                PageType.RANKINGS -> {
+                    val rows = hotBangs.chunked(3)
+                    rows.forEach { rowItems ->
+                        item {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                rowItems.forEach { bang ->
+                                    BangCard(
+                                        bang = bang,
+                                        onClick = { onBangClick(bang.id) },
+                                        cardWidth = actualCardWidth
+                                    )
+                                }
+                                repeat(3 - rowItems.size) {
+                                    Spacer(Modifier.weight(1f))
+                                }
+                            }
+                        }
+                    }
+                }
+                PageType.PLAYLIST, PageType.DAILY -> {
                     val rows = playlists.chunked(3)
-                    rows.forEachIndexed { rowIndex, rowItems ->
+                    rows.forEach { rowItems ->
                         item {
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
@@ -944,6 +1088,40 @@ fun SongCard(
         }
         Text(
             text = song.name,
+            style = MaterialTheme.typography.bodyMedium,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.padding(top = 4.dp)
+        )
+    }
+}
+
+/** 排行榜图标卡片 */
+@Composable
+fun BangCard(
+    bang: Bang,
+    onClick: () -> Unit,
+    cardWidth: Int
+) {
+    Column(
+        modifier = Modifier
+            .width(cardWidth.dp)
+            .clickable(onClick = onClick)
+    ) {
+        Box(
+            modifier = Modifier
+                .size(cardWidth.dp)
+                .clip(RoundedCornerShape(8.dp))
+        ) {
+            AsyncImage(
+                model = bang.pic,
+                contentDescription = bang.name,
+                modifier = Modifier.fillMaxSize(),
+                contentScale = ContentScale.Crop
+            )
+        }
+        Text(
+            text = bang.name,
             style = MaterialTheme.typography.bodyMedium,
             maxLines = 2,
             overflow = TextOverflow.Ellipsis,

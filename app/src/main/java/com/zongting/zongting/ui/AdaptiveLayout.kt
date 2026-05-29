@@ -63,7 +63,7 @@ object AdaptiveLayout {
 }
 
 /** 平板横屏内容区最大宽度（防止封面/文字在大屏上拉伸过度） */
-const val PAD_MAX_CONTENT_WIDTH_DP = 1200
+const val PAD_MAX_CONTENT_WIDTH_DP = 1920
 
 /** 平板横屏侧边 NavigationRail 宽度 */
 const val PAD_NAV_RAIL_WIDTH_DP = 80
