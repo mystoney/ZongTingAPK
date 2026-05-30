@@ -1817,6 +1817,10 @@ fun PlayerScreenLandscape(
                     .fillMaxWidth(),
                 color = Color(0xFF1A1A2E).copy(alpha = 0.95f)
             ) {
+                val screenWidth = LocalConfiguration.current.screenWidthDp
+                // 按钮尺寸随屏幕宽度自适应：手机竖屏基准36dp，横屏/大屏按比例放大
+                val btnSize = (36 + (screenWidth - 360) * 0.05f).coerceIn(36f, 48f).dp
+
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -1836,7 +1840,7 @@ fun PlayerScreenLandscape(
                             imageVector = icon,
                             contentDescription = desc,
                             tint = Color.White.copy(alpha = 0.8f),
-                            modifier = Modifier.size(24.dp)
+                            modifier = Modifier.size(btnSize)
                         )
                     }
 
@@ -1846,23 +1850,23 @@ fun PlayerScreenLandscape(
                             imageVector = Icons.Default.SkipPrevious,
                             contentDescription = "上一首",
                             tint = Color.White,
-                            modifier = Modifier.size(36.dp)
+                            modifier = Modifier.size(btnSize)
                         )
                     }
 
-                    // 播放/暂停（圆形大按钮）
+                    // 播放/暂停
                     FilledIconButton(
                         onClick = onTogglePlay,
                         colors = IconButtonDefaults.filledIconButtonColors(
                             containerColor = Color.White
                         ),
-                        modifier = Modifier.size(64.dp)
+                        modifier = Modifier.size(btnSize * 1.6f)
                     ) {
                         Icon(
                             imageVector = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
                             contentDescription = if (isPlaying) "暂停" else "播放",
                             tint = Color(0xFF0D0D1A),
-                            modifier = Modifier.size(36.dp)
+                            modifier = Modifier.size(btnSize)
                         )
                     }
 
@@ -1872,7 +1876,7 @@ fun PlayerScreenLandscape(
                             imageVector = Icons.Default.SkipNext,
                             contentDescription = "下一首",
                             tint = Color.White,
-                            modifier = Modifier.size(36.dp)
+                            modifier = Modifier.size(btnSize)
                         )
                     }
 
@@ -1882,7 +1886,7 @@ fun PlayerScreenLandscape(
                             imageVector = Icons.AutoMirrored.Filled.PlaylistPlay,
                             contentDescription = "播放列表",
                             tint = Color.White.copy(alpha = 0.8f),
-                            modifier = Modifier.size(28.dp)
+                            modifier = Modifier.size(btnSize)
                         )
                     }
                 }
