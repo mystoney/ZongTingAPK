@@ -1223,7 +1223,7 @@ private fun LyricPage(
                     modifier = Modifier
                         .align(Alignment.CenterEnd)
                         .padding(end = 8.dp)
-                        .fillMaxHeight(0.65f)
+                        .fillMaxHeight(0.95f)
                         .pointerInput(Unit) {
                             detectVerticalDragGestures(
                                 onDragStart = {
