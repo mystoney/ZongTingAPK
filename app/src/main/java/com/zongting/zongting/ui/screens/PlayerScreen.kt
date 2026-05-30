@@ -16,6 +16,7 @@ import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.pager.HorizontalPager
@@ -1890,17 +1891,27 @@ fun PlayerScreenLandscape(
                                         val isCurrent = index == currentIndex
                                         val alpha = if (isCurrent) 1f else 0.45f
                                         val fontSize = if (isCurrent) 20.sp else 16.sp
-                                        val color = if (isCurrent) accentColor else Color.White
 
-                                        Text(
-                                            text = line.text.ifEmpty { " " },
-                                            color = color.copy(alpha = alpha),
-                                            fontSize = fontSize,
-                                            fontWeight = if (isCurrent) FontWeight.Bold else FontWeight.Normal,
-                                            textAlign = TextAlign.Center,
-                                            modifier = Modifier
-                                                .fillMaxWidth()
-                                        )
+                                        Box(contentAlignment = Alignment.Center) {
+                                            if (isCurrent) {
+                                                Text(
+                                                    text = line.text.ifEmpty { " " },
+                                                    color = Color.Black.copy(alpha = 0.7f),
+                                                    fontSize = fontSize,
+                                                    fontWeight = FontWeight.Bold,
+                                                    textAlign = TextAlign.Center,
+                                                    modifier = Modifier.offset(x = 1.5.dp, y = 1.5.dp)
+                                                )
+                                            }
+                                            Text(
+                                                text = line.text.ifEmpty { " " },
+                                                color = Color.White.copy(alpha = alpha),
+                                                fontSize = fontSize,
+                                                fontWeight = if (isCurrent) FontWeight.Bold else FontWeight.Normal,
+                                                textAlign = TextAlign.Center,
+                                                modifier = Modifier.fillMaxWidth()
+                                            )
+                                        }
                                     }
                                 }
                             }
