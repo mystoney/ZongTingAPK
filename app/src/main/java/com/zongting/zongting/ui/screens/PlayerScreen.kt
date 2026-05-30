@@ -1089,10 +1089,10 @@ private fun LyricPage(
                         }
                         Box(
                             modifier = Modifier
-                                .offset(x = 1.dp, y = thumbOffset - 5.dp)
-                                .size(10.dp)
+                                .offset(x = (-3).dp, y = thumbOffset - 6.dp)
+                                .size(12.dp)
                                 .background(
-                                    Color.White,
+                                    Color(0xFFE53935),
                                     CircleShape
                                 )
                         )
