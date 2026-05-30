@@ -523,23 +523,25 @@ private fun PlayerBottomBar(
     if (showPlaylist) {
         ModalBottomSheet(
             onDismissRequest = { onShowPlaylist(false) },
-            sheetState = rememberModalBottomSheetState()
+            sheetState = rememberModalBottomSheetState(),
+            containerColor = Color(0xF20B1E10)
         ) {
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
+                    .background(Color(0xF20B1E10))
                     .padding(horizontal = 16.dp)
                     .padding(bottom = 32.dp)
             ) {
                 Text(
                     text = "当前播放列表 (${currentPlaylist.size}首)",
-                    style = MaterialTheme.typography.titleMedium,
+                    style = MaterialTheme.typography.titleLarge,
                     modifier = Modifier.padding(bottom = 16.dp)
                 )
                 if (currentPlaylist.isEmpty()) {
                     Text(
                         text = "播放列表为空",
-                        style = MaterialTheme.typography.bodyMedium,
+                        style = MaterialTheme.typography.bodyLarge,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.padding(vertical = 32.dp)
                     )
@@ -547,6 +549,7 @@ private fun PlayerBottomBar(
                     LazyColumn(
                         modifier = Modifier
                             .fillMaxWidth()
+                            .background(Color(0xF20B1E10))
                             .heightIn(max = 400.dp),
                         state = playlistListState,
                     ) {
@@ -564,14 +567,14 @@ private fun PlayerBottomBar(
                             ) {
                                 Text(
                                     text = "${index + 1}",
-                                    style = MaterialTheme.typography.bodySmall,
+                                    style = MaterialTheme.typography.bodyMedium,
                                     color = if (isCurrentSong) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
                                     modifier = Modifier.width(32.dp)
                                 )
                                 Column(modifier = Modifier.weight(1f)) {
                                     Text(
                                         text = song.name,
-                                        style = MaterialTheme.typography.bodyMedium,
+                                        style = MaterialTheme.typography.bodyLarge,
                                         color = if (isCurrentSong) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
                                         fontWeight = if (isCurrentSong) FontWeight.Bold else FontWeight.Normal,
                                         maxLines = 1,
@@ -579,7 +582,7 @@ private fun PlayerBottomBar(
                                     )
                                     Text(
                                         text = song.artist,
-                                        style = MaterialTheme.typography.bodySmall,
+                                        style = MaterialTheme.typography.bodyMedium,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                                         maxLines = 1,
                                         overflow = TextOverflow.Ellipsis
@@ -1384,11 +1387,12 @@ private fun SavePlaylistDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("保存到歌单") },
+        containerColor = Color(0xF20B1E10),
+        title = { Text("保存到歌单", style = MaterialTheme.typography.titleLarge) },
         text = {
             Column {
                 if (songCount > 0) {
-                    Text("将 $songCount 首歌曲保存到歌单", style = MaterialTheme.typography.bodyMedium)
+                    Text("将 $songCount 首歌曲保存到歌单", style = MaterialTheme.typography.bodyLarge)
                     Spacer(modifier = Modifier.height(12.dp))
                 }
                 if (showNewPlaylistInput) {
@@ -1396,6 +1400,7 @@ private fun SavePlaylistDialog(
                         value = newPlaylistName,
                         onValueChange = { newPlaylistName = it },
                         label = { Text("歌单名称") },
+                        textStyle = LocalTextStyle.current.copy(fontSize = 16.sp),
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth()
                     )
@@ -1404,7 +1409,7 @@ private fun SavePlaylistDialog(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.End
                     ) {
-                        TextButton(onClick = { showNewPlaylistInput = false }) { Text("取消") }
+                        TextButton(onClick = { showNewPlaylistInput = false }) { Text("取消", style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold), color = Color.White) }
                         TextButton(
                             onClick = {
                                 if (newPlaylistName.isNotBlank()) {
@@ -1414,11 +1419,11 @@ private fun SavePlaylistDialog(
                                     onDismiss()
                                 }
                             }
-                        ) { Text("创建") }
+                        ) { Text("创建", style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold), color = Color.White) }
                     }
                 } else {
                     if (playlists.isEmpty()) {
-                        Text("暂无歌单，请先创建", style = MaterialTheme.typography.bodyMedium)
+                        Text("暂无歌单，请先创建", style = MaterialTheme.typography.bodyLarge)
                     } else {
                         playlists.forEach { playlist ->
                             Row(
@@ -1439,7 +1444,7 @@ private fun SavePlaylistDialog(
                                 Spacer(modifier = Modifier.width(12.dp))
                                 Column {
                                     Text(playlist.name, style = MaterialTheme.typography.bodyLarge)
-                                    Text("${playlist.songs.size}首", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    Text("${playlist.songs.size}首", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                                 }
                             }
                         }
@@ -1451,14 +1456,14 @@ private fun SavePlaylistDialog(
                     ) {
                         Icon(Icons.Default.Add, contentDescription = null)
                         Spacer(modifier = Modifier.width(4.dp))
-                        Text("创建新歌单")
+                        Text("创建新歌单", style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold), color = Color.White)
                     }
                 }
             }
         },
         confirmButton = {},
         dismissButton = {
-            TextButton(onClick = onDismiss) { Text("关闭") }
+            TextButton(onClick = onDismiss) { Text("关闭", style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold), color = Color.White) }
         }
     )
 }

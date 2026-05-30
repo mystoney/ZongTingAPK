@@ -17,6 +17,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.TextStyle
@@ -936,12 +937,14 @@ private fun AddToPlaylistSheet(
     if (showCreate) {
         AlertDialog(
             onDismissRequest = { showCreate = false },
-            title = { Text("新建歌单") },
+            containerColor = Color(0xF20B1E10),
+            title = { Text("新建歌单", style = MaterialTheme.typography.titleLarge) },
             text = {
                 OutlinedTextField(
                     value = newName,
                     onValueChange = { newName = it },
                     label = { Text("歌单名称") },
+                    textStyle = LocalTextStyle.current.copy(fontSize = 16.sp),
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth()
                 )
@@ -950,10 +953,10 @@ private fun AddToPlaylistSheet(
                 TextButton(
                     onClick = { if (newName.isNotBlank()) { onCreateAndAdd(newName) } },
                     enabled = newName.isNotBlank()
-                ) { Text("创建") }
+                ) { Text("创建", style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold), color = Color.White) }
             },
             dismissButton = {
-                TextButton(onClick = { showCreate = false }) { Text("取消") }
+                TextButton(onClick = { showCreate = false }) { Text("取消", style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold), color = Color.White) }
             }
         )
         return
@@ -961,7 +964,8 @@ private fun AddToPlaylistSheet(
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("添加到歌单") },
+        containerColor = Color(0xF20B1E10),
+        title = { Text("添加到歌单", style = MaterialTheme.typography.titleLarge) },
         text = {
             Column {
                 Text(
@@ -993,6 +997,7 @@ private fun AddToPlaylistSheet(
                     Text(
                         "还没有歌单，创建一个吧",
                         modifier = Modifier.padding(vertical = 16.dp),
+                        style = MaterialTheme.typography.bodyLarge,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 } else {
@@ -1011,7 +1016,7 @@ private fun AddToPlaylistSheet(
                                 Text(playlist.name, style = MaterialTheme.typography.titleMedium)
                                 Text(
                                     "${playlist.songs.size} 首",
-                                    style = MaterialTheme.typography.bodyMedium,
+                                    style = MaterialTheme.typography.bodyLarge,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
                             }
@@ -1022,7 +1027,7 @@ private fun AddToPlaylistSheet(
         },
         confirmButton = {},
         dismissButton = {
-            TextButton(onClick = onDismiss) { Text("取消") }
+            TextButton(onClick = onDismiss) { Text("取消", style = MaterialTheme.typography.bodyLarge) }
         }
     )
 }
@@ -1036,12 +1041,14 @@ private fun CreatePlaylistDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("创建歌单") },
+        containerColor = Color(0xF20B1E10),
+        title = { Text("创建歌单", style = MaterialTheme.typography.titleLarge) },
         text = {
             OutlinedTextField(
                 value = name,
                 onValueChange = { name = it },
                 label = { Text("歌单名称") },
+                textStyle = LocalTextStyle.current.copy(fontSize = 16.sp),
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth()
             )
@@ -1051,12 +1058,12 @@ private fun CreatePlaylistDialog(
                 onClick = { if (name.isNotBlank()) onConfirm(name) },
                 enabled = name.isNotBlank()
             ) {
-                Text("创建")
+                Text("创建", style = MaterialTheme.typography.bodyLarge)
             }
         },
         dismissButton = {
             TextButton(onClick = onDismiss) {
-                Text("取消")
+                Text("取消", style = MaterialTheme.typography.bodyLarge)
             }
         }
     )

@@ -12,16 +12,22 @@ import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.*
+import androidx.compose.foundation.shape.CircleShape
 
 import androidx.compose.material3.windowsizeclass.WindowSizeClass
 import androidx.compose.material3.windowsizeclass.WindowWidthSizeClass
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.unit.sp
+import coil.compose.AsyncImage
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.zongting.zongting.data.model.Bang
 import com.zongting.zongting.data.model.Song
@@ -200,8 +206,8 @@ fun RankingsScreen(
                     color = MaterialTheme.colorScheme.outlineVariant
                 )
 
-                // ── 右侧：歌曲列表 ─────────────────────────────────────
-                Box(modifier = Modifier.weight(1f)) {
+                // ── 右侧：歌曲列表（网格） ─────────────────────────────────
+                BoxWithConstraints(modifier = Modifier.weight(1f)) {
                     if (uiState.displayedSongs.isEmpty() && uiState.selectedBang != null) {
                         Box(
                             modifier = Modifier.fillMaxSize(),
@@ -214,32 +220,49 @@ fun RankingsScreen(
                             )
                         }
                     } else {
+                        val isExpanded = windowSizeClass?.widthSizeClass == WindowWidthSizeClass.Expanded
+                        val columns = if (isExpanded) 6 else 3
+                        val spacing = if (isExpanded) 6.dp else 8.dp
+                        val horizontalPadding = 6.dp * 2
+                        val totalSpacing = spacing * (columns - 1) + horizontalPadding
+                        val availableWidth = maxWidth - totalSpacing
+                        val cardWidth = ((availableWidth - spacing * (columns - 1)) / columns).coerceAtLeast(50.dp)
+
                         LazyColumn(
                             modifier = Modifier.fillMaxSize(),
-                            contentPadding = PaddingValues(start = 6.dp, top = 0.dp, end = 6.dp, bottom = 165.dp),
-                            verticalArrangement = Arrangement.spacedBy(4.dp)
+                            contentPadding = PaddingValues(horizontal = 6.dp, vertical = 8.dp),
+                            verticalArrangement = Arrangement.spacedBy(spacing)
                         ) {
                             item {
                                 if (uiState.selectedBang != null) {
                                     Text(
                                         text = uiState.selectedBang!!.name,
                                         style = MaterialTheme.typography.titleMedium,
-                                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 8.dp)
+                                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 4.dp)
                                     )
                                 }
                             }
-
-                            itemsIndexed(uiState.displayedSongs) { index, song ->
-                                RankingSongItem(
-                                    rank = index + 1,
-                                    song = song,
-                                    showFeeBadge = uiState.source == "netease",
-                                    onClick = {
-                                        // 插入到当前播放歌曲的前一首，立即播放
-                                        mainViewModel.playSongPrev(song)
-                                        onSongClick(song, uiState.displayedSongs)
+                            items(uiState.displayedSongs.chunked(columns).size) { rowIndex ->
+                                val rowItems = uiState.displayedSongs.chunked(columns).getOrNull(rowIndex) ?: emptyList()
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.spacedBy(spacing)
+                                ) {
+                                    rowItems.forEach { song ->
+                                        RankingSongCard(
+                                            song = song,
+                                            cardWidth = cardWidth.value.toInt(),
+                                            showFeeBadge = uiState.source == "netease",
+                                            onClick = {
+                                                mainViewModel.playSongPrev(song)
+                                                onSongClick(song, uiState.displayedSongs)
+                                            }
+                                        )
                                     }
-                                )
+                                    repeat((columns - rowItems.size).coerceAtLeast(0)) {
+                                        Spacer(modifier = Modifier.weight(1f))
+                                    }
+                                }
                             }
                         }
                     }
@@ -347,16 +370,18 @@ fun RankingSongItem(
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // 排名号
+            // 封面图 + 收费徽章
             Box(
-                modifier = Modifier.width(36.dp),
-                contentAlignment = Alignment.Center
+                modifier = Modifier.size(36.dp),
+                contentAlignment = Alignment.TopEnd
             ) {
-                Text(
-                    text = "$rank",
-                    style = MaterialTheme.typography.titleMedium.copy(fontSize = 15.sp),
-                    color = if (rank <= 3) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(top = 4.dp)
+                AsyncImage(
+                    model = song.pic120,
+                    contentDescription = song.name,
+                    modifier = Modifier
+                        .size(36.dp)
+                        .clip(RoundedCornerShape(4.dp)),
+                    contentScale = ContentScale.Crop
                 )
                 if (showFeeBadge && !song.playable) {
                     Box(
@@ -415,5 +440,97 @@ fun RankingSongItem(
                 modifier = Modifier.padding(start = 8.dp)
             )
         }
+    }
+}
+
+/** 排行榜右侧网格歌曲卡片 — 样式与首页 SongCard 一致 */
+@Composable
+fun RankingSongCard(
+    song: Song,
+    cardWidth: Int,
+    showFeeBadge: Boolean = true,
+    onClick: () -> Unit
+) {
+    Column(
+        modifier = Modifier
+            .width(cardWidth.dp)
+            .clickable(onClick = onClick)
+    ) {
+        Box(modifier = Modifier.size(cardWidth.dp)) {
+            val btnSizeDp = cardWidth.dp * 0.30f
+            val icSizeDp = btnSizeDp * 0.80f
+            val xOffset = (cardWidth.toFloat() * 0.75f - btnSizeDp.value / 2).dp
+            val yOffset = xOffset
+
+            // 封面
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .clip(RoundedCornerShape(8.dp))
+            ) {
+                AsyncImage(
+                    model = song.pic120,
+                    contentDescription = song.name,
+                    modifier = Modifier.fillMaxSize(),
+                    contentScale = ContentScale.Crop
+                )
+                // VIP / 版权徽章
+                if (showFeeBadge && !song.playable) {
+                    Box(
+                        modifier = Modifier
+                            .align(Alignment.TopEnd)
+                            .padding(3.dp)
+                            .size(14.dp)
+                            .background(
+                                if (song.fee == 1)
+                                    Color(0xFFFF6B35).copy(alpha = 0.9f)
+                                else
+                                    MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.9f),
+                                RoundedCornerShape(3.dp)
+                            ),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        if (song.fee == 1) {
+                            Text(
+                                text = "VIP",
+                                fontSize = 6.sp,
+                                color = Color.White
+                            )
+                        } else {
+                            Icon(
+                                imageVector = Icons.Default.Lock,
+                                contentDescription = "版权限制",
+                                modifier = Modifier.size(8.dp),
+                                tint = MaterialTheme.colorScheme.onErrorContainer
+                            )
+                        }
+                    }
+                }
+            }
+            // 播放按钮
+            Box(
+                modifier = Modifier
+                    .align(Alignment.TopStart)
+                    .offset(x = xOffset, y = yOffset)
+                    .size(btnSizeDp)
+                    .background(Color.White.copy(alpha = 0.5f), RoundedCornerShape(btnSizeDp / 2))
+                    .clickable(onClick = onClick),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(
+                    imageVector = Icons.Filled.PlayArrow,
+                    contentDescription = "播放",
+                    tint = Color.White,
+                    modifier = Modifier.size(icSizeDp),
+                )
+            }
+        }
+        Text(
+            text = song.name,
+            style = MaterialTheme.typography.bodySmall,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.padding(top = 4.dp)
+        )
     }
 }
