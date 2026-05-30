@@ -1688,17 +1688,18 @@ fun PlayerScreenLandscape(
             Row(
                 modifier = Modifier
                     .fillMaxSize()
-                    .padding(16.dp)
+                    .padding(12.dp)
                     .navigationBarsPadding(),
-                horizontalArrangement = Arrangement.spacedBy(20.dp)
+                horizontalArrangement = Arrangement.spacedBy(16.dp)
             ) {
+                // 左侧：黑胶唱片 + 控制面板（占 2/5）
                 BoxWithConstraints(
                     modifier = Modifier
-                        .weight(1f)
+                        .weight(0.4f)
                         .fillMaxHeight(),
                     contentAlignment = Alignment.Center
                 ) {
-                    val coverSize = minOf(maxWidth * 0.92f, maxHeight * 0.92f)
+                    val coverSize = minOf(maxWidth * 0.9f, maxHeight * 0.9f)
 
                     // 1. 大黑胶唱片铺满（旋转动画）
                     VinylRecord(
@@ -1709,117 +1710,117 @@ fun PlayerScreenLandscape(
                     )
 
                     // 2. 底部半透明控制面板（进度条 + 按钮）
-                    Column(
-                        modifier = Modifier
-                            .align(Alignment.BottomCenter)
-                            .fillMaxWidth()
-                            .background(
-                                Color.Black.copy(alpha = 0.55f),
-                                RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp)
-                            )
-                            .padding(horizontal = 12.dp, vertical = 8.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally
-                    ) {
-                        // 进度条
-                        Column(modifier = Modifier.fillMaxWidth()) {
-                            Slider(
-                                value = if (playbackState.duration > 0) {
-                                    playbackState.position.toFloat() / playbackState.duration.toFloat()
-                                } else 0f,
-                                onValueChange = { fraction ->
-                                    onSeek((fraction * playbackState.duration).toLong())
-                                },
-                                colors = SliderDefaults.colors(
-                                    thumbColor = accentColor,
-                                    activeTrackColor = accentColor,
-                                    inactiveTrackColor = Color.White.copy(alpha = 0.3f)
-                                )
-                            )
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween
+                            Column(
+                                modifier = Modifier
+                                    .align(Alignment.BottomCenter)
+                                    .fillMaxWidth()
+                                    .background(
+                                        Color.Black.copy(alpha = 0.3f),
+                                        RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp)
+                                    )
+                                    .padding(horizontal = 8.dp, vertical = 6.dp),
+                                horizontalAlignment = Alignment.CenterHorizontally
                             ) {
-                                Text(
-                                    text = formatTime(playbackState.position),
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = Color.White.copy(alpha = 0.7f)
-                                )
-                                Text(
-                                    text = formatTime(playbackState.duration),
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = Color.White.copy(alpha = 0.7f)
-                                )
-                            }
-                        }
-
-                        Spacer(modifier = Modifier.height(4.dp))
-
-                        // 播放控制按钮
-                        val screenWidth = LocalConfiguration.current.screenWidthDp
-                        val btnSize = (34 + (screenWidth - 360) * 0.04f).coerceIn(30f, 46f).dp
-
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceEvenly,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            IconButton(onClick = onTogglePlayMode) {
-                                val (icon, desc) = when (playMode) {
-                                    0 -> Icons.Default.Repeat to "列表循环"
-                                    1 -> Icons.Default.Repeat to "单曲循环"
-                                    else -> Icons.Default.Shuffle to "随机播放"
+                                // 进度条
+                                Column(modifier = Modifier.fillMaxWidth()) {
+                                    Slider(
+                                        value = if (playbackState.duration > 0) {
+                                            playbackState.position.toFloat() / playbackState.duration.toFloat()
+                                        } else 0f,
+                                        onValueChange = { fraction ->
+                                            onSeek((fraction * playbackState.duration).toLong())
+                                        },
+                                        colors = SliderDefaults.colors(
+                                            thumbColor = accentColor,
+                                            activeTrackColor = accentColor,
+                                            inactiveTrackColor = Color.White.copy(alpha = 0.3f)
+                                        )
+                                    )
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.SpaceBetween
+                                    ) {
+                                        Text(
+                                            text = formatTime(playbackState.position),
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = Color.White.copy(alpha = 0.7f)
+                                        )
+                                        Text(
+                                            text = formatTime(playbackState.duration),
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = Color.White.copy(alpha = 0.7f)
+                                        )
+                                    }
                                 }
-                                Icon(
-                                    imageVector = icon,
-                                    contentDescription = desc,
-                                    tint = Color.White.copy(alpha = 0.8f),
-                                    modifier = Modifier.size(btnSize)
-                                )
-                            }
 
-                            IconButton(onClick = onPrevious) {
-                                Icon(
-                                    imageVector = Icons.Default.SkipPrevious,
-                                    contentDescription = "上一首",
-                                    tint = Color.White,
-                                    modifier = Modifier.size(btnSize)
-                                )
-                            }
+                                Spacer(modifier = Modifier.height(4.dp))
 
-                            FilledIconButton(
-                                onClick = onTogglePlay,
-                                colors = IconButtonDefaults.filledIconButtonColors(
-                                    containerColor = accentColor
-                                ),
-                                modifier = Modifier.size(btnSize * 1.6f)
-                            ) {
-                                Icon(
-                                    imageVector = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
-                                    contentDescription = if (isPlaying) "暂停" else "播放",
-                                    tint = Color.White,
-                                    modifier = Modifier.size(btnSize)
-                                )
-                            }
+                                // 播放控制按钮
+                                val screenWidth = LocalConfiguration.current.screenWidthDp
+                                val btnSize = (24 + (screenWidth - 360) * 0.03f).coerceIn(22f, 32f).dp
 
-                            IconButton(onClick = onNext) {
-                                Icon(
-                                    imageVector = Icons.Default.SkipNext,
-                                    contentDescription = "下一首",
-                                    tint = Color.White,
-                                    modifier = Modifier.size(btnSize)
-                                )
-                            }
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceEvenly,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    IconButton(onClick = onTogglePlayMode) {
+                                        val (icon, desc) = when (playMode) {
+                                            0 -> Icons.Default.Repeat to "列表循环"
+                                            1 -> Icons.Default.Repeat to "单曲循环"
+                                            else -> Icons.Default.Shuffle to "随机播放"
+                                        }
+                                        Icon(
+                                            imageVector = icon,
+                                            contentDescription = desc,
+                                            tint = Color.White.copy(alpha = 0.8f),
+                                            modifier = Modifier.size(btnSize)
+                                        )
+                                    }
 
-                            IconButton(onClick = onToggleFavorite) {
-                                FavoriteIcon(
-                                    isFavorite = isFavorite,
-                                    tint = if (isFavorite) AppColors.FavoriteActive else Color.White.copy(alpha = 0.8f),
-                                    contentDescription = "收藏",
-                                    modifier = Modifier.size(btnSize)
-                                )
+                                    IconButton(onClick = onPrevious) {
+                                        Icon(
+                                            imageVector = Icons.Default.SkipPrevious,
+                                            contentDescription = "上一首",
+                                            tint = Color.White,
+                                            modifier = Modifier.size(btnSize)
+                                        )
+                                    }
+
+                                    FilledIconButton(
+                                        onClick = onTogglePlay,
+                                        colors = IconButtonDefaults.filledIconButtonColors(
+                                            containerColor = accentColor
+                                        ),
+                                        modifier = Modifier.size(btnSize * 1.5f)
+                                    ) {
+                                        Icon(
+                                            imageVector = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
+                                            contentDescription = if (isPlaying) "暂停" else "播放",
+                                            tint = Color.White,
+                                            modifier = Modifier.size(btnSize)
+                                        )
+                                    }
+
+                                    IconButton(onClick = onNext) {
+                                        Icon(
+                                            imageVector = Icons.Default.SkipNext,
+                                            contentDescription = "下一首",
+                                            tint = Color.White,
+                                            modifier = Modifier.size(btnSize)
+                                        )
+                                    }
+
+                                    IconButton(onClick = onToggleFavorite) {
+                                        FavoriteIcon(
+                                            isFavorite = isFavorite,
+                                            tint = if (isFavorite) AppColors.FavoriteActive else Color.White.copy(alpha = 0.8f),
+                                            contentDescription = "收藏",
+                                            modifier = Modifier.size(btnSize)
+                                        )
+                                    }
+                                }
                             }
-                        }
-                    }
 
                     // 左上角大字歌名（与歌词当前行样式一致）
                     Box(
@@ -1847,10 +1848,10 @@ fun PlayerScreenLandscape(
                     }
                 }
 
-                // ==================== 右侧：滚动歌词 ====================
+                // ==================== 右侧：滚动歌词（占 3/5）====================
                 Box(
                     modifier = Modifier
-                        .weight(1f)
+                        .weight(0.6f)
                         .fillMaxHeight()
                         .padding(vertical = 8.dp)
                 ) {
@@ -1912,13 +1913,13 @@ fun PlayerScreenLandscape(
                                     state = listState,
                                     horizontalAlignment = Alignment.End,
                                     verticalArrangement = Arrangement.spacedBy(10.dp),
-                                    contentPadding = PaddingValues(vertical = 16.dp, horizontal = 40.dp)
+                                    contentPadding = PaddingValues(vertical = 16.dp, horizontal = 24.dp)
                                 ) {
                                     itemsIndexed(lyrics) { index, line ->
                                         val isCurrent = index == currentIndex
                                         val isNext = index == currentIndex + 1
                                         val alpha = if (isCurrent) 1f else 0.5f
-                                        val fontSize = if (isCurrent) 28.sp else if (isNext) 24.sp else 16.sp
+                                        val fontSize = if (isCurrent) 24.sp else if (isNext) 20.sp else 14.sp
 
                                         Row(
                                             verticalAlignment = Alignment.CenterVertically,
@@ -1944,7 +1945,7 @@ fun PlayerScreenLandscape(
                                                     Text(
                                                         text = line.text.ifEmpty { " " },
                                                         color = Color.Black.copy(alpha = 0.8f),
-                                                        fontSize = 28.sp,
+                                                        fontSize = 24.sp,
                                                         fontWeight = FontWeight.Bold,
                                                         modifier = Modifier.offset(x = 1.5.dp, y = 1.5.dp)
                                                     )
