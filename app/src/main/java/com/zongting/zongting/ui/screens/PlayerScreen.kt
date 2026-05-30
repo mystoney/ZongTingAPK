@@ -38,6 +38,7 @@ import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.drawscope.Fill
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asComposeRenderEffect
@@ -1900,11 +1901,9 @@ fun PlayerScreenLandscape(
                                 val paddingTop = with(density) { 16.dp.toPx() }
 
                                 LaunchedEffect(currentIndex) {
-                                    val targetOffset = (paddingTop + currentIndex * totalItemHeight)
-                                        .toInt()
                                     listState.animateScrollToItem(
                                         index = maxOf(0, currentIndex - 1),
-                                        scrollOffset = -((listState.layoutInfo.viewportSize.height / 2) - (itemHeight / 2).toInt())
+                                        scrollOffset = -((listState.layoutInfo.viewportSize.height / 2) - (3 * totalItemHeight + itemHeight / 2)).toInt()
                                     )
                                 }
 
@@ -1925,20 +1924,7 @@ fun PlayerScreenLandscape(
                                             verticalAlignment = Alignment.CenterVertically,
                                             horizontalArrangement = Arrangement.End
                                         ) {
-                                            // 当前行前加 ▶ 图标
-                                            if (isCurrent) {
-                                                Icon(
-                                                    imageVector = Icons.Default.PlayArrow,
-                                                    contentDescription = null,
-                                                    tint = Color.White,
-                                                    modifier = Modifier
-                                                        .size(22.dp)
-                                                        .padding(start = 6.dp)
-                                                )
-                                            } else {
-                                                Spacer(modifier = Modifier.width(24.dp))
-                                            }
-
+                                            // 主文字层
                                             Box {
                                                 // 阴影层（黑色描边）
                                                 if (isCurrent) {
@@ -1999,42 +1985,22 @@ private fun FavoriteIcon(
     modifier: Modifier = Modifier,
     contentDescription: String? = null
 ) {
-    val heartColor = tint
-    val outlineColor = Color.White
-
-    Icon(
-        imageVector = Icons.Filled.Favorite,
-        contentDescription = contentDescription,
-        tint = heartColor,
-        modifier = modifier.drawBehind {
-            // 先画白色描边（外向扩展）
-            val path = Path().apply {
-                val w = size.width
-                val h = size.height
-                moveTo(w * 0.5f, h * 0.85f)
-                cubicTo(
-                    w * 0.1f, h * 0.65f,
-                    0f, h * 0.35f,
-                    w * 0.25f, h * 0.15f
-                )
-                cubicTo(
-                    w * 0.4f, 0f,
-                    w * 0.5f, h * 0.1f,
-                    w * 0.5f, h * 0.1f
-                )
-                cubicTo(
-                    w * 0.5f, h * 0.1f,
-                    w * 0.6f, 0f,
-                    w * 0.75f, h * 0.15f
-                )
-                cubicTo(
-                    w * 1f, h * 0.35f,
-                    w * 0.9f, h * 0.65f,
-                    w * 0.5f, h * 0.85f
-                )
-                close()
-            }
-            drawPath(path, outlineColor, style = Stroke(width = 4f))
+    Canvas(modifier = modifier) {
+        val path = Path().apply {
+            val w = size.width
+            val h = size.height
+            moveTo(w * 0.5f, h * 0.85f)
+            cubicTo(w * 0.1f, h * 0.65f, 0f, h * 0.35f, w * 0.25f, h * 0.15f)
+            cubicTo(w * 0.4f, 0f, w * 0.5f, h * 0.1f, w * 0.5f, h * 0.1f)
+            cubicTo(w * 0.5f, h * 0.1f, w * 0.6f, 0f, w * 0.75f, h * 0.15f)
+            cubicTo(w * 1f, h * 0.35f, w * 0.9f, h * 0.65f, w * 0.5f, h * 0.85f)
+            close()
         }
-    )
+        // 选中：绿色填充
+        if (isFavorite) {
+            drawPath(path, AppColors.FavoriteActive, style = Fill)
+        }
+        // 白色描边（选中未选中都画）
+        drawPath(path, Color.White, style = Stroke(width = 3f))
+    }
 }

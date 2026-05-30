@@ -17,9 +17,11 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.foundation.Canvas
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.drawscope.Fill
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.layout.ContentScale
@@ -1234,38 +1236,20 @@ private fun LibraryFavoriteIcon(
     tint: Color,
     modifier: Modifier = Modifier
 ) {
-    Icon(
-        imageVector = Icons.Filled.Favorite,
-        contentDescription = if (isFavorite) "已收藏" else "收藏",
-        tint = tint,
-        modifier = modifier.drawBehind {
-            val path = Path().apply {
-                val w = size.width
-                val h = size.height
-                moveTo(w * 0.5f, h * 0.85f)
-                cubicTo(
-                    w * 0.1f, h * 0.65f,
-                    0f, h * 0.35f,
-                    w * 0.25f, h * 0.15f
-                )
-                cubicTo(
-                    w * 0.4f, 0f,
-                    w * 0.5f, h * 0.1f,
-                    w * 0.5f, h * 0.1f
-                )
-                cubicTo(
-                    w * 0.5f, h * 0.1f,
-                    w * 0.6f, 0f,
-                    w * 0.75f, h * 0.15f
-                )
-                cubicTo(
-                    w * 1f, h * 0.35f,
-                    w * 0.9f, h * 0.65f,
-                    w * 0.5f, h * 0.85f
-                )
-                close()
-            }
-            drawPath(path, Color.White, style = Stroke(width = 4f))
+    Canvas(modifier = modifier) {
+        val path = Path().apply {
+            val w = size.width
+            val h = size.height
+            moveTo(w * 0.5f, h * 0.85f)
+            cubicTo(w * 0.1f, h * 0.65f, 0f, h * 0.35f, w * 0.25f, h * 0.15f)
+            cubicTo(w * 0.4f, 0f, w * 0.5f, h * 0.1f, w * 0.5f, h * 0.1f)
+            cubicTo(w * 0.5f, h * 0.1f, w * 0.6f, 0f, w * 0.75f, h * 0.15f)
+            cubicTo(w * 1f, h * 0.35f, w * 0.9f, h * 0.65f, w * 0.5f, h * 0.85f)
+            close()
         }
-    )
+        if (isFavorite) {
+            drawPath(path, AppColors.FavoriteActive, style = Fill)
+        }
+        drawPath(path, Color.White, style = Stroke(width = 3f))
+    }
 }
