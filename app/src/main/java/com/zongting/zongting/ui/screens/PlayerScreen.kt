@@ -65,6 +65,7 @@ import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
@@ -395,12 +396,16 @@ private fun PlayerBottomBar(
     onPlaySong: (Song) -> Unit,
     playlistListState: androidx.compose.foundation.lazy.LazyListState
 ) {
-    val playModeIcon = when (playMode) {
+    // 乐观更新：本地记住当前图标状态，点击立即切换，异步同步真实 playMode
+    var localPlayMode by remember { mutableIntStateOf(playMode) }
+    LaunchedEffect(playMode) { localPlayMode = playMode }
+
+    val playModeIcon = when (localPlayMode) {
         1 -> Icons.Default.RepeatOne
         2 -> Icons.Default.Shuffle
         else -> Icons.Default.Repeat
     }
-    val playModeDesc = when (playMode) {
+    val playModeDesc = when (localPlayMode) {
         0 -> "顺序播放"
         1 -> "单曲循环"
         else -> "随机播放"
@@ -443,7 +448,10 @@ private fun PlayerBottomBar(
                     .padding(vertical = 2.dp),
                 horizontalArrangement = Arrangement.SpaceEvenly
             ) {
-                IconButton(onClick = onTogglePlayMode) {
+                IconButton(onClick = {
+                    localPlayMode = (localPlayMode + 1) % 3
+                    onTogglePlayMode()
+                }) {
                     Icon(imageVector = playModeIcon, contentDescription = playModeDesc, modifier = Modifier.size(24.dp))
                 }
 
@@ -611,20 +619,21 @@ private fun VinylRecord(
     val context = LocalContext.current
     val cachedLoader = androidx.compose.runtime.remember { imageLoader }
 
-    val rotation = remember { androidx.compose.runtime.mutableFloatStateOf(0f) }
-    val animatedRotation by androidx.compose.animation.core.animateFloatAsState(
-        targetValue = if (isPlaying) rotation.floatValue + 360f else rotation.floatValue,
-        animationSpec = androidx.compose.animation.core.tween(durationMillis = 6000, easing = androidx.compose.animation.core.LinearEasing),
-        label = "vinyl_rotation"
-    )
+    var rotation by androidx.compose.runtime.remember { androidx.compose.runtime.mutableFloatStateOf(0f) }
+    // 暂停时冻结在当前角度
+    val pausedRotation = androidx.compose.runtime.remember(rotation, isPlaying) { rotation }
+    val displayRotation = if (isPlaying) rotation else pausedRotation
 
-    // 持续旋转角度（播放时累加，暂停时保持）
+    // 匀速旋转：每秒转 360/10 = 36 度
     androidx.compose.runtime.LaunchedEffect(isPlaying) {
-        if (isPlaying) {
-            while (true) {
-                kotlinx.coroutines.delay(6000)
-                rotation.floatValue += 360f
-            }
+        if (!isPlaying) return@LaunchedEffect
+        var lastTime = System.currentTimeMillis()
+        while (coroutineContext.isActive) {
+            val now = System.currentTimeMillis()
+            val deltaMs = (now - lastTime).coerceAtLeast(0)
+            rotation = (rotation + 360f * deltaMs / 10000f) % 360f
+            lastTime = now
+            delay(16)
         }
     }
 
@@ -659,11 +668,13 @@ private fun VinylRecord(
 
             val nc = drawContext.canvas.nativeCanvas
 
+            // 用 saveLayer 把唱片内容画到离屏缓冲，再用 CLEAR 挖空中心孔
+            nc.saveLayer(0f, 0f, size.width, size.height, null)
+
             // 限制所有绘制只在唱片圆形区域内，唱片外保持透明（露出页面背景）
             val vinylClip = android.graphics.Path().apply {
                 addCircle(cx, cy, outerR, android.graphics.Path.Direction.CW)
             }
-            nc.save()
             nc.clipPath(vinylClip)
 
             // --- 第1层：金属质感边缘：白色高光 -> 银灰 -> 黑色（径向渐变，左上光源） ---
@@ -688,7 +699,7 @@ private fun VinylRecord(
 
             // --- 旋转的唱片主体 ---
             nc.save()
-            nc.rotate(animatedRotation, cx, cy)
+            nc.rotate(displayRotation, cx, cy)
 
             // 封面图片：裁剪为圆形铺满整张唱片
             val bmp = loadedBmp.value
@@ -743,11 +754,12 @@ private fun VinylRecord(
             }
             nc.drawCircle(cx, cy, artR, highlightPaint)
 
-            // 封面中心孔（画实心页面背景色，模拟透明效果）
-            nc.drawCircle(cx, cy, holeR, android.graphics.Paint().apply {
+            // 封面中心孔（用 CLEAR 挖空，透明穿透显示页面背景）
+            val holePaint = android.graphics.Paint().apply {
                 isAntiAlias = true
-                color = android.graphics.Color.parseColor("#121212")
-            })
+                xfermode = android.graphics.PorterDuffXfermode(android.graphics.PorterDuff.Mode.CLEAR)
+            }
+            nc.drawCircle(cx, cy, holeR, holePaint)
 
             // 唱片外圈描边（银灰色描边，贴合金属边缘内侧）
             nc.drawCircle(cx, cy, artR, android.graphics.Paint().apply {
@@ -765,8 +777,7 @@ private fun VinylRecord(
                 color = android.graphics.Color.parseColor("#60FFFFFF")
             })
 
-            nc.restore() // 恢复旋转
-            nc.restore() // 恢复clip（唱片外保持透明）
+            nc.restore() // 恢复clip + 提交saveLayer（中心孔CLEAR穿透显示页面背景）
         }
     }
 }
@@ -897,7 +908,7 @@ private fun AlbumCoverPage(
             ) {
                 currentSong?.let { song ->
                     VinylRecord(
-                        albumArtUrl = song.pic,
+                        albumArtUrl = song.coverUrl ?: song.pic,
                         isPlaying = isPlaying,
                         modifier = Modifier
                             .fillMaxWidth(0.72f)
@@ -928,7 +939,7 @@ private fun AlbumCoverPage(
                     contentAlignment = Alignment.Center
                 ) {
                     VinylRecord(
-                        albumArtUrl = song.pic,
+                        albumArtUrl = song.coverUrl ?: song.pic,
                         isPlaying = isPlaying,
                         modifier = Modifier
                             .fillMaxWidth(0.8f)
@@ -1039,33 +1050,63 @@ private fun LyricPage(
                     val lines = lyricState.lyrics
                     val position = playbackState.position
 
-                    // 实时计算当前行（不用 remember，避免缓存导致高亮滞后）
                     // 实时计算当前行，保证 position 变化时立即更新高亮
                     val currentLineIndex = lines.indices.lastOrNull { lines[it].timestamp <= position } ?: 0
-
-                    val lineHeightDp = 44.dp
 
                     BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
                         val configuration = LocalConfiguration.current
                         val isLandscape = configuration.orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE
-                        // 横屏时歌词字体更大，当前行和下一行字体相同
                         val currentLineFontSize = if (isLandscape) 32.sp else 20.sp
                         val otherLineFontSize = if (isLandscape) 24.sp else 15.sp
-                        val lineHeightDp2 = if (isLandscape) 60.dp else 44.dp
+                        val lineHeightDp = if (isLandscape) 60.dp else 44.dp
                         val boxHeightPx = with(LocalDensity.current) { maxHeight.toPx() }
-                        val lineHeightPx = with(LocalDensity.current) { lineHeightDp2.toPx() }
+                        val lineHeightPx = with(LocalDensity.current) { lineHeightDp.toPx() }
+                        val lineHeight3xPx = lineHeightPx * 3f
 
-                        // position 变化时强制重新触发滚动
+                        // 计算当前行在 LazyColumn 视口中的 Y 中心坐标
+                        // 滚动时 firstVisibleItemIndex / firstVisibleItemScrollOffset 变化，触发 recomposition
+                        val firstVisibleIdx = lazyListState.firstVisibleItemIndex
+                        val firstVisibleOffset = lazyListState.firstVisibleItemScrollOffset
+                        // 垂直 padding 必须 >= 0，防止 boxHeightPx < lineHeightPx 时崩溃
+                        val verticalPaddingPx = maxOf(0f, (boxHeightPx - lineHeightPx) / 2f)
+                        val currentLineCenterY = verticalPaddingPx +
+                            (currentLineIndex - firstVisibleIdx) * lineHeightPx -
+                            firstVisibleOffset +
+                            lineHeightPx / 2f
+
+                        // 目标行始终为 currentLineIndex（切歌时自动更新）
                         LaunchedEffect(position, currentLineIndex) {
                             if (lines.isNotEmpty() && currentLineIndex in lines.indices) {
                                 lazyListState.animateScrollToItem(index = currentLineIndex)
                             }
                         }
 
+                        // 渐变叠加层：绝对定位于当前行中心线，上下各 1.5 倍行高
                         Box(
                             modifier = Modifier.fillMaxSize()
                         ) {
-                            val verticalPadding = with(LocalDensity.current) { ((boxHeightPx - lineHeightPx) / 2).toDp() }
+                            // 单一垂直渐变背景：定位于当前行中心线，上下各 1.5x 行高（在歌词之后）
+                            // 上下限 clamp 防止 offset 越界
+                            val gradientTopY = (currentLineCenterY - lineHeight3xPx / 2f).coerceIn(0f, boxHeightPx - lineHeight3xPx)
+                            val gradientHeight = lineHeight3xPx.coerceAtMost(boxHeightPx)
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .offset(y = with(LocalDensity.current) { gradientTopY.toDp() })
+                                    .height(with(LocalDensity.current) { gradientHeight.toDp() })
+                                    .background(
+                                        brush = Brush.verticalGradient(
+                                            colorStops = arrayOf(
+                                                0f to Color.Black.copy(alpha = 0f),
+                                                0.5f to Color.Black.copy(alpha = 0.80f),
+                                                1f to Color.Black.copy(alpha = 0f)
+                                            )
+                                        ),
+                                        shape = RoundedCornerShape(0.dp)
+                                    )
+                            )
+
+                            val verticalPadding = with(LocalDensity.current) { verticalPaddingPx.toDp() }
                             LazyColumn(
                                 state = lazyListState,
                                 modifier = Modifier
@@ -1074,28 +1115,31 @@ private fun LyricPage(
                                 horizontalAlignment = Alignment.CenterHorizontally,
                                 contentPadding = PaddingValues(vertical = verticalPadding)
                             ) {
-                                itemsIndexed(lines) { index, lyricLine ->
-                                    val isCurrentLine = index == currentLineIndex
-                                    val isNextLine = index == currentLineIndex + 1
+                                itemsIndexed(
+                                    items = lines,
+                                    key = { idx, _ -> idx }
+                                ) { idx, lyricLine ->
+                                    val isCurrent = idx == currentLineIndex
                                     val alpha by animateFloatAsState(
-                                        targetValue = if (isCurrentLine) 1f else 0.45f,
+                                        targetValue = if (isCurrent) 1f else 0.45f,
                                         animationSpec = tween(300),
-                                        label = "lyricAlpha"
+                                        label = "lyricAlpha_$idx"
                                     )
                                     Text(
                                         text = lyricLine.text,
-                                        fontSize = if (isCurrentLine || isNextLine) currentLineFontSize else otherLineFontSize,
-                                        fontWeight = if (isCurrentLine) FontWeight.Bold else FontWeight.Normal,
-                                        color = if (isCurrentLine)
+                                        fontSize = if (isCurrent) currentLineFontSize else otherLineFontSize,
+                                        fontWeight = if (isCurrent) FontWeight.Bold else FontWeight.Normal,
+                                        color = if (isCurrent) {
                                             Color(0xFFE53935).copy(alpha = alpha)
-                                        else
-                                            MaterialTheme.colorScheme.onSurface.copy(alpha = alpha),
+                                        } else {
+                                            MaterialTheme.colorScheme.onSurface.copy(alpha = alpha)
+                                        },
                                         textAlign = TextAlign.Center,
                                         modifier = Modifier
                                             .fillMaxWidth()
                                             .graphicsLayer {
-                                                scaleX = if (isCurrentLine) 1.05f else 1f
-                                                scaleY = if (isCurrentLine) 1.05f else 1f
+                                                scaleX = if (isCurrent) 1.05f else 1f
+                                                scaleY = if (isCurrent) 1.05f else 1f
                                             }
                                             .padding(vertical = 8.dp)
                                             .clickable { onSeek(lyricLine.timestamp) }
@@ -1103,7 +1147,7 @@ private fun LyricPage(
                                 }
                             }
 
-                            // 顶部渐变遮罩
+                            // 顶部渐变遮罩（边缘渐隐）
                             Box(
                                 modifier = Modifier
                                     .fillMaxWidth()

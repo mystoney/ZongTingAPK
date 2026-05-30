@@ -8,13 +8,17 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Repeat
+import androidx.compose.material.icons.filled.RepeatOne
+import androidx.compose.material.icons.filled.Shuffle
 import androidx.compose.material.icons.filled.SkipNext
 import androidx.compose.material.icons.filled.SkipPrevious
 import androidx.compose.material.icons.outlined.FavoriteBorder
 import androidx.compose.material3.*
-import androidx.compose.runtime.Composable
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
@@ -29,6 +33,8 @@ fun MiniPlayer(
     song: Song,
     isPlaying: Boolean,
     isFavorite: Boolean,
+    playMode: Int = 0,
+    onTogglePlayMode: () -> Unit = {},
     onPlayPause: () -> Unit,
     onToggleFavorite: () -> Unit,
     onPrevious: () -> Unit,
@@ -46,12 +52,34 @@ fun MiniPlayer(
     val textStyleTitle = if (isExpanded) MaterialTheme.typography.headlineMedium else MaterialTheme.typography.bodyMedium
     val textStyleArtist = if (isExpanded) MaterialTheme.typography.titleMedium else MaterialTheme.typography.bodySmall
 
-    Surface(
+    // 乐观更新：本地记住当前图标状态，点击立即切换，异步同步真实 playMode
+    var localPlayMode by remember { mutableIntStateOf(playMode) }
+    LaunchedEffect(playMode) { localPlayMode = playMode }
+
+    val playModeIcon = when (localPlayMode) {
+        1 -> Icons.Filled.RepeatOne
+        2 -> Icons.Filled.Shuffle
+        else -> Icons.Filled.Repeat
+    }
+    val playModeDesc = when (localPlayMode) {
+        0 -> "顺序播放"
+        1 -> "单曲循环"
+        else -> "随机播放"
+    }
+
+    Box(
         modifier = modifier
             .fillMaxWidth()
-            .clickable(onClick = onClick),
-        color = Color(0xBF0B1E10),
-        tonalElevation = 4.dp
+            .background(
+                brush = Brush.verticalGradient(
+                    colorStops = arrayOf(
+                        0f to Color(0xB30B1E10),
+                        0.5f to Color(0xF20B1E10),
+                        1f to Color(0xB30B1E10)
+                    )
+                )
+            )
+            .clickable(onClick = onClick)
     ) {
         Row(
             modifier = Modifier
@@ -61,7 +89,7 @@ fun MiniPlayer(
         ) {
             // 封面
             AsyncImage(
-                model = song.pic120,
+                model = song.coverUrl ?: song.pic120,
                 contentDescription = null,
                 modifier = Modifier
                     .size(coverSize)
@@ -98,6 +126,22 @@ fun MiniPlayer(
                     imageVector = if (isFavorite) Icons.Filled.Favorite else Icons.Outlined.FavoriteBorder,
                     contentDescription = if (isFavorite) "取消喜欢" else "我喜欢",
                     tint = if (isFavorite) Color(0xFFFF5252) else Color.White,
+                    modifier = Modifier.size(iconSize)
+                )
+            }
+
+            // 播放模式按钮
+            IconButton(
+                onClick = {
+                    localPlayMode = (localPlayMode + 1) % 3
+                    onTogglePlayMode()
+                },
+                modifier = Modifier.size(iconSize * 2f)
+            ) {
+                Icon(
+                    imageVector = playModeIcon,
+                    contentDescription = playModeDesc,
+                    tint = Color.White,
                     modifier = Modifier.size(iconSize)
                 )
             }

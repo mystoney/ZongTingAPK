@@ -509,10 +509,17 @@ class MainViewModel @Inject constructor(
     }
 
     fun playNext() {
+        // 保存切歌前的播放状态，防止 ExoPlayer 切换 MediaItem 时的 BUFFERING 回调导致 isPlaying 短暂变 false（按钮闪烁）
+        val wasPlaying = _isPlaying.value
         when (_playMode.value) {
             1 -> {
-                // ★ 单曲循环：回到开头重新播放当前歌曲
-                PlayerManager.seekTo(0)
+                // ★ 单曲循环：切换到下一首（由 ExoPlayer 的 REPEAT_MODE_ONE 负责循环播放该曲）
+                PlayerManager.seekToNext()
+                if (wasPlaying) {
+                    _isPlaying.value = true
+                } else {
+                    PlayerManager.play()
+                }
             }
             2 -> {
                 // ★ 随机播放：随机选一首播放（不能和当前相同）
@@ -522,21 +529,38 @@ class MainViewModel @Inject constructor(
                     val randomIdx = (playlist.indices - currentIdx).random()
                     playSong(playlist[randomIdx], playlist)
                 } else if (playlist.isNotEmpty()) {
-                    PlayerManager.seekTo(0)
+                    PlayerManager.seekToNext()
+                    if (wasPlaying) {
+                        _isPlaying.value = true
+                    } else {
+                        PlayerManager.play()
+                    }
                 }
             }
             else -> {
                 // ★ 顺序播放：正常切下一首
                 PlayerManager.seekToNext()
+                if (wasPlaying) {
+                    _isPlaying.value = true
+                } else {
+                    PlayerManager.play()
+                }
             }
         }
     }
 
     fun playPrevious() {
+        // 保存切歌前的播放状态，防止 ExoPlayer 切换 MediaItem 时的 BUFFERING 回调导致 isPlaying 短暂变 false（按钮闪烁）
+        val wasPlaying = _isPlaying.value
         when (_playMode.value) {
             1 -> {
-                // ★ 单曲循环：回到开头重新播放当前歌曲
-                PlayerManager.seekTo(0)
+                // ★ 单曲循环：切换到上一首（由 ExoPlayer 的 REPEAT_MODE_ONE 负责循环播放该曲）
+                PlayerManager.seekToPrevious()
+                if (wasPlaying) {
+                    _isPlaying.value = true
+                } else {
+                    PlayerManager.play()
+                }
             }
             2 -> {
                 // ★ 随机播放：随机选一首播放
@@ -549,6 +573,11 @@ class MainViewModel @Inject constructor(
             else -> {
                 // ★ 顺序播放：正常切上一首
                 PlayerManager.seekToPrevious()
+                if (wasPlaying) {
+                    _isPlaying.value = true
+                } else {
+                    PlayerManager.play()
+                }
             }
         }
     }

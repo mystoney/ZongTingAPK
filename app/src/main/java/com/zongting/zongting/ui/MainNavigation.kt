@@ -368,6 +368,8 @@ private fun NavHostContent(
                 song = currentSong.value!!,
                 isPlaying = isPlaying.value,
                 isFavorite = favoriteSongs.value.contains(currentSong.value!!.rid),
+                playMode = mainViewModel.playMode.value,
+                onTogglePlayMode = { mainViewModel.togglePlayMode() },
                 onPlayPause = { mainViewModel.togglePlayPause() },
                 onToggleFavorite = { mainViewModel.toggleFavorite(currentSong.value!!) },
                 onPrevious = { mainViewModel.playPrevious() },
