@@ -1014,91 +1014,11 @@ private fun LyricPage(
     val lazyListState = rememberLazyListState()
     var isUserScrolling by remember { mutableStateOf(false) }
 
-    val progress = if (playbackState.duration > 0) {
-        playbackState.position.toFloat() / playbackState.duration.toFloat()
-    } else 0f
-
     Surface(
         modifier = Modifier.fillMaxSize(),
         color = MaterialTheme.colorScheme.background.copy(alpha = 0.1f)
     ) {
         Box(modifier = Modifier.fillMaxSize()) {
-            // 纵向进度条 + 时间标签（Row布局：右侧进度条，左侧上下各一个时间）
-            Row(
-                modifier = Modifier
-                    .align(Alignment.CenterEnd)
-                    .padding(end = 12.dp)
-                    .fillMaxHeight(0.7f),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                // 左侧时间标签列
-                Column(
-                    modifier = Modifier
-                        .padding(end = 8.dp)
-                        .fillMaxHeight(),
-                    horizontalAlignment = Alignment.End,
-                    verticalArrangement = Arrangement.SpaceBetween
-                ) {
-                    // 当前时间（上方，红色）
-                    Text(
-                        text = formatDuration(playbackState.position),
-                        style = MaterialTheme.typography.labelSmall,
-                        color = Color(0xFFE53935),
-                        modifier = Modifier.padding(top = 2.dp)
-                    )
-                    // 总时长（下方）
-                    Text(
-                        text = formatDuration(playbackState.duration),
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(bottom = 2.dp)
-                    )
-                }
-                // 右侧纵向进度条
-                Box(
-                    modifier = Modifier
-                        .width(6.dp)
-                        .fillMaxHeight()
-                ) {
-                    // 轨道背景（白色半透明，圆角）
-                    Box(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .background(
-                                Color.White.copy(alpha = 0.15f),
-                                RoundedCornerShape(3.dp)
-                            )
-                    )
-                    // 已播放进度（从顶部向下填充：align=TopCenter + fillMaxHeight）
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .fillMaxHeight(progress)
-                            .align(Alignment.TopCenter)
-                            .background(
-                                Color(0xFFE53935),
-                                RoundedCornerShape(3.dp)
-                            )
-                    )
-                    // 当前播放位置圆点（progress * height 从顶部算）
-                    BoxWithConstraints(
-                        modifier = Modifier.fillMaxSize()
-                    ) {
-                        val thumbOffset = with(LocalDensity.current) {
-                            (maxHeight.toPx() * progress).toDp()
-                        }
-                        Box(
-                            modifier = Modifier
-                                .offset(x = (-3).dp, y = thumbOffset - 6.dp)
-                                .size(12.dp)
-                                .background(
-                                    Color(0xFFE53935),
-                                    CircleShape
-                                )
-                        )
-                    }
-                }
-            }
             when (lyricState) {
                 is LyricState.Loading -> {
                     Box(
