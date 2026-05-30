@@ -1101,10 +1101,14 @@ private fun LyricPage(
                         val configuration = LocalConfiguration.current
                         val isLandscape = configuration.orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE
                         val currentLineFontSize = if (isLandscape) {
-                            if (isExpanded) (32 * 1.3f).sp else 32.sp
+                            if (isExpanded) 50.sp else 36.sp
+                        } else 24.sp
+                        val otherLineFontSize = if (isLandscape) 28.sp else 15.sp
+                        val nextLineFontSize = if (isLandscape) {
+                            if (isExpanded) 44.sp else 32.sp
                         } else 20.sp
-                        val otherLineFontSize = if (isLandscape) 24.sp else 15.sp
                         val lineHeightDp = if (isLandscape) 60.dp else 44.dp
+                        val horizontalPadding = if (isExpanded) 48.dp else if (isLandscape) 40.dp else 24.dp
                         val boxHeightPx = with(LocalDensity.current) { maxHeight.toPx() }
                         val lineHeightPx = with(LocalDensity.current) { lineHeightDp.toPx() }
                         val lineHeight3xPx = lineHeightPx * 3f
@@ -1157,7 +1161,7 @@ private fun LyricPage(
                                 state = lazyListState,
                                 modifier = Modifier
                                     .fillMaxSize()
-                                    .padding(horizontal = 24.dp),
+                                    .padding(horizontal = horizontalPadding),
                                 horizontalAlignment = Alignment.Start,
                                 contentPadding = PaddingValues(vertical = verticalPadding)
                             ) {
@@ -1179,8 +1183,8 @@ private fun LyricPage(
                                             Text(
                                                 text = lyricLine.text,
                                                 color = Color.Black.copy(alpha = 0.8f),
-                                                fontSize = if (isCurrent || isNext) currentLineFontSize else otherLineFontSize,
-                                                fontWeight = if (isCurrent) FontWeight.Bold else FontWeight.Normal,
+                                                fontSize = currentLineFontSize,
+                                                fontWeight = FontWeight.Bold,
                                                 textAlign = TextAlign.Start,
                                                 modifier = Modifier
                                                     .fillMaxWidth()
@@ -1194,7 +1198,7 @@ private fun LyricPage(
                                         // 主文字层
                                         Text(
                                             text = lyricLine.text,
-                                            fontSize = if (isCurrent || isNext) currentLineFontSize else otherLineFontSize,
+                                            fontSize = if (isCurrent) currentLineFontSize else if (isNext) nextLineFontSize else otherLineFontSize,
                                             fontWeight = if (isCurrent) FontWeight.Bold else FontWeight.Normal,
                                             color = textColor,
                                             textAlign = TextAlign.Start,
@@ -1921,12 +1925,13 @@ fun PlayerScreenLandscape(
                                     state = listState,
                                     horizontalAlignment = Alignment.Start,
                                     verticalArrangement = Arrangement.spacedBy(10.dp),
-                                    contentPadding = PaddingValues(vertical = 16.dp, horizontal = 24.dp)
+                                    contentPadding = PaddingValues(vertical = 16.dp, horizontal = 40.dp)
                                 ) {
                                     itemsIndexed(lyrics) { index, line ->
                                         val isCurrent = index == currentIndex
+                                        val isNext = index == currentIndex + 1
                                         val alpha = if (isCurrent) 1f else 0.5f
-                                        val fontSize = if (isCurrent) 22.sp else 14.sp
+                                        val fontSize = if (isCurrent) 28.sp else if (isNext) 24.sp else 16.sp
 
                                         Row(
                                             verticalAlignment = Alignment.CenterVertically,
@@ -1952,7 +1957,7 @@ fun PlayerScreenLandscape(
                                                     Text(
                                                         text = line.text.ifEmpty { " " },
                                                         color = Color.Black.copy(alpha = 0.8f),
-                                                        fontSize = fontSize,
+                                                        fontSize = 28.sp,
                                                         fontWeight = FontWeight.Bold,
                                                         modifier = Modifier.offset(x = 1.5.dp, y = 1.5.dp)
                                                     )
