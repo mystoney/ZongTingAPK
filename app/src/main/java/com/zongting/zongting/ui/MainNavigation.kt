@@ -10,6 +10,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -35,6 +36,8 @@ import com.zongting.zongting.data.model.Bang
 import com.zongting.zongting.data.model.UserPlaylist
 import com.zongting.zongting.data.repository.UpdateEvent
 import com.zongting.zongting.data.repository.UpdatePhase
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
 
 sealed class Screen(val route: String, val title: String, val icon: ImageVector) {
     object Home : Screen("home", "首页", Icons.Default.Home)
@@ -64,6 +67,8 @@ fun MainNavigation(
     updateViewModel: com.zongting.zongting.ui.screens.UpdateViewModel = hiltViewModel()
 ) {
     val isExpanded = windowSizeClass.widthSizeClass == WindowWidthSizeClass.Expanded
+    val configuration = LocalConfiguration.current
+    val isLandscapePhone = !isExpanded && configuration.screenWidthDp > configuration.screenHeightDp
     val navController = rememberNavController()
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentDestination = navBackStackEntry?.destination
@@ -75,6 +80,26 @@ fun MainNavigation(
     val recentlyPlayed = mainViewModel.recentlyPlayed.collectAsState()
     val userPlaylists = mainViewModel.userPlaylists.collectAsState(initial = emptyList())
     var expandedPlaylist by remember { mutableStateOf<UserPlaylist?>(null) }
+
+    // 手机横屏时：有歌曲则自动进入播放器，无歌曲则留在首页
+    LaunchedEffect(isLandscapePhone, currentSong.value) {
+        if (isLandscapePhone && currentSong.value != null) {
+            val currentRoute = navController.currentBackStackEntry?.destination?.route
+            if (currentRoute != Screen.Player.route) {
+                navController.navigate(Screen.Player.route) {
+                    launchSingleTop = true
+                }
+            }
+        } else if (isLandscapePhone && currentSong.value == null) {
+            // 无歌曲时确保留在首页
+            val currentRoute = navController.currentBackStackEntry?.destination?.route
+            if (currentRoute != Screen.Home.route) {
+                navController.navigate(Screen.Home.route) {
+                    popUpTo(Screen.Home.route) { inclusive = true }
+                }
+            }
+        }
+    }
 
     // 监听更新事件
     val updateEvent by updateViewModel.updateEvent.collectAsState()
@@ -102,7 +127,7 @@ fun MainNavigation(
         }
     }
 
-    val showBottomBar = currentDestination?.route?.let { route ->
+    val showBottomBar = !isLandscapePhone && currentDestination?.route?.let { route ->
         bottomNavItems.any { item ->
             val base = item.route.split("/{")[0]
             route == item.route || route.startsWith(base + "/")
@@ -143,7 +168,7 @@ fun MainNavigation(
                     .weight(1f)
                     .fillMaxHeight()
             ) {
-                NavHostContent(navController, mainViewModel, updateViewModel, currentSong, isPlaying, favoriteSongs, favoriteSongList, recentlyPlayed, userPlaylists, expandedPlaylist, pendingVersionInfo.value, updateEvent, updatePhase, windowSizeClass, onPlaylistExpandChange = { expandedPlaylist = it })
+                NavHostContent(navController, mainViewModel, updateViewModel, currentSong, isPlaying, favoriteSongs, favoriteSongList, recentlyPlayed, userPlaylists, expandedPlaylist, pendingVersionInfo.value, updateEvent, updatePhase, windowSizeClass, isLandscapePhone, onPlaylistExpandChange = { expandedPlaylist = it })
             }
         }
     } else {
@@ -179,7 +204,7 @@ fun MainNavigation(
                     .fillMaxSize()
                     .padding(paddingValues)
             ) {
-                NavHostContent(navController, mainViewModel, updateViewModel, currentSong, isPlaying, favoriteSongs, favoriteSongList, recentlyPlayed, userPlaylists, expandedPlaylist, pendingVersionInfo.value, updateEvent, updatePhase, windowSizeClass, onPlaylistExpandChange = { expandedPlaylist = it })
+                NavHostContent(navController, mainViewModel, updateViewModel, currentSong, isPlaying, favoriteSongs, favoriteSongList, recentlyPlayed, userPlaylists, expandedPlaylist, pendingVersionInfo.value, updateEvent, updatePhase, windowSizeClass, isLandscapePhone, onPlaylistExpandChange = { expandedPlaylist = it })
             }
         }
     }
@@ -201,6 +226,7 @@ private fun NavHostContent(
     updateEvent: com.zongting.zongting.data.repository.UpdateEvent?,
     updatePhase: UpdatePhase,
     windowSizeClass: WindowSizeClass,
+    isLandscapePhone: Boolean,
     onPlaylistExpandChange: (UserPlaylist?) -> Unit
 ) {
     val navBackStackEntry by navController.currentBackStackEntryAsState()
@@ -218,6 +244,8 @@ private fun NavHostContent(
                 viewModel = hiltViewModel(),
                 updateViewModel = updateViewModel,
                 windowSizeClass = windowSizeClass,
+                isLandscapePhone = isLandscapePhone,
+                onGoToPlayer = { navController.navigate(Screen.Player.route) },
                 onPlaylistClick = { playlistId ->
                     navController.navigate(Screen.Playlist.createRoute(playlistId))
                 },
@@ -354,13 +382,20 @@ private fun NavHostContent(
         composable(Screen.Player.route) {
             PlayerScreen(
                 windowSizeClass = windowSizeClass,
-                onBackClick = { navController.popBackStack() },
+                isLandscapePhone = isLandscapePhone,
+                onBackClick = {
+                    if (isLandscapePhone) {
+                        navController.navigate(Screen.Home.route) { popUpTo(Screen.Home.route) { inclusive = true } }
+                    } else {
+                        navController.popBackStack()
+                    }
+                },
                 viewModel = mainViewModel
             )
         }
     }
 
-    val showMiniPlayer = currentSong.value != null &&
+    val showMiniPlayer = !isLandscapePhone && currentSong.value != null &&
         currentDestination?.route != Screen.Player.route
     if (showMiniPlayer) {
         Box(modifier = Modifier.fillMaxSize()) {

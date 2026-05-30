@@ -63,6 +63,11 @@ import com.zongting.zongting.data.model.UserPlaylist
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
+import androidx.compose.material3.SliderDefaults
+import androidx.compose.material3.windowsizeclass.WindowSizeClass
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.size
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
@@ -72,6 +77,7 @@ import kotlinx.coroutines.launch
 @Composable
 fun PlayerScreen(
     windowSizeClass: androidx.compose.material3.windowsizeclass.WindowSizeClass,
+    isLandscapePhone: Boolean = false,
     onBackClick: () -> Unit,
     viewModel: MainViewModel
 ) {
@@ -125,6 +131,26 @@ fun PlayerScreen(
             }
             kotlinx.coroutines.delay(500L)
         }
+    }
+
+    // 手机横屏：简化布局
+    if (isLandscapePhone) {
+        PlayerScreenLandscape(
+            currentSong = currentSong,
+            isPlaying = isPlaying,
+            playbackState = playbackState,
+            playMode = viewModel.playMode.value,
+            isFavorite = currentSong?.let { viewModel.isFavorite(it.rid) } ?: false,
+            onBackClick = onBackClick,
+            onTogglePlay = { viewModel.togglePlayPause() },
+            onTogglePlayMode = { viewModel.togglePlayMode() },
+            onToggleFavorite = { currentSong?.let { viewModel.toggleFavorite(it) } },
+            onPrevious = { viewModel.playPrevious() },
+            onNext = { viewModel.playNext() },
+            onSeek = { pos -> viewModel.seekTo(pos) },
+            imageLoader = viewModel.cachedImageLoader
+        )
+        return
     }
 
     // 封面虚化平铺背景（无封面时用深色背景）
@@ -1572,4 +1598,213 @@ fun SleepTimerDialog(
         },
         dismissButton = {}
     )
+}
+
+/** 手机横屏简化播放页面：左侧封面 + 右侧信息 + 底部控制栏 */
+@Composable
+fun PlayerScreenLandscape(
+    currentSong: Song?,
+    isPlaying: Boolean,
+    playbackState: PlaybackState,
+    playMode: Int,
+    isFavorite: Boolean,
+    onBackClick: () -> Unit,
+    onTogglePlay: () -> Unit,
+    onTogglePlayMode: () -> Unit,
+    onToggleFavorite: () -> Unit,
+    onPrevious: () -> Unit,
+    onNext: () -> Unit,
+    onSeek: (Long) -> Unit,
+    imageLoader: coil.ImageLoader
+) {
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color(0xFF0D0D1A))
+    ) {
+        if (currentSong == null) {
+            Box(
+                modifier = Modifier.fillMaxSize(),
+                contentAlignment = Alignment.Center
+            ) {
+                Text("无正在播放的歌曲", color = Color.White.copy(alpha = 0.6f))
+            }
+        } else {
+            Row(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(16.dp),
+                horizontalArrangement = Arrangement.spacedBy(24.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                // ===== 左侧：封面 =====
+                val coverUrl = currentSong.coverUrl ?: currentSong.pic
+                AsyncImage(
+                    model = coil.request.ImageRequest.Builder(LocalContext.current)
+                        .data(coverUrl)
+                        .crossfade(true)
+                        .build(),
+                    imageLoader = imageLoader,
+                    contentDescription = "专辑封面",
+                    modifier = Modifier
+                        .fillMaxHeight(0.72f)
+                        .aspectRatio(1f)
+                        .clip(RoundedCornerShape(12.dp)),
+                    contentScale = ContentScale.Crop
+                )
+
+                // ===== 右侧：信息 + 控制 =====
+                Column(
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxHeight(0.72f),
+                    verticalArrangement = Arrangement.SpaceBetween
+                ) {
+                    // 顶部：返回 + 歌曲信息
+                    Column {
+                        IconButton(onClick = onBackClick) {
+                            Icon(
+                                Icons.Default.KeyboardArrowDown,
+                                contentDescription = "返回",
+                                tint = Color.White
+                            )
+                        }
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            text = currentSong.name,
+                            style = MaterialTheme.typography.titleLarge,
+                            color = Color.White,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            text = currentSong.artist,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = Color.White.copy(alpha = 0.7f),
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+
+                    // 中间：进度条
+                    Column {
+                        Slider(
+                            value = if (playbackState.duration > 0) {
+                                playbackState.position.toFloat() / playbackState.duration.toFloat()
+                            } else 0f,
+                            onValueChange = { fraction ->
+                                onSeek((fraction * playbackState.duration).toLong())
+                            },
+                            colors = SliderDefaults.colors(
+                                thumbColor = Color.White,
+                                activeTrackColor = Color.White,
+                                inactiveTrackColor = Color.White.copy(alpha = 0.3f)
+                            )
+                        )
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Text(
+                                text = formatTime(playbackState.position),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = Color.White.copy(alpha = 0.7f)
+                            )
+                            Text(
+                                text = formatTime(playbackState.duration),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = Color.White.copy(alpha = 0.7f)
+                            )
+                        }
+                    }
+                }
+            }
+
+            // ===== 底部：统一播放控制栏（简化） =====
+            Surface(
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .fillMaxWidth(),
+                color = Color(0xFF1A1A2E).copy(alpha = 0.95f)
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .navigationBarsPadding()
+                        .padding(horizontal = 24.dp, vertical = 8.dp),
+                    horizontalArrangement = Arrangement.SpaceEvenly,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    // 收藏
+                    IconButton(onClick = onToggleFavorite) {
+                        Icon(
+                            imageVector = if (isFavorite) Icons.Filled.Favorite else Icons.Outlined.FavoriteBorder,
+                            contentDescription = "收藏",
+                            tint = if (isFavorite) Color(0xFFFF6B6B) else Color.White.copy(alpha = 0.8f)
+                        )
+                    }
+
+                    // 上一首
+                    IconButton(onClick = onPrevious) {
+                        Icon(
+                            imageVector = Icons.Default.SkipPrevious,
+                            contentDescription = "上一首",
+                            tint = Color.White,
+                            modifier = Modifier.size(36.dp)
+                        )
+                    }
+
+                    // 播放/暂停
+                    FilledIconButton(
+                        onClick = onTogglePlay,
+                        colors = IconButtonDefaults.filledIconButtonColors(
+                            containerColor = Color.White
+                        ),
+                        modifier = Modifier.size(64.dp)
+                    ) {
+                        Icon(
+                            imageVector = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
+                            contentDescription = if (isPlaying) "暂停" else "播放",
+                            tint = Color(0xFF0D0D1A),
+                            modifier = Modifier.size(36.dp)
+                        )
+                    }
+
+                    // 下一首
+                    IconButton(onClick = onNext) {
+                        Icon(
+                            imageVector = Icons.Default.SkipNext,
+                            contentDescription = "下一首",
+                            tint = Color.White,
+                            modifier = Modifier.size(36.dp)
+                        )
+                    }
+
+                    // 播放模式
+                    IconButton(onClick = onTogglePlayMode) {
+                        val (icon, desc) = when (playMode) {
+                            0 -> Icons.Default.Repeat to "列表循环"
+                            1 -> Icons.Default.Repeat to "单曲循环"
+                            else -> Icons.Default.Shuffle to "随机播放"
+                        }
+                        Icon(
+                            imageVector = icon,
+                            contentDescription = desc,
+                            tint = Color.White.copy(alpha = 0.8f),
+                            modifier = Modifier.size(24.dp)
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+private fun formatTime(ms: Long): String {
+    val totalSec = ms / 1000
+    val min = totalSec / 60
+    val sec = totalSec % 60
+    return "%d:%02d".format(min, sec)
 }

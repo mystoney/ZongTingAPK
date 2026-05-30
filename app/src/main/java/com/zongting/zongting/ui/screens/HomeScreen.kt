@@ -14,9 +14,13 @@ import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.filled.Leaderboard
+import androidx.compose.material.icons.filled.LibraryMusic
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -61,7 +65,9 @@ fun HomeScreen(
     onSongPlay: (Song) -> Unit,
     onBangClick: (String) -> Unit,  // 热门榜单点击 → 跳转排行榜
     onBangPlay: (Bang) -> Unit,  // 排行榜全部播放
-    windowSizeClass: WindowSizeClass? = null
+    windowSizeClass: WindowSizeClass? = null,
+    isLandscapePhone: Boolean = false,
+    onGoToPlayer: () -> Unit = {}
 ) {
     val isExpanded = windowSizeClass?.widthSizeClass == WindowWidthSizeClass.Expanded
     val uiState by viewModel.uiState.collectAsState()
@@ -94,6 +100,12 @@ fun HomeScreen(
             onBangPlay = onBangPlay,
             isExpanded = true,
             availableWidthDp = PAD_MAX_CONTENT_WIDTH_DP.dp
+        )
+    } else if (isLandscapePhone) {
+        // 手机横屏：简化布局，无Banner，点击图标直接进入播放页
+        HomeScreenLandscape(
+            uiState = uiState,
+            onGoToPlayer = onGoToPlayer
         )
     } else {
         // 手机布局：保持原有行为
@@ -805,6 +817,129 @@ fun BangCard(
             maxLines = 2,
             overflow = TextOverflow.Ellipsis,
             modifier = Modifier.padding(top = 4.dp)
+        )
+    }
+}
+
+/** 手机横屏首页：播放列表为空时显示，无Banner/无NavBar/无miniplayer */
+@Composable
+fun HomeScreenLandscape(
+    uiState: HomeUiState,
+    onGoToPlayer: () -> Unit
+) {
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(MaterialTheme.colorScheme.background),
+        contentAlignment = Alignment.Center
+    ) {
+        if (uiState.isLoading) {
+            CircularProgressIndicator()
+        } else if (uiState.error != null) {
+            Text("加载失败: ${uiState.error}", color = MaterialTheme.colorScheme.error)
+        } else {
+            Column(
+                modifier = Modifier.fillMaxSize(),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Center
+            ) {
+                // 主入口图标（取消"首页"图标，用户已说不需要）
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(48.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    // 播放入口（播放列表为空时提示）
+                    LandscapeIconButton(
+                        icon = Icons.Filled.PlayArrow,
+                        label = "播放",
+                        onClick = onGoToPlayer
+                    )
+                    // 搜索入口
+                    LandscapeIconButton(
+                        icon = Icons.Filled.Search,
+                        label = "搜索",
+                        onClick = onGoToPlayer
+                    )
+                    // 排行榜入口
+                    LandscapeIconButton(
+                        icon = Icons.Filled.Leaderboard,
+                        label = "排行榜",
+                        onClick = onGoToPlayer
+                    )
+                    // 音乐库入口
+                    LandscapeIconButton(
+                        icon = Icons.Filled.LibraryMusic,
+                        label = "音乐库",
+                        onClick = onGoToPlayer
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun LandscapeIconButton(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    label: String,
+    onClick: () -> Unit
+) {
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        modifier = Modifier
+            .clickable(onClick = onClick)
+            .padding(12.dp)
+    ) {
+        Surface(
+            shape = RoundedCornerShape(16.dp),
+            color = MaterialTheme.colorScheme.primaryContainer,
+            modifier = Modifier.size(72.dp)
+        ) {
+            Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
+                Icon(
+                    imageVector = icon,
+                    contentDescription = label,
+                    tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                    modifier = Modifier.size(40.dp)
+                )
+            }
+        }
+        Spacer(modifier = Modifier.height(8.dp))
+        Text(
+            text = label,
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurface
+        )
+    }
+}
+
+@Composable
+private fun LandscapeSmallCard(
+    title: String,
+    coverUrl: String,
+    onClick: () -> Unit
+) {
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        modifier = Modifier
+            .width(80.dp)
+            .clickable(onClick = onClick)
+    ) {
+        AsyncImage(
+            model = coverUrl,
+            contentDescription = title,
+            modifier = Modifier
+                .size(64.dp)
+                .clip(RoundedCornerShape(8.dp)),
+            contentScale = ContentScale.Crop
+        )
+        Spacer(modifier = Modifier.height(4.dp))
+        Text(
+            text = title,
+            style = MaterialTheme.typography.bodySmall,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            color = MaterialTheme.colorScheme.onSurface
         )
     }
 }
