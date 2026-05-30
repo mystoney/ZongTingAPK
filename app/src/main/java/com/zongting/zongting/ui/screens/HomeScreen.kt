@@ -159,12 +159,6 @@ private fun HomeScreenContent(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
-                    Text(
-                        "纵听",
-                        style = MaterialTheme.typography.titleLarge,
-                        color = Color(0xFFE53935)
-                    )
-
                     // 根据阶段显示进度条/按钮
                     when (updatePhase) {
                         UpdatePhase.Idle -> { /* 不显示 */ }
