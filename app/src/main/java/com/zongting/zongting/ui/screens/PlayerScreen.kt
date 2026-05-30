@@ -1674,25 +1674,23 @@ fun PlayerScreenLandscape(
                         .weight(1f)
                         .fillMaxHeight(),
                     horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.SpaceBetween
+                    verticalArrangement = Arrangement.Top
                 ) {
-                    Spacer(modifier = Modifier.height(4.dp))
+                    Spacer(modifier = Modifier.height(6.dp))
 
-                    // 圆形封面（参考图的大圆形封面）
+                    // 圆形封面（缩小，给下方留空间）
                     Box(
                         modifier = Modifier
-                            .fillMaxWidth(0.85f)
+                            .fillMaxWidth(0.65f)
                             .aspectRatio(1f),
                         contentAlignment = Alignment.Center
                     ) {
-                        // 外圈：深色圆形底（唱片感）
                         Box(
                             modifier = Modifier
                                 .fillMaxSize()
                                 .clip(CircleShape)
                                 .background(Color(0xFF1A1A2E))
                         )
-                        // 封面图片（裁剪为圆形）
                         val coverUrl = currentSong.coverUrl ?: currentSong.pic
                         AsyncImage(
                             model = coil.request.ImageRequest.Builder(LocalContext.current)
@@ -1708,10 +1706,10 @@ fun PlayerScreenLandscape(
                         )
                     }
 
-                    // 歌曲名称（中英文）
+                    // 歌曲名称
                     Text(
                         text = currentSong.name,
-                        style = MaterialTheme.typography.titleLarge,
+                        style = MaterialTheme.typography.titleMedium,
                         color = Color.White,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
@@ -1722,15 +1720,17 @@ fun PlayerScreenLandscape(
                     // 艺术家
                     Text(
                         text = currentSong.artist,
-                        style = MaterialTheme.typography.bodyMedium,
+                        style = MaterialTheme.typography.bodySmall,
                         color = Color.White.copy(alpha = 0.7f),
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                         textAlign = TextAlign.Center
                     )
 
-                    // 进度条
-                    Column(modifier = Modifier.fillMaxWidth()) {
+                    Spacer(modifier = Modifier.weight(1f))
+
+                    // 进度条（往上提，紧贴按钮上方）
+                    Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp)) {
                         Slider(
                             value = if (playbackState.duration > 0) {
                                 playbackState.position.toFloat() / playbackState.duration.toFloat()
@@ -1761,16 +1761,17 @@ fun PlayerScreenLandscape(
                         }
                     }
 
-                    // 播放控制按钮（参考图样式：循环 上一首 播放/暂停 下一首 红心）
+                    Spacer(modifier = Modifier.height(6.dp))
+
+                    // 播放控制按钮（紧跟进度条下方）
                     val screenWidth = LocalConfiguration.current.screenWidthDp
-                    val btnSize = (40 + (screenWidth - 360) * 0.05f).coerceIn(40f, 52f).dp
+                    val btnSize = (34 + (screenWidth - 360) * 0.04f).coerceIn(34f, 46f).dp
 
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceEvenly,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        // 循环模式
                         IconButton(onClick = onTogglePlayMode) {
                             val (icon, desc) = when (playMode) {
                                 0 -> Icons.Default.Repeat to "列表循环"
@@ -1785,7 +1786,6 @@ fun PlayerScreenLandscape(
                             )
                         }
 
-                        // 上一首
                         IconButton(onClick = onPrevious) {
                             Icon(
                                 imageVector = Icons.Default.SkipPrevious,
@@ -1795,7 +1795,6 @@ fun PlayerScreenLandscape(
                             )
                         }
 
-                        // 播放/暂停（大红按钮，参考图样式）
                         FilledIconButton(
                             onClick = onTogglePlay,
                             colors = IconButtonDefaults.filledIconButtonColors(
@@ -1811,7 +1810,6 @@ fun PlayerScreenLandscape(
                             )
                         }
 
-                        // 下一首
                         IconButton(onClick = onNext) {
                             Icon(
                                 imageVector = Icons.Default.SkipNext,
@@ -1821,7 +1819,6 @@ fun PlayerScreenLandscape(
                             )
                         }
 
-                        // 收藏红心
                         IconButton(onClick = onToggleFavorite) {
                             Icon(
                                 imageVector = if (isFavorite) Icons.Filled.Favorite else Icons.Outlined.FavoriteBorder,
@@ -1832,7 +1829,7 @@ fun PlayerScreenLandscape(
                         }
                     }
 
-                    Spacer(modifier = Modifier.height(4.dp))
+                    Spacer(modifier = Modifier.height(6.dp))
                 }
 
                 // ==================== 右侧：滚动歌词 ====================
@@ -1876,13 +1873,28 @@ fun PlayerScreenLandscape(
                                     )
                                 }
                             } else {
-                                // 找到当前行
                                 val currentIndex = lyrics.indexOfLast { it.timestamp <= playbackState.position }
                                     .coerceAtLeast(0)
 
+                                val listState = rememberLazyListState()
+                                val density = LocalDensity.current
+                                val itemSpacing = with(density) { 12.dp.toPx() }
+                                val itemHeight = with(density) { 32.dp.toPx() }
+                                val totalItemHeight = itemHeight + itemSpacing
+                                val paddingTop = with(density) { 16.dp.toPx() }
+
+                                LaunchedEffect(currentIndex) {
+                                    val targetOffset = (paddingTop + currentIndex * totalItemHeight)
+                                        .toInt()
+                                    listState.animateScrollToItem(
+                                        index = maxOf(0, currentIndex - 1),
+                                        scrollOffset = -((listState.layoutInfo.viewportSize.height / 2) - (itemHeight / 2).toInt())
+                                    )
+                                }
+
                                 LazyColumn(
                                     modifier = Modifier.fillMaxSize(),
-                                    state = rememberLazyListState(initialFirstVisibleItemIndex = maxOf(0, currentIndex - 2)),
+                                    state = listState,
                                     horizontalAlignment = Alignment.CenterHorizontally,
                                     verticalArrangement = Arrangement.spacedBy(12.dp),
                                     contentPadding = PaddingValues(vertical = 16.dp)
