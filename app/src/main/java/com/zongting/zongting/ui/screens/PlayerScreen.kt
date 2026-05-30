@@ -1895,34 +1895,53 @@ fun PlayerScreenLandscape(
                                 LazyColumn(
                                     modifier = Modifier.fillMaxSize(),
                                     state = listState,
-                                    horizontalAlignment = Alignment.CenterHorizontally,
-                                    verticalArrangement = Arrangement.spacedBy(12.dp),
-                                    contentPadding = PaddingValues(vertical = 16.dp)
+                                    horizontalAlignment = Alignment.Start,
+                                    verticalArrangement = Arrangement.spacedBy(10.dp),
+                                    contentPadding = PaddingValues(vertical = 16.dp, horizontal = 24.dp)
                                 ) {
                                     itemsIndexed(lyrics) { index, line ->
                                         val isCurrent = index == currentIndex
-                                        val alpha = if (isCurrent) 1f else 0.45f
-                                        val fontSize = if (isCurrent) 20.sp else 16.sp
+                                        val alpha = if (isCurrent) 1f else 0.5f
+                                        val fontSize = if (isCurrent) 22.sp else 14.sp
 
-                                        Box(contentAlignment = Alignment.Center) {
+                                        Row(
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.Start
+                                        ) {
+                                            // 当前行前加 ▶ 图标
                                             if (isCurrent) {
+                                                Icon(
+                                                    imageVector = Icons.Default.PlayArrow,
+                                                    contentDescription = null,
+                                                    tint = Color.White,
+                                                    modifier = Modifier
+                                                        .size(18.dp)
+                                                        .padding(end = 6.dp)
+                                                )
+                                            } else {
+                                                Spacer(modifier = Modifier.width(24.dp))
+                                            }
+
+                                            Box {
+                                                // 阴影层（黑色描边）
+                                                if (isCurrent) {
+                                                    Text(
+                                                        text = line.text.ifEmpty { " " },
+                                                        color = Color.Black.copy(alpha = 0.8f),
+                                                        fontSize = fontSize,
+                                                        fontWeight = FontWeight.Bold,
+                                                        modifier = Modifier.offset(x = 1.5.dp, y = 1.5.dp)
+                                                    )
+                                                }
+                                                // 主文字层
                                                 Text(
                                                     text = line.text.ifEmpty { " " },
-                                                    color = Color.Black.copy(alpha = 0.7f),
+                                                    color = Color.White.copy(alpha = alpha),
                                                     fontSize = fontSize,
-                                                    fontWeight = FontWeight.Bold,
-                                                    textAlign = TextAlign.Center,
-                                                    modifier = Modifier.offset(x = 1.5.dp, y = 1.5.dp)
+                                                    fontWeight = if (isCurrent) FontWeight.Bold else FontWeight.Normal,
+                                                    modifier = Modifier.padding(start = 0.dp)
                                                 )
                                             }
-                                            Text(
-                                                text = line.text.ifEmpty { " " },
-                                                color = Color.White.copy(alpha = alpha),
-                                                fontSize = fontSize,
-                                                fontWeight = if (isCurrent) FontWeight.Bold else FontWeight.Normal,
-                                                textAlign = TextAlign.Center,
-                                                modifier = Modifier.fillMaxWidth()
-                                            )
                                         }
                                     }
                                 }
