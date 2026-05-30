@@ -1023,15 +1023,38 @@ private fun LyricPage(
         color = MaterialTheme.colorScheme.background.copy(alpha = 0.1f)
     ) {
         Box(modifier = Modifier.fillMaxSize()) {
-            // 纵向进度条 + 时间标签（Row布局：左侧进度条，右侧上下各一个时间）
+            // 纵向进度条 + 时间标签（Row布局：右侧进度条，左侧上下各一个时间）
             Row(
                 modifier = Modifier
-                    .align(Alignment.CenterStart)
-                    .padding(start = 8.dp)
+                    .align(Alignment.CenterEnd)
+                    .padding(end = 12.dp)
                     .fillMaxHeight(0.7f),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                // 左侧纵向进度条
+                // 左侧时间标签列
+                Column(
+                    modifier = Modifier
+                        .padding(end = 8.dp)
+                        .fillMaxHeight(),
+                    horizontalAlignment = Alignment.End,
+                    verticalArrangement = Arrangement.SpaceBetween
+                ) {
+                    // 当前时间（上方，红色）
+                    Text(
+                        text = formatDuration(playbackState.position),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = Color(0xFFE53935),
+                        modifier = Modifier.padding(top = 2.dp)
+                    )
+                    // 总时长（下方）
+                    Text(
+                        text = formatDuration(playbackState.duration),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(bottom = 2.dp)
+                    )
+                }
+                // 右侧纵向进度条
                 Box(
                     modifier = Modifier
                         .width(6.dp)
@@ -1074,28 +1097,6 @@ private fun LyricPage(
                                 )
                         )
                     }
-                }
-                // 右侧时间标签列
-                Column(
-                    modifier = Modifier
-                        .padding(start = 8.dp)
-                        .fillMaxHeight(),
-                    verticalArrangement = Arrangement.SpaceBetween
-                ) {
-                    // 总时长（上方）
-                    Text(
-                        text = formatDuration(playbackState.duration),
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(top = 2.dp)
-                    )
-                    // 当前时间（下方）
-                    Text(
-                        text = formatDuration(playbackState.position),
-                        style = MaterialTheme.typography.labelSmall,
-                        color = Color(0xFFE53935),
-                        modifier = Modifier.padding(bottom = 2.dp)
-                    )
                 }
             }
             when (lyricState) {
