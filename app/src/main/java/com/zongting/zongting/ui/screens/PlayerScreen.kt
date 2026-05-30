@@ -65,6 +65,7 @@ import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.windowsizeclass.WindowSizeClass
+import androidx.compose.material3.windowsizeclass.WindowWidthSizeClass
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.size
@@ -303,7 +304,8 @@ fun PlayerScreen(
                         onPrevious = { viewModel.playPrevious() },
                         onNext = { viewModel.playNext() },
                         onDrag = { pos -> viewModel.updateProgress(pos, playbackState.duration) },
-                        onSeek = { viewModel.seekTo(it) }
+                        onSeek = { viewModel.seekTo(it) },
+                        isExpanded = windowSizeClass.widthSizeClass == WindowWidthSizeClass.Expanded
                     )
                 }
             }
@@ -1052,7 +1054,8 @@ private fun LyricPage(
     onPrevious: () -> Unit,
     onNext: () -> Unit,
     onDrag: (Long) -> Unit,
-    onSeek: (Long) -> Unit
+    onSeek: (Long) -> Unit,
+    isExpanded: Boolean = false  // true = pad (WindowWidthSizeClass.Expanded)
 ) {
     val lazyListState = rememberLazyListState()
     var isUserScrolling by remember { mutableStateOf(false) }
@@ -1085,7 +1088,9 @@ private fun LyricPage(
                     BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
                         val configuration = LocalConfiguration.current
                         val isLandscape = configuration.orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE
-                        val currentLineFontSize = if (isLandscape) 32.sp else 20.sp
+                        val currentLineFontSize = if (isLandscape) {
+                            if (isExpanded) (32 * 1.3f).sp else 32.sp
+                        } else 20.sp
                         val otherLineFontSize = if (isLandscape) 24.sp else 15.sp
                         val lineHeightDp = if (isLandscape) 60.dp else 44.dp
                         val boxHeightPx = with(LocalDensity.current) { maxHeight.toPx() }
