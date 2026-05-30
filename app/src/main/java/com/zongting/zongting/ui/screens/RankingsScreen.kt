@@ -32,6 +32,8 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import com.zongting.zongting.data.model.Bang
 import com.zongting.zongting.data.model.Song
 import com.zongting.zongting.ui.MainViewModel
+import com.zongting.zongting.ui.theme.Primary
+import com.zongting.zongting.ui.theme.PrimaryVariant
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -154,7 +156,11 @@ fun RankingsScreen(
                         enabled = uiState.displayedSongs.isNotEmpty(),
                         modifier = Modifier.height(scaledBtnHeight),
                         contentPadding = PaddingValues(horizontal = 10.dp, vertical = 0.dp),
-                        shape = RoundedCornerShape(15.dp)
+                        shape = RoundedCornerShape(15.dp),
+                        colors = ButtonDefaults.filledTonalButtonColors(
+                            containerColor = PrimaryVariant.copy(alpha = 0.3f),
+                            contentColor = Primary
+                        )
                     ) {
                         Icon(Icons.Default.PlayArrow, null, Modifier.size(scaledIconSize))
                         Spacer(Modifier.width(2.dp))
@@ -231,7 +237,11 @@ fun RankingsScreen(
                     enabled = uiState.displayedSongs.isNotEmpty(),
                     modifier = Modifier.height(scaledChipHeight),
                     contentPadding = PaddingValues(horizontal = 12.dp, vertical = 0.dp),
-                    shape = RoundedCornerShape(16.dp)
+                    shape = RoundedCornerShape(16.dp),
+                    colors = ButtonDefaults.filledTonalButtonColors(
+                        containerColor = PrimaryVariant.copy(alpha = 0.3f),
+                        contentColor = Primary
+                    )
                 ) {
                     Icon(Icons.Default.PlayArrow, null, Modifier.size((16.dp.value * scale).dp))
                     Spacer(Modifier.width(4.dp))

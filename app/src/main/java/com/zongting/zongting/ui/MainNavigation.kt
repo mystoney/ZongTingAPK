@@ -39,6 +39,7 @@ import com.zongting.zongting.data.repository.UpdateEvent
 import com.zongting.zongting.data.repository.UpdatePhase
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.NavigationBarItemDefaults
 
 sealed class Screen(val route: String, val title: String, val icon: ImageVector) {
     object Home : Screen("home", "首页", Icons.Default.Home)
@@ -186,6 +187,11 @@ fun MainNavigation(
                                     icon = { Icon(screen.icon, contentDescription = screen.title) },
                                     label = { Text(screen.title) },
                                     selected = isSelected,
+                                    colors = NavigationBarItemDefaults.colors(
+                                        selectedIconColor = PrimaryVariant,
+                                        selectedTextColor = PrimaryVariant,
+                                        indicatorColor = PrimaryVariant.copy(alpha = 0.3f)
+                                    ),
                                     onClick = {
                                         navController.navigate(screen.route) {
                                             popUpTo(navController.graph.findStartDestination().id) {
