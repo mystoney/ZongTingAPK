@@ -1991,12 +1991,10 @@ private fun FavoriteIcon(
         tint = if (isFavorite) AppColors.FavoriteActive else Color.Transparent,
         modifier = modifier
     )
-    if (isFavorite) {
-        Icon(
-            imageVector = Icons.Outlined.FavoriteBorder,
-            contentDescription = null,
-            tint = Color.White,
-            modifier = modifier
-        )
-    }
+    Icon(
+        imageVector = Icons.Outlined.FavoriteBorder,
+        contentDescription = null,
+        tint = Color.White,
+        modifier = modifier
+    )
 }
