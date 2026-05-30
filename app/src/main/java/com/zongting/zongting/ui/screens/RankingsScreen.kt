@@ -145,27 +145,6 @@ fun RankingsScreen(
                         label = { Text("单曲购买", style = LocalTextStyle.current.copy(fontSize = scaledFontSize)) },
                         modifier = Modifier.height(scaledChipHeight)
                     )
-                    Spacer(modifier = Modifier.weight(1f))
-                    // 全部播放
-                    FilledTonalButton(
-                        onClick = {
-                            if (uiState.displayedSongs.isNotEmpty()) {
-                                mainViewModel.playSongs(uiState.displayedSongs, 0)
-                            }
-                        },
-                        enabled = uiState.displayedSongs.isNotEmpty(),
-                        modifier = Modifier.height(scaledBtnHeight),
-                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 0.dp),
-                        shape = RoundedCornerShape(15.dp),
-                        colors = ButtonDefaults.filledTonalButtonColors(
-                            containerColor = PrimaryVariant.copy(alpha = 0.3f),
-                            contentColor = Primary
-                        )
-                    ) {
-                        Icon(Icons.Default.PlayArrow, null, Modifier.size(scaledIconSize))
-                        Spacer(Modifier.width(2.dp))
-                        Text("播放", style = LocalTextStyle.current.copy(fontSize = scaledFontSize))
-                    }
                 }
             }
         } else {
@@ -227,26 +206,6 @@ fun RankingsScreen(
                     label = { Text("单曲购买", style = LocalTextStyle.current.copy(fontSize = scaledTextSize)) },
                     modifier = Modifier.height(scaledChipHeight)
                 )
-                Spacer(modifier = Modifier.weight(1f))
-                FilledTonalButton(
-                    onClick = {
-                        if (uiState.displayedSongs.isNotEmpty()) {
-                            mainViewModel.playSongs(uiState.displayedSongs, 0)
-                        }
-                    },
-                    enabled = uiState.displayedSongs.isNotEmpty(),
-                    modifier = Modifier.height(scaledChipHeight),
-                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 0.dp),
-                    shape = RoundedCornerShape(16.dp),
-                    colors = ButtonDefaults.filledTonalButtonColors(
-                        containerColor = PrimaryVariant.copy(alpha = 0.3f),
-                        contentColor = Primary
-                    )
-                ) {
-                    Icon(Icons.Default.PlayArrow, null, Modifier.size((16.dp.value * scale).dp))
-                    Spacer(Modifier.width(4.dp))
-                    Text("全部播放", style = LocalTextStyle.current.copy(fontSize = scaledTextSize))
-                }
             }
         }
 

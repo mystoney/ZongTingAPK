@@ -218,7 +218,7 @@ fun PlayerScreen(
         // 顶部导航（铃声截取界面时隐藏）
         if (!showRingtoneCutter) {
             TopAppBar(
-                title = { Text("正在播放") },
+                title = { Text("正在播放", style = MaterialTheme.typography.titleMedium) },
                 navigationIcon = {
                     IconButton(
                         onClick = {
@@ -248,12 +248,12 @@ fun PlayerScreen(
                     Tab(
                         selected = pagerState.currentPage == 0,
                         onClick = { coroutineScope.launch { pagerState.animateScrollToPage(0) } },
-                        text = { Text("播放") }
+                        text = { Text("播放", style = MaterialTheme.typography.labelMedium) }
                     )
                     Tab(
                         selected = pagerState.currentPage == 1,
                         onClick = { coroutineScope.launch { pagerState.animateScrollToPage(1) } },
-                        text = { Text("歌词") }
+                        text = { Text("歌词", style = MaterialTheme.typography.labelMedium) }
                     )
                 }
             }
