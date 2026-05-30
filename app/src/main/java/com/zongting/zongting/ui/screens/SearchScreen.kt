@@ -26,6 +26,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import coil.compose.AsyncImage
 import com.zongting.zongting.data.model.Song
@@ -54,6 +55,63 @@ fun SearchScreen(
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.background)
     ) {
+        Spacer(modifier = Modifier.height(WindowInsets.statusBars.asPaddingValues().calculateTopPadding()))
+
+        // 标题
+        Text(
+            text = "搜索歌曲",
+            style = MaterialTheme.typography.titleLarge,
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)
+        )
+
+        // 来源切换 + 版权筛选（同一行）
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 2.dp),
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            FilterChip(
+                selected = uiState.source == "kuwo",
+                onClick = { viewModel.setSource("kuwo") },
+                label = { Text("酷我", style = LocalTextStyle.current.copy(fontSize = 15.sp)) },
+                modifier = Modifier.height(32.dp)
+            )
+            FilterChip(
+                selected = uiState.source == "netease",
+                onClick = { viewModel.setSource("netease") },
+                label = { Text("网易云", style = LocalTextStyle.current.copy(fontSize = 15.sp)) },
+                modifier = Modifier.height(32.dp)
+            )
+            if (uiState.source == "netease" && uiState.searchResults.isNotEmpty()) {
+                HorizontalDivider(
+                    modifier = Modifier
+                        .height(20.dp)
+                        .width(1.dp),
+                    color = MaterialTheme.colorScheme.outlineVariant
+                )
+                FilterChip(
+                    selected = uiState.filters.contains("free"),
+                    onClick = { viewModel.setFilter("free", !uiState.filters.contains("free")) },
+                    label = { Text("免费", style = LocalTextStyle.current.copy(fontSize = 15.sp)) },
+                    modifier = Modifier.height(32.dp)
+                )
+                FilterChip(
+                    selected = uiState.filters.contains("vip"),
+                    onClick = { viewModel.setFilter("vip", !uiState.filters.contains("vip")) },
+                    label = { Text("VIP", style = LocalTextStyle.current.copy(fontSize = 15.sp)) },
+                    modifier = Modifier.height(32.dp)
+                )
+                FilterChip(
+                    selected = uiState.filters.contains("lock"),
+                    onClick = { viewModel.setFilter("lock", !uiState.filters.contains("lock")) },
+                    label = { Text("付费", style = LocalTextStyle.current.copy(fontSize = 15.sp)) },
+                    modifier = Modifier.height(32.dp)
+                )
+            }
+        }
+
         // 搜索栏
         Row(
             modifier = Modifier
@@ -103,56 +161,6 @@ fun SearchScreen(
                 modifier = Modifier.height(56.dp)
             ) {
                 Text("搜索")
-            }
-        }
-
-        // 来源切换
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 2.dp),
-            horizontalArrangement = Arrangement.spacedBy(6.dp)
-        ) {
-            FilterChip(
-                selected = uiState.source == "kuwo",
-                onClick = { viewModel.setSource("kuwo") },
-                label = { Text("酷我", style = LocalTextStyle.current.copy(fontSize = 15.sp)) },
-                modifier = Modifier.height(32.dp)
-            )
-            FilterChip(
-                selected = uiState.source == "netease",
-                onClick = { viewModel.setSource("netease") },
-                label = { Text("网易云", style = LocalTextStyle.current.copy(fontSize = 15.sp)) },
-                modifier = Modifier.height(32.dp)
-            )
-        }
-
-        // 版权筛选（仅网易云搜索结果显示）
-        if (uiState.source == "netease" && uiState.searchResults.isNotEmpty()) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 4.dp),
-                horizontalArrangement = Arrangement.spacedBy(6.dp)
-            ) {
-                FilterChip(
-                    selected = uiState.filters.contains("free"),
-                    onClick = { viewModel.setFilter("free", !uiState.filters.contains("free")) },
-                    label = { Text("免费", style = LocalTextStyle.current.copy(fontSize = 15.sp)) },
-                    modifier = Modifier.height(32.dp)
-                )
-                FilterChip(
-                    selected = uiState.filters.contains("vip"),
-                    onClick = { viewModel.setFilter("vip", !uiState.filters.contains("vip")) },
-                    label = { Text("VIP", style = LocalTextStyle.current.copy(fontSize = 15.sp)) },
-                    modifier = Modifier.height(32.dp)
-                )
-                FilterChip(
-                    selected = uiState.filters.contains("lock"),
-                    onClick = { viewModel.setFilter("lock", !uiState.filters.contains("lock")) },
-                    label = { Text("付费", style = LocalTextStyle.current.copy(fontSize = 15.sp)) },
-                    modifier = Modifier.height(32.dp)
-                )
             }
         }
 

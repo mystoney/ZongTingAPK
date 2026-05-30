@@ -79,79 +79,147 @@ fun RankingsScreen(
             )
         )
 
-        // ── 来源切换行 ───────────────────────────────────────────────
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 6.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            FilterChip(
-                selected = uiState.source == "kuwo",
-                onClick = { rankingsViewModel.setSource("kuwo") },
-                label = { Text("酷我音乐", style = LocalTextStyle.current.copy(fontSize = 15.sp)) },
-                modifier = Modifier.height(32.dp)
-            )
-            FilterChip(
-                selected = uiState.source == "netease",
-                onClick = { rankingsViewModel.setSource("netease") },
-                label = { Text("网易云音乐", style = LocalTextStyle.current.copy(fontSize = 15.sp)) },
-                modifier = Modifier.height(32.dp)
-            )
-        }
-
-        // ── 筛选行 ───────────────────────────────────────────────────
+        // ── 筛选 + 来源切换行（横屏合并为一行，竖屏保持两行）──────────
         val neteaseEnabled = uiState.source == "netease"
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 4.dp),
-            horizontalArrangement = Arrangement.spacedBy(6.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            FilterChip(
-                selected = uiState.filters.contains("free"),
-                onClick = { if (neteaseEnabled) rankingsViewModel.setFilter("free", !uiState.filters.contains("free")) },
-                enabled = neteaseEnabled,
-                label = { Text("免费", style = LocalTextStyle.current.copy(fontSize = 15.sp)) },
-                modifier = Modifier.height(32.dp)
-            )
-            FilterChip(
-                selected = uiState.filters.contains("vip"),
-                onClick = { if (neteaseEnabled) rankingsViewModel.setFilter("vip", !uiState.filters.contains("vip")) },
-                enabled = neteaseEnabled,
-                label = { Text("VIP", style = LocalTextStyle.current.copy(fontSize = 15.sp)) },
-                modifier = Modifier.height(32.dp)
-            )
-            FilterChip(
-                selected = uiState.filters.contains("single"),
-                onClick = { if (neteaseEnabled) rankingsViewModel.setFilter("single", !uiState.filters.contains("single")) },
-                enabled = neteaseEnabled,
-                label = { Text("单曲购买", style = LocalTextStyle.current.copy(fontSize = 15.sp)) },
-                modifier = Modifier.height(32.dp)
-            )
+        val isLandscape = LocalConfiguration.current.screenWidthDp > LocalConfiguration.current.screenHeightDp
 
-            Spacer(modifier = Modifier.weight(1f))
-
-            // 全部播放按钮
-            FilledTonalButton(
-                onClick = {
-                    if (uiState.displayedSongs.isNotEmpty()) {
-                        mainViewModel.playSongs(uiState.displayedSongs, 0)
-                    }
-                },
-                enabled = uiState.displayedSongs.isNotEmpty(),
-                modifier = Modifier.height(32.dp),
-                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 0.dp),
-                shape = RoundedCornerShape(16.dp)
+        if (isLandscape) {
+            // 横屏：合并为一行
+            BoxWithConstraints(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 4.dp)
             ) {
-                Icon(
-                    imageVector = Icons.Default.PlayArrow,
-                    contentDescription = null,
-                    modifier = Modifier.size(16.dp)
+                val fontSize = if (maxWidth < 600.dp) 12.sp else 15.sp
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    // 来源：酷我 / 网易云
+                    FilterChip(
+                        selected = uiState.source == "kuwo",
+                        onClick = { rankingsViewModel.setSource("kuwo") },
+                        label = { Text("酷我", style = LocalTextStyle.current.copy(fontSize = fontSize)) },
+                        modifier = Modifier.height(30.dp)
+                    )
+                    FilterChip(
+                        selected = uiState.source == "netease",
+                        onClick = { rankingsViewModel.setSource("netease") },
+                        label = { Text("网易云", style = LocalTextStyle.current.copy(fontSize = fontSize)) },
+                        modifier = Modifier.height(30.dp)
+                    )
+                    VerticalDivider(
+                        modifier = Modifier.height(20.dp),
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.3f)
+                    )
+                    // 筛选：免费 / VIP / 单曲购买
+                    FilterChip(
+                        selected = uiState.filters.contains("free"),
+                        onClick = { if (neteaseEnabled) rankingsViewModel.setFilter("free", !uiState.filters.contains("free")) },
+                        enabled = neteaseEnabled,
+                        label = { Text("免费", style = LocalTextStyle.current.copy(fontSize = fontSize)) },
+                        modifier = Modifier.height(30.dp)
+                    )
+                    FilterChip(
+                        selected = uiState.filters.contains("vip"),
+                        onClick = { if (neteaseEnabled) rankingsViewModel.setFilter("vip", !uiState.filters.contains("vip")) },
+                        enabled = neteaseEnabled,
+                        label = { Text("VIP", style = LocalTextStyle.current.copy(fontSize = fontSize)) },
+                        modifier = Modifier.height(30.dp)
+                    )
+                    FilterChip(
+                        selected = uiState.filters.contains("single"),
+                        onClick = { if (neteaseEnabled) rankingsViewModel.setFilter("single", !uiState.filters.contains("single")) },
+                        enabled = neteaseEnabled,
+                        label = { Text("单曲购买", style = LocalTextStyle.current.copy(fontSize = fontSize)) },
+                        modifier = Modifier.height(30.dp)
+                    )
+                    Spacer(modifier = Modifier.weight(1f))
+                    // 全部播放
+                    FilledTonalButton(
+                        onClick = {
+                            if (uiState.displayedSongs.isNotEmpty()) {
+                                mainViewModel.playSongs(uiState.displayedSongs, 0)
+                            }
+                        },
+                        enabled = uiState.displayedSongs.isNotEmpty(),
+                        modifier = Modifier.height(30.dp),
+                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 0.dp),
+                        shape = RoundedCornerShape(15.dp)
+                    ) {
+                        Icon(Icons.Default.PlayArrow, null, Modifier.size(14.dp))
+                        Spacer(Modifier.width(2.dp))
+                        Text("播放", style = LocalTextStyle.current.copy(fontSize = fontSize))
+                    }
+                }
+            }
+        } else {
+            // 竖屏：来源切换行
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 6.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                FilterChip(
+                    selected = uiState.source == "kuwo",
+                    onClick = { rankingsViewModel.setSource("kuwo") },
+                    label = { Text("酷我音乐", style = LocalTextStyle.current.copy(fontSize = 15.sp)) },
+                    modifier = Modifier.height(32.dp)
                 )
-                Spacer(modifier = Modifier.width(4.dp))
-                Text("全部播放", style = LocalTextStyle.current.copy(fontSize = 15.sp))
+                FilterChip(
+                    selected = uiState.source == "netease",
+                    onClick = { rankingsViewModel.setSource("netease") },
+                    label = { Text("网易云音乐", style = LocalTextStyle.current.copy(fontSize = 15.sp)) },
+                    modifier = Modifier.height(32.dp)
+                )
+            }
+            // 筛选行
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 4.dp),
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                FilterChip(
+                    selected = uiState.filters.contains("free"),
+                    onClick = { if (neteaseEnabled) rankingsViewModel.setFilter("free", !uiState.filters.contains("free")) },
+                    enabled = neteaseEnabled,
+                    label = { Text("免费", style = LocalTextStyle.current.copy(fontSize = 15.sp)) },
+                    modifier = Modifier.height(32.dp)
+                )
+                FilterChip(
+                    selected = uiState.filters.contains("vip"),
+                    onClick = { if (neteaseEnabled) rankingsViewModel.setFilter("vip", !uiState.filters.contains("vip")) },
+                    enabled = neteaseEnabled,
+                    label = { Text("VIP", style = LocalTextStyle.current.copy(fontSize = 15.sp)) },
+                    modifier = Modifier.height(32.dp)
+                )
+                FilterChip(
+                    selected = uiState.filters.contains("single"),
+                    onClick = { if (neteaseEnabled) rankingsViewModel.setFilter("single", !uiState.filters.contains("single")) },
+                    enabled = neteaseEnabled,
+                    label = { Text("单曲购买", style = LocalTextStyle.current.copy(fontSize = 15.sp)) },
+                    modifier = Modifier.height(32.dp)
+                )
+                Spacer(modifier = Modifier.weight(1f))
+                FilledTonalButton(
+                    onClick = {
+                        if (uiState.displayedSongs.isNotEmpty()) {
+                            mainViewModel.playSongs(uiState.displayedSongs, 0)
+                        }
+                    },
+                    enabled = uiState.displayedSongs.isNotEmpty(),
+                    modifier = Modifier.height(32.dp),
+                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 0.dp),
+                    shape = RoundedCornerShape(16.dp)
+                ) {
+                    Icon(Icons.Default.PlayArrow, null, Modifier.size(16.dp))
+                    Spacer(Modifier.width(4.dp))
+                    Text("全部播放", style = LocalTextStyle.current.copy(fontSize = 15.sp))
+                }
             }
         }
 

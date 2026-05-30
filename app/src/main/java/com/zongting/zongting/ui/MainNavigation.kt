@@ -121,8 +121,8 @@ fun MainNavigation(
                     val isSelected = currentDestination?.route == screen.route ||
                         (screen.route != "rankings" && currentDestination?.route?.startsWith(screen.route) == true)
                     NavigationRailItem(
-                        icon = { Icon(screen.icon, contentDescription = screen.title) },
-                        label = { Text(screen.title, maxLines = 1) },
+                        icon = { Icon(screen.icon, contentDescription = screen.title, modifier = Modifier.size(30.dp)) },
+                        label = { Text(screen.title, maxLines = 1, style = MaterialTheme.typography.titleMedium) },
                         selected = isSelected,
                         onClick = {
                             navController.navigate(screen.route) {

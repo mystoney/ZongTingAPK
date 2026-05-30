@@ -1123,6 +1123,7 @@ private fun LyricPage(
                                     key = { idx, _ -> idx }
                                 ) { idx, lyricLine ->
                                     val isCurrent = idx == currentLineIndex
+                                    val isNext = idx == currentLineIndex + 1
                                     val alpha by animateFloatAsState(
                                         targetValue = if (isCurrent) 1f else 0.45f,
                                         animationSpec = tween(300),
@@ -1130,7 +1131,7 @@ private fun LyricPage(
                                     )
                                     Text(
                                         text = lyricLine.text,
-                                        fontSize = if (isCurrent) currentLineFontSize else otherLineFontSize,
+                                        fontSize = if (isCurrent || isNext) currentLineFontSize else otherLineFontSize,
                                         fontWeight = if (isCurrent) FontWeight.Bold else FontWeight.Normal,
                                         color = if (isCurrent) {
                                             Color(0xFFE53935).copy(alpha = alpha)

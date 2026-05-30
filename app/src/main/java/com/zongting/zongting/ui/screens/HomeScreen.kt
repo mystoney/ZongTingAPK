@@ -28,6 +28,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Dialog
 import kotlin.math.ceil
 import kotlin.collections.chunked
 import androidx.compose.material3.windowsizeclass.WindowSizeClass
@@ -88,6 +89,7 @@ fun HomeScreen(
             onPlaylistPlay = onPlaylistPlay,
             onSongPlay = onSongPlay,
             onBangClick = onBangClick,
+            onBangPlay = onBangPlay,
             isExpanded = true,
             availableWidthDp = PAD_MAX_CONTENT_WIDTH_DP.dp
         )
@@ -104,6 +106,7 @@ fun HomeScreen(
             onPlaylistPlay = onPlaylistPlay,
             onSongPlay = onSongPlay,
             onBangClick = onBangClick,
+            onBangPlay = onBangPlay,
             isExpanded = false,
             availableWidthDp = null
         )
@@ -123,6 +126,7 @@ private fun HomeScreenContent(
     onPlaylistPlay: (Long) -> Unit,
     onSongPlay: (Song) -> Unit,
     onBangClick: (String) -> Unit,
+    onBangPlay: (Bang) -> Unit,
     isExpanded: Boolean,
     availableWidthDp: Dp?,
 ) {
@@ -275,6 +279,7 @@ private fun HomeScreenContent(
                         onSongClick = onSongClick,
                         onSongPlay = onSongPlay,
                         onBangClick = onBangClick,
+                        onBangPlay = onBangPlay,
                         isExpanded = isExpanded,
                         availableWidthDp = availableWidthDp
                     )
@@ -299,12 +304,47 @@ private fun HomeScreenContent(
 fun BannerCarousel(banners: List<Banner>) {
     val pagerState = rememberPagerState(pageCount = { banners.size })
     val scope = rememberCoroutineScope()
+    var selectedBannerImage by remember { mutableStateOf<String?>(null) }
+    var selectedImageSize by remember { mutableStateOf(Pair(1f, 1f)) }
+    val configuration = LocalConfiguration.current
+    val screenWidthPx = configuration.screenWidthDp.dp
 
     // 自动轮播
     LaunchedEffect(Unit) {
         while (true) {
             delay(3000)
             pagerState.animateScrollToPage((pagerState.currentPage + 1) % banners.size)
+        }
+    }
+
+    // 图片点击弹窗
+    selectedBannerImage?.let { imageUrl ->
+        Dialog(
+            onDismissRequest = { selectedBannerImage = null }
+        ) {
+            val (imgW, imgH) = selectedImageSize
+            val aspectRatio = if (imgH > 0) imgW / imgH else 16f / 9f
+            val dialogWidth = screenWidthPx * 0.85f
+            val dialogHeight = dialogWidth / aspectRatio
+
+            Box(
+                modifier = Modifier
+                    .width(dialogWidth)
+                    .height(dialogHeight)
+                    .clip(RoundedCornerShape(12.dp))
+                    .clickable { selectedBannerImage = null },
+                contentAlignment = Alignment.Center
+            ) {
+                AsyncImage(
+                    model = imageUrl,
+                    contentDescription = null,
+                    modifier = Modifier.fillMaxSize(),
+                    contentScale = ContentScale.Fit,
+                    onSuccess = {
+                        selectedImageSize = it.result.drawable.intrinsicWidth.toFloat() to it.result.drawable.intrinsicHeight.toFloat()
+                    }
+                )
+            }
         }
     }
 
@@ -315,18 +355,18 @@ fun BannerCarousel(banners: List<Banner>) {
             state = pagerState,
             modifier = Modifier
                 .fillMaxWidth()
-                .height(140.dp)
+                .height(180.dp)
                 .padding(horizontal = 16.dp)
         ) { page ->
             val banner = banners[page]
-            // 优先用 newPic（高清图），pic 可能是空或旧图
             val imageUrl = banner.newPic.ifEmpty { banner.pic }
             AsyncImage(
                 model = imageUrl,
                 contentDescription = null,
                 modifier = Modifier
                     .fillMaxSize()
-                    .clip(RoundedCornerShape(12.dp)),
+                    .clip(RoundedCornerShape(12.dp))
+                    .clickable { selectedBannerImage = imageUrl },
                 contentScale = ContentScale.Crop
             )
         }
@@ -375,19 +415,19 @@ fun PlaylistCard(
     playlist: Playlist,
     onClick: () -> Unit,
     onPlayClick: () -> Unit,
-    cardWidth: Int,
-    iconWidth: Int
+    cardWidth: Dp,
+    iconWidth: Dp
 ) {
     Column(
         modifier = Modifier
-            .width(cardWidth.dp)
+            .width(cardWidth)
             .clickable(onClick = onClick)
     ) {
         Box(
             modifier = Modifier
-                .size(iconWidth.dp)
+                .size(iconWidth)
         ) {
-            val iconDpWidth: Dp = iconWidth.dp
+            val iconDpWidth: Dp = iconWidth
             // 按钮：直径=图标宽×30%，三角形=按钮×80%，offset=80%
             val btnSizeDp: Dp = iconDpWidth * 0.30f      // 按钮=图标×30%
             val icSizeDp: Dp = btnSizeDp * 0.80f        // 三角=按钮×80%
@@ -438,9 +478,9 @@ fun PlaylistCard(
 
 /** 热门榜单 — 横向滚动卡片 */
 @Composable
-fun HotBangsRow(bangs: List<Bang>, onBangClick: (String) -> Unit) {
+fun HotBangsRow(bangs: List<Bang>, onBangClick: (String) -> Unit, onBangPlay: (Bang) -> Unit) {
     val screenWidth = LocalConfiguration.current.screenWidthDp
-    val cardWidth = (screenWidth - 32 - 24) / 3
+    val cardWidth: Dp = ((screenWidth - 32 - 24) / 3).dp
     LazyRow(
         modifier = Modifier
             .fillMaxWidth()
@@ -449,7 +489,7 @@ fun HotBangsRow(bangs: List<Bang>, onBangClick: (String) -> Unit) {
         horizontalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         items(bangs) { bang ->
-            BangCard(bang = bang, onClick = { onBangClick(bang.id) }, cardWidth = cardWidth)
+            BangCard(bang = bang, onClick = { onBangClick(bang.id) }, onPlayClick = { onBangPlay(bang) }, cardWidth = cardWidth)
         }
     }
 }
@@ -462,7 +502,7 @@ fun DailyRecommendRow(
     onPlaylistPlay: (Long) -> Unit
 ) {
     val screenWidth = LocalConfiguration.current.screenWidthDp
-    val cardWidth = (screenWidth - 32 - 16) / 3
+    val cardWidth: Dp = ((screenWidth - 32 - 16) / 3).dp
     val rows = playlists.chunked(3)
 
     Column(
@@ -581,89 +621,86 @@ fun RecommendContent(
     onSongClick: (Song, List<Song>) -> Unit,
     onSongPlay: (Song) -> Unit,
     onBangClick: (String) -> Unit,
+    onBangPlay: (Bang) -> Unit,
     isExpanded: Boolean = false,
     availableWidthDp: Dp? = null
 ) {
-    val effectiveWidth = availableWidthDp?.value ?: LocalConfiguration.current.screenWidthDp.toFloat()
-    val horizontalPadding = 32
-    val cardWidth = if (isExpanded) {
-        160
-    } else {
-        val columnSpacing = 8 * 2
-        ((effectiveWidth - horizontalPadding - columnSpacing) / 3).toInt()
-    }
-
-    Column(
+    BoxWithConstraints(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 8.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp)
+            .padding(horizontal = 16.dp)
     ) {
-        // 每日推荐
-        if (playlists.isNotEmpty()) {
-            SectionTitle("每日推荐")
-            playlists.chunked(if (isExpanded) 6 else 3).forEach { rowItems ->
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    rowItems.forEach { playlist ->
-                        PlaylistCard(
-                            playlist,
-                            { onPlaylistClick(playlist.id) },
-                            { onPlaylistPlay(playlist.id) },
-                            cardWidth,
-                            cardWidth
-                        )
-                    }
-                    repeat((if (isExpanded) 6 else 3) - rowItems.size) {
-                        Spacer(Modifier.weight(1f))
+        val numCols = if (isExpanded) 6 else 3
+        val totalGaps = 8.dp * (numCols - 1)
+        val cardW = (maxWidth - totalGaps) / numCols
+
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(vertical = 8.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
+            // 每日推荐
+            if (playlists.isNotEmpty()) {
+                SectionTitle("每日推荐")
+                playlists.chunked(numCols).forEach { rowItems ->
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        rowItems.forEach { playlist ->
+                            PlaylistCard(
+                                playlist,
+                                { onPlaylistClick(playlist.id) },
+                                { onPlaylistPlay(playlist.id) },
+                                cardW,
+                                cardW
+                            )
+                        }
+                        repeat(numCols - rowItems.size) {
+                            Spacer(Modifier.weight(1f))
+                        }
                     }
                 }
             }
-        }
 
-        // 排行榜
-        if (hotBangs.isNotEmpty()) {
-            SectionTitle("排行榜")
-            hotBangs.chunked(if (isExpanded) 6 else 3).forEach { rowItems ->
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    rowItems.forEach { bang ->
-                        BangCard(
-                            bang = bang,
-                            onClick = { onBangClick(bang.id) },
-                            cardWidth = cardWidth
-                        )
-                    }
-                    repeat((if (isExpanded) 6 else 3) - rowItems.size) {
-                        Spacer(Modifier.weight(1f))
+            // 排行榜
+            if (hotBangs.isNotEmpty()) {
+                SectionTitle("排行榜")
+                hotBangs.chunked(numCols).forEach { rowItems ->
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        rowItems.forEach { bang ->
+                            BangCard(
+                                bang = bang,
+                                onClick = { onBangClick(bang.id) },
+                                onPlayClick = { onBangPlay(bang) },
+                                cardWidth = cardW
+                            )
+                        }
                     }
                 }
             }
-        }
 
-        // 热门歌曲
-        if (hotSongs.isNotEmpty()) {
-            SectionTitle("热门歌曲")
-            hotSongs.chunked(if (isExpanded) 6 else 3).forEach { rowItems ->
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    rowItems.forEach { song ->
-                        SongCard(
-                            song = song,
-                            allSongs = hotSongs,
-                            onClick = { onSongClick(song, hotSongs) },
-                            onPlayClick = { onSongPlay(song) },
-                            cardWidth = cardWidth
-                        )
-                    }
-                    repeat((if (isExpanded) 6 else 3) - rowItems.size) {
-                        Spacer(Modifier.weight(1f))
+            // 热门歌曲
+            if (hotSongs.isNotEmpty()) {
+                SectionTitle("热门歌曲")
+                hotSongs.chunked(numCols).forEach { rowItems ->
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        rowItems.forEach { song ->
+                            SongCard(
+                                song = song,
+                                allSongs = hotSongs,
+                                onClick = { onSongClick(song, hotSongs) },
+                                onPlayClick = { onSongPlay(song) },
+                                cardWidth = cardW
+                            )
+                        }
                     }
                 }
             }
@@ -688,17 +725,17 @@ fun SongCard(
     allSongs: List<Song>,
     onClick: () -> Unit,
     onPlayClick: () -> Unit,
-    cardWidth: Int
+    cardWidth: Dp
 ) {
     Column(
         modifier = Modifier
-            .width(cardWidth.dp)
+            .width(cardWidth)
             .clickable(onClick = onClick)
     ) {
         Box(
-            modifier = Modifier.size(cardWidth.dp)
+            modifier = Modifier.size(cardWidth)
         ) {
-            val iconDpWidth: Dp = cardWidth.dp
+            val iconDpWidth: Dp = cardWidth
             val btnSizeDp: Dp = iconDpWidth * 0.30f
             val icSizeDp: Dp = btnSizeDp * 0.80f
             val xOffset = (iconDpWidth.value * 0.80f - btnSizeDp.value / 2).dp
@@ -748,16 +785,17 @@ fun SongCard(
 fun BangCard(
     bang: Bang,
     onClick: () -> Unit,
-    cardWidth: Int
+    onPlayClick: () -> Unit,
+    cardWidth: Dp
 ) {
     Column(
         modifier = Modifier
-            .width(cardWidth.dp)
+            .width(cardWidth)
             .clickable(onClick = onClick)
     ) {
         Box(
             modifier = Modifier
-                .size(cardWidth.dp)
+                .size(cardWidth)
                 .clip(RoundedCornerShape(8.dp))
         ) {
             AsyncImage(
@@ -766,6 +804,29 @@ fun BangCard(
                 modifier = Modifier.fillMaxSize(),
                 contentScale = ContentScale.Crop
             )
+            // 播放按钮覆盖层：圆心对齐图标右下角，完全在图标内
+            // 按钮=图标×30%，三角形=按钮×80%，offset=80%
+            val iconDpWidth: Dp = cardWidth
+            val btnSizeDp: Dp = iconDpWidth * 0.30f      // 按钮=图标×30%
+            val icSizeDp: Dp = btnSizeDp * 0.80f         // 三角=按钮×80%
+            val xOffset = (iconDpWidth.value * 0.80f - btnSizeDp.value / 2).dp
+            val yOffset = xOffset
+            Box(
+                modifier = Modifier
+                    .align(Alignment.TopStart)
+                    .offset(x = xOffset, y = yOffset)
+                    .size(btnSizeDp)
+                    .background(Color.White.copy(alpha = 0.5f), RoundedCornerShape(btnSizeDp / 2))
+                    .clickable(onClick = onPlayClick),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(
+                    imageVector = Icons.Filled.PlayArrow,
+                    contentDescription = "播放全部",
+                    tint = Color.White,
+                    modifier = Modifier.size(icSizeDp),
+                )
+            }
         }
         Text(
             text = bang.name,

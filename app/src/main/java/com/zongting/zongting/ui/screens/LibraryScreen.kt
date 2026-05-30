@@ -286,9 +286,7 @@ fun LibraryScreen(
                         onAddAll = { songsList -> songsPendingAdd = songsList },
                         onBack = { expandedPlaylist = null }
                     )
-                    3 -> DownloadManagerContent(
-                        onAboutClick = { selectedTab = 4 }
-                    )
+                    3 -> DownloadManagerContent()
                     4 -> AboutContent()
                 }
             }
@@ -1106,9 +1104,7 @@ private fun RenamePlaylistDialog(
 }
 
 @Composable
-private fun DownloadManagerContent(
-    onAboutClick: () -> Unit
-) {
+private fun DownloadManagerContent() {
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -1121,32 +1117,6 @@ private fun DownloadManagerContent(
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
         Spacer(modifier = Modifier.height(8.dp))
-        HorizontalDivider()
-        // 关于入口
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .clickable(onClick = onAboutClick)
-                .padding(vertical = 16.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(
-                    Icons.Default.Info,
-                    contentDescription = null,
-                    modifier = Modifier.size(24.dp),
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                Spacer(modifier = Modifier.width(12.dp))
-                Text("关于", style = MaterialTheme.typography.titleMedium)
-            }
-            Icon(
-                Icons.Default.ChevronRight,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-        }
         HorizontalDivider()
         Spacer(modifier = Modifier.weight(1f))
     }
