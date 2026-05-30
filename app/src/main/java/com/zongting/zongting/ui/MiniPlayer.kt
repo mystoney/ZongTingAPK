@@ -21,6 +21,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -144,9 +147,8 @@ fun MiniPlayer(
                     onClick = onToggleFavorite,
                     modifier = Modifier.size(buttonTouchTarget)
                 ) {
-                    Icon(
-                        imageVector = if (isFavorite) Icons.Filled.Favorite else Icons.Outlined.FavoriteBorder,
-                        contentDescription = if (isFavorite) "取消喜欢" else "我喜欢",
+                    MiniFavoriteIcon(
+                        isFavorite = isFavorite,
                         tint = if (isFavorite) AppColors.FavoriteActive else AppColors.FavoriteInactive,
                         modifier = Modifier.size(iconSize)
                     )
@@ -209,4 +211,49 @@ fun MiniPlayer(
             }
         }
     }
+}
+
+/**
+ * 收藏图标：选中时白色描边 + AppColors.FavoriteActive 填充
+ */
+@Composable
+private fun MiniFavoriteIcon(
+    isFavorite: Boolean,
+    tint: Color,
+    modifier: Modifier = Modifier
+) {
+    Icon(
+        imageVector = Icons.Filled.Favorite,
+        contentDescription = if (isFavorite) "取消喜欢" else "我喜欢",
+        tint = tint,
+        modifier = modifier.drawBehind {
+            val path = Path().apply {
+                val w = size.width
+                val h = size.height
+                moveTo(w * 0.5f, h * 0.85f)
+                cubicTo(
+                    w * 0.1f, h * 0.65f,
+                    0f, h * 0.35f,
+                    w * 0.25f, h * 0.15f
+                )
+                cubicTo(
+                    w * 0.4f, 0f,
+                    w * 0.5f, h * 0.1f,
+                    w * 0.5f, h * 0.1f
+                )
+                cubicTo(
+                    w * 0.5f, h * 0.1f,
+                    w * 0.6f, 0f,
+                    w * 0.75f, h * 0.15f
+                )
+                cubicTo(
+                    w * 1f, h * 0.35f,
+                    w * 0.9f, h * 0.65f,
+                    w * 0.5f, h * 0.85f
+                )
+                close()
+            }
+            drawPath(path, Color.White, style = Stroke(width = 4f))
+        }
+    )
 }

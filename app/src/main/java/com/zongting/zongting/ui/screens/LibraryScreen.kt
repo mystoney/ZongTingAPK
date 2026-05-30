@@ -17,7 +17,10 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.style.TextOverflow
@@ -28,6 +31,7 @@ import coil.compose.AsyncImage
 import com.zongting.zongting.BuildConfig
 import com.zongting.zongting.data.model.Song
 import com.zongting.zongting.data.model.UserPlaylist
+import com.zongting.zongting.ui.theme.AppColors
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
@@ -501,11 +505,10 @@ private fun LibraryFavoriteContent(
                         onClick = { onSongClick(song) },
                         onLongClick = { onSongLongPress(song) },
                         trailing = {
-                            Icon(
-                                imageVector = Icons.Default.Favorite,
-                                contentDescription = "已收藏",
-                                modifier = Modifier.size((20 * if (isExpanded) 1.3f else 1f).dp),
-                                tint = MaterialTheme.colorScheme.primary
+                            LibraryFavoriteIcon(
+                                isFavorite = true,
+                                tint = AppColors.FavoriteActive,
+                                modifier = Modifier.size((20 * if (isExpanded) 1.3f else 1f).dp)
                             )
                         },
                         onFavoriteClick = { onToggleFavorite(song) },
@@ -880,11 +883,10 @@ private fun LibrarySongRow(
                 trailing()
             } else if (onFavoriteClick != null) {
                 IconButton(onClick = onFavoriteClick) {
-                    Icon(
-                        imageVector = Icons.Default.FavoriteBorder,
-                        contentDescription = "收藏",
-                        modifier = Modifier.size(iconSize),
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                    LibraryFavoriteIcon(
+                        isFavorite = false,
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.size(iconSize)
                     )
                 }
             }
@@ -1221,4 +1223,49 @@ fun EmptyState(
             )
         }
     }
+}
+
+/**
+ * 收藏图标：选中时白色描边 + tint 填充
+ */
+@Composable
+private fun LibraryFavoriteIcon(
+    isFavorite: Boolean,
+    tint: Color,
+    modifier: Modifier = Modifier
+) {
+    Icon(
+        imageVector = Icons.Filled.Favorite,
+        contentDescription = if (isFavorite) "已收藏" else "收藏",
+        tint = tint,
+        modifier = modifier.drawBehind {
+            val path = Path().apply {
+                val w = size.width
+                val h = size.height
+                moveTo(w * 0.5f, h * 0.85f)
+                cubicTo(
+                    w * 0.1f, h * 0.65f,
+                    0f, h * 0.35f,
+                    w * 0.25f, h * 0.15f
+                )
+                cubicTo(
+                    w * 0.4f, 0f,
+                    w * 0.5f, h * 0.1f,
+                    w * 0.5f, h * 0.1f
+                )
+                cubicTo(
+                    w * 0.5f, h * 0.1f,
+                    w * 0.6f, 0f,
+                    w * 0.75f, h * 0.15f
+                )
+                cubicTo(
+                    w * 1f, h * 0.35f,
+                    w * 0.9f, h * 0.65f,
+                    w * 0.5f, h * 0.85f
+                )
+                close()
+            }
+            drawPath(path, Color.White, style = Stroke(width = 4f))
+        }
+    )
 }

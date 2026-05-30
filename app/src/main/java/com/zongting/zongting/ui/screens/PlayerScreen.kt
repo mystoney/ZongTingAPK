@@ -37,6 +37,8 @@ import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asComposeRenderEffect
 import androidx.compose.ui.graphics.drawscope.DrawScope
@@ -520,10 +522,10 @@ private fun PlayerBottomBar(
                 }
 
                 IconButton(onClick = onToggleFavorite) {
-                    Icon(
-                        imageVector = if (isFavorite) Icons.Filled.Favorite else Icons.Outlined.FavoriteBorder,
-                        contentDescription = if (isFavorite) "取消喜欢" else "我喜欢",
+                    FavoriteIcon(
+                        isFavorite = isFavorite,
                         tint = if (isFavorite) AppColors.FavoriteActive else MaterialTheme.colorScheme.onSurface,
+                        contentDescription = if (isFavorite) "取消喜欢" else "我喜欢",
                         modifier = Modifier.size(scaledSmallIconSize)
                     )
                 }
@@ -1809,10 +1811,10 @@ fun PlayerScreenLandscape(
                             }
 
                             IconButton(onClick = onToggleFavorite) {
-                                Icon(
-                                    imageVector = if (isFavorite) Icons.Filled.Favorite else Icons.Outlined.FavoriteBorder,
+                                FavoriteIcon(
+                                    isFavorite = isFavorite,
+                                    tint = if (isFavorite) AppColors.FavoriteActive else Color.White.copy(alpha = 0.8f),
                                     contentDescription = "收藏",
-                                    tint = if (isFavorite) accentColor else Color.White.copy(alpha = 0.8f),
                                     modifier = Modifier.size(btnSize)
                                 )
                             }
@@ -1908,7 +1910,7 @@ fun PlayerScreenLandscape(
                                 LazyColumn(
                                     modifier = Modifier.fillMaxSize(),
                                     state = listState,
-                                    horizontalAlignment = Alignment.Start,
+                                    horizontalAlignment = Alignment.End,
                                     verticalArrangement = Arrangement.spacedBy(10.dp),
                                     contentPadding = PaddingValues(vertical = 16.dp, horizontal = 40.dp)
                                 ) {
@@ -1920,7 +1922,7 @@ fun PlayerScreenLandscape(
 
                                         Row(
                                             verticalAlignment = Alignment.CenterVertically,
-                                            horizontalArrangement = Arrangement.Start
+                                            horizontalArrangement = Arrangement.End
                                         ) {
                                             // 当前行前加 ▶ 图标
                                             if (isCurrent) {
@@ -1930,7 +1932,7 @@ fun PlayerScreenLandscape(
                                                     tint = Color.White,
                                                     modifier = Modifier
                                                         .size(22.dp)
-                                                        .padding(end = 6.dp)
+                                                        .padding(start = 6.dp)
                                                 )
                                             } else {
                                                 Spacer(modifier = Modifier.width(24.dp))
@@ -1984,4 +1986,54 @@ private fun formatTime(ms: Long): String {
     val min = totalSec / 60
     val sec = totalSec % 60
     return "%d:%02d".format(min, sec)
+}
+
+/**
+ * 收藏图标：选中时白色描边 + AppColors.FavoriteActive 填充
+ */
+@Composable
+private fun FavoriteIcon(
+    isFavorite: Boolean,
+    tint: Color,
+    modifier: Modifier = Modifier,
+    contentDescription: String? = null
+) {
+    val heartColor = tint
+    val outlineColor = Color.White
+
+    Icon(
+        imageVector = Icons.Filled.Favorite,
+        contentDescription = contentDescription,
+        tint = heartColor,
+        modifier = modifier.drawBehind {
+            // 先画白色描边（外向扩展）
+            val path = Path().apply {
+                val w = size.width
+                val h = size.height
+                moveTo(w * 0.5f, h * 0.85f)
+                cubicTo(
+                    w * 0.1f, h * 0.65f,
+                    0f, h * 0.35f,
+                    w * 0.25f, h * 0.15f
+                )
+                cubicTo(
+                    w * 0.4f, 0f,
+                    w * 0.5f, h * 0.1f,
+                    w * 0.5f, h * 0.1f
+                )
+                cubicTo(
+                    w * 0.5f, h * 0.1f,
+                    w * 0.6f, 0f,
+                    w * 0.75f, h * 0.15f
+                )
+                cubicTo(
+                    w * 1f, h * 0.35f,
+                    w * 0.9f, h * 0.65f,
+                    w * 0.5f, h * 0.85f
+                )
+                close()
+            }
+            drawPath(path, outlineColor, style = Stroke(width = 4f))
+        }
+    )
 }
