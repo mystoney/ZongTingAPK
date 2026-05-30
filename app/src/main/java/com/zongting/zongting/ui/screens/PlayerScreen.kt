@@ -1217,8 +1217,9 @@ private fun LyricPage(
                     playbackState.position.toFloat() / playbackState.duration.toFloat()
                 } else 0f
                 val displayProgress = if (isDragging) dragProgress else progress
+                val density = LocalDensity.current
 
-                Box(
+                BoxWithConstraints(
                     modifier = Modifier
                         .align(Alignment.CenterEnd)
                         .padding(end = 8.dp)
@@ -1243,50 +1244,48 @@ private fun LyricPage(
                                     }
                                 }
                             )
-                        },
-                    contentAlignment = Alignment.TopCenter
+                        }
                 ) {
-                    // 外层容器：纵向排列：圆形指示器在上，轨道在下
-                    Column(
-                        modifier = Modifier.fillMaxHeight(),
-                        verticalArrangement = Arrangement.Top,
-                        horizontalAlignment = Alignment.CenterHorizontally
+                    // 使用 density.density 和 Dp.value 做像素换算，避免 toPx/toDp 扩展函数
+                    val densityVal = density.density
+                    val barHeightPx = maxHeight.value * densityVal
+                    val thumbDiaPx = 12f * densityVal
+                    // 圆形 Y：进度 0=底部，进度 1=顶部
+                    val thumbY = (barHeightPx * (1f - displayProgress) - thumbDiaPx / 2).coerceIn(0f, barHeightPx - thumbDiaPx)
+
+                    // 轨道背景
+                    Box(
+                        modifier = Modifier
+                            .fillMaxHeight()
+                            .width(6.dp)
+                            .background(
+                                Color.White.copy(alpha = 0.15f),
+                                RoundedCornerShape(3.dp)
+                            )
+                    )
+                    // 已播放进度（从上往下填充）
+                    Box(
+                        modifier = Modifier
+                            .fillMaxHeight(displayProgress)
+                            .width(6.dp)
+                            .background(
+                                Color(0xFFE53935),
+                                RoundedCornerShape(3.dp)
+                            )
+                    )
+                    // 圆形指示器（直径=进度条宽度的两倍=12dp）
+                    Box(
+                        modifier = Modifier
+                            .fillMaxHeight()
+                            .width(6.dp),
+                        contentAlignment = Alignment.TopStart
                     ) {
-                        // 圆形指示器（直径 = 进度条宽度的两倍）
                         Box(
                             modifier = Modifier
+                                .offset(y = (thumbY / densityVal).dp)
                                 .size(12.dp)
-                                .offset(y = (-6).dp) // 圆形底部对齐进度条顶部
                                 .background(Color(0xFFE53935), CircleShape)
                         )
-                        // 轨道背景 + 已播放进度
-                        Box(
-                            modifier = Modifier
-                                .weight(1f)
-                                .width(6.dp),
-                            contentAlignment = Alignment.BottomCenter
-                        ) {
-                            // 轨道背景
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxHeight()
-                                    .width(6.dp)
-                                    .background(
-                                        Color.White.copy(alpha = 0.15f),
-                                        RoundedCornerShape(3.dp)
-                                    )
-                            )
-                            // 已播放进度（从底部往上填充）
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxHeight(displayProgress)
-                                    .width(6.dp)
-                                    .background(
-                                        Color(0xFFE53935),
-                                        RoundedCornerShape(3.dp)
-                                    )
-                            )
-                        }
                     }
                 }
                 // 时间标签
