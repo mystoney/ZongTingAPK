@@ -599,30 +599,6 @@ fun RecommendContent(
             .padding(horizontal = 16.dp, vertical = 8.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        // 热门歌曲
-        if (hotSongs.isNotEmpty()) {
-            SectionTitle("热门歌曲")
-            hotSongs.chunked(if (isExpanded) 6 else 3).forEach { rowItems ->
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    rowItems.forEach { song ->
-                        SongCard(
-                            song = song,
-                            allSongs = hotSongs,
-                            onClick = { onSongClick(song, hotSongs) },
-                            onPlayClick = { onSongPlay(song) },
-                            cardWidth = cardWidth
-                        )
-                    }
-                    repeat((if (isExpanded) 6 else 3) - rowItems.size) {
-                        Spacer(Modifier.weight(1f))
-                    }
-                }
-            }
-        }
-
         // 每日推荐
         if (playlists.isNotEmpty()) {
             SectionTitle("每日推荐")
@@ -647,7 +623,6 @@ fun RecommendContent(
             }
         }
 
-        // 推荐歌单（如果和每日推荐不同的话，避免重复）
         // 排行榜
         if (hotBangs.isNotEmpty()) {
             SectionTitle("排行榜")
@@ -660,6 +635,30 @@ fun RecommendContent(
                         BangCard(
                             bang = bang,
                             onClick = { onBangClick(bang.id) },
+                            cardWidth = cardWidth
+                        )
+                    }
+                    repeat((if (isExpanded) 6 else 3) - rowItems.size) {
+                        Spacer(Modifier.weight(1f))
+                    }
+                }
+            }
+        }
+
+        // 热门歌曲
+        if (hotSongs.isNotEmpty()) {
+            SectionTitle("热门歌曲")
+            hotSongs.chunked(if (isExpanded) 6 else 3).forEach { rowItems ->
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    rowItems.forEach { song ->
+                        SongCard(
+                            song = song,
+                            allSongs = hotSongs,
+                            onClick = { onSongClick(song, hotSongs) },
+                            onPlayClick = { onSongPlay(song) },
                             cardWidth = cardWidth
                         )
                     }
