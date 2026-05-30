@@ -1128,10 +1128,16 @@ private fun LyricPage(
                             firstVisibleOffset +
                             lineHeightPx / 2f
 
+                        // 行偏移量：PAD 当前行在第3行(偏移2)，手机竖屏当前行在第5行(偏移4)，横屏不需要歌词
+                        val rowOffset = if (isLandscape) 0 else if (isExpanded) 2 else 4
+
                         // 目标行始终为 currentLineIndex（切歌时自动更新）
                         LaunchedEffect(position, currentLineIndex) {
                             if (lines.isNotEmpty() && currentLineIndex in lines.indices) {
-                                lazyListState.animateScrollToItem(index = currentLineIndex)
+                                lazyListState.animateScrollToItem(
+                                    index = currentLineIndex,
+                                    scrollOffset = (verticalPaddingPx + (currentLineIndex - rowOffset) * lineHeightPx).toInt()
+                                )
                             }
                         }
 
