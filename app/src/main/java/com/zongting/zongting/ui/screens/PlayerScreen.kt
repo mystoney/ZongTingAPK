@@ -1903,7 +1903,7 @@ fun PlayerScreenLandscape(
                                 LaunchedEffect(currentIndex) {
                                     listState.animateScrollToItem(
                                         index = maxOf(0, currentIndex - 1),
-                                        scrollOffset = -((listState.layoutInfo.viewportSize.height / 2) - (3 * totalItemHeight + itemHeight / 2)).toInt()
+                                        scrollOffset = -((listState.layoutInfo.viewportSize.height / 2) - (2 * totalItemHeight + itemHeight / 2)).toInt()
                                     )
                                 }
 
