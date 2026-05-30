@@ -90,7 +90,15 @@ fun RankingsScreen(
                     .fillMaxWidth()
                     .padding(horizontal = 16.dp, vertical = 4.dp)
             ) {
-                val fontSize = if (maxWidth < 600.dp) 12.sp else 15.sp
+                val isExpanded = windowSizeClass?.widthSizeClass == WindowWidthSizeClass.Expanded
+                val scale = if (isExpanded) 1.3f else 1f
+                val baseChipHeight = 30.dp
+                val baseFontSize = if (maxWidth < 600.dp) 12.sp else 15.sp
+                val scaledChipHeight = (baseChipHeight.value * scale).dp
+                val scaledFontSize = (baseFontSize.value * scale).sp
+                val scaledIconSize = (14.dp.value * scale).dp
+                val scaledBtnHeight = (30.dp.value * scale).dp
+
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(4.dp),
@@ -100,17 +108,17 @@ fun RankingsScreen(
                     FilterChip(
                         selected = uiState.source == "kuwo",
                         onClick = { rankingsViewModel.setSource("kuwo") },
-                        label = { Text("酷我", style = LocalTextStyle.current.copy(fontSize = fontSize)) },
-                        modifier = Modifier.height(30.dp)
+                        label = { Text("酷我", style = LocalTextStyle.current.copy(fontSize = scaledFontSize)) },
+                        modifier = Modifier.height(scaledChipHeight)
                     )
                     FilterChip(
                         selected = uiState.source == "netease",
                         onClick = { rankingsViewModel.setSource("netease") },
-                        label = { Text("网易云", style = LocalTextStyle.current.copy(fontSize = fontSize)) },
-                        modifier = Modifier.height(30.dp)
+                        label = { Text("网易云", style = LocalTextStyle.current.copy(fontSize = scaledFontSize)) },
+                        modifier = Modifier.height(scaledChipHeight)
                     )
                     VerticalDivider(
-                        modifier = Modifier.height(20.dp),
+                        modifier = Modifier.height((20.dp.value * scale).dp),
                         color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.3f)
                     )
                     // 筛选：免费 / VIP / 单曲购买
@@ -118,22 +126,22 @@ fun RankingsScreen(
                         selected = uiState.filters.contains("free"),
                         onClick = { if (neteaseEnabled) rankingsViewModel.setFilter("free", !uiState.filters.contains("free")) },
                         enabled = neteaseEnabled,
-                        label = { Text("免费", style = LocalTextStyle.current.copy(fontSize = fontSize)) },
-                        modifier = Modifier.height(30.dp)
+                        label = { Text("免费", style = LocalTextStyle.current.copy(fontSize = scaledFontSize)) },
+                        modifier = Modifier.height(scaledChipHeight)
                     )
                     FilterChip(
                         selected = uiState.filters.contains("vip"),
                         onClick = { if (neteaseEnabled) rankingsViewModel.setFilter("vip", !uiState.filters.contains("vip")) },
                         enabled = neteaseEnabled,
-                        label = { Text("VIP", style = LocalTextStyle.current.copy(fontSize = fontSize)) },
-                        modifier = Modifier.height(30.dp)
+                        label = { Text("VIP", style = LocalTextStyle.current.copy(fontSize = scaledFontSize)) },
+                        modifier = Modifier.height(scaledChipHeight)
                     )
                     FilterChip(
                         selected = uiState.filters.contains("single"),
                         onClick = { if (neteaseEnabled) rankingsViewModel.setFilter("single", !uiState.filters.contains("single")) },
                         enabled = neteaseEnabled,
-                        label = { Text("单曲购买", style = LocalTextStyle.current.copy(fontSize = fontSize)) },
-                        modifier = Modifier.height(30.dp)
+                        label = { Text("单曲购买", style = LocalTextStyle.current.copy(fontSize = scaledFontSize)) },
+                        modifier = Modifier.height(scaledChipHeight)
                     )
                     Spacer(modifier = Modifier.weight(1f))
                     // 全部播放
@@ -144,18 +152,27 @@ fun RankingsScreen(
                             }
                         },
                         enabled = uiState.displayedSongs.isNotEmpty(),
-                        modifier = Modifier.height(30.dp),
+                        modifier = Modifier.height(scaledBtnHeight),
                         contentPadding = PaddingValues(horizontal = 10.dp, vertical = 0.dp),
                         shape = RoundedCornerShape(15.dp)
                     ) {
-                        Icon(Icons.Default.PlayArrow, null, Modifier.size(14.dp))
+                        Icon(Icons.Default.PlayArrow, null, Modifier.size(scaledIconSize))
                         Spacer(Modifier.width(2.dp))
-                        Text("播放", style = LocalTextStyle.current.copy(fontSize = fontSize))
+                        Text("播放", style = LocalTextStyle.current.copy(fontSize = scaledFontSize))
                     }
                 }
             }
         } else {
             // 竖屏：来源切换行
+            val isExpanded = windowSizeClass?.widthSizeClass == WindowWidthSizeClass.Expanded
+            val scale = if (isExpanded) 1.3f else 1f
+            val baseChipHeight = 32.dp
+            val baseTextSize = 15.sp
+            val baseDividerHeight = 20.dp
+            val scaledChipHeight = (baseChipHeight.value * scale).dp
+            val scaledTextSize = (baseTextSize.value * scale).sp
+            val scaledDividerHeight = (baseDividerHeight.value * scale).dp
+
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -165,14 +182,14 @@ fun RankingsScreen(
                 FilterChip(
                     selected = uiState.source == "kuwo",
                     onClick = { rankingsViewModel.setSource("kuwo") },
-                    label = { Text("酷我音乐", style = LocalTextStyle.current.copy(fontSize = 15.sp)) },
-                    modifier = Modifier.height(32.dp)
+                    label = { Text("酷我音乐", style = LocalTextStyle.current.copy(fontSize = scaledTextSize)) },
+                    modifier = Modifier.height(scaledChipHeight)
                 )
                 FilterChip(
                     selected = uiState.source == "netease",
                     onClick = { rankingsViewModel.setSource("netease") },
-                    label = { Text("网易云音乐", style = LocalTextStyle.current.copy(fontSize = 15.sp)) },
-                    modifier = Modifier.height(32.dp)
+                    label = { Text("网易云音乐", style = LocalTextStyle.current.copy(fontSize = scaledTextSize)) },
+                    modifier = Modifier.height(scaledChipHeight)
                 )
             }
             // 筛选行
@@ -187,22 +204,22 @@ fun RankingsScreen(
                     selected = uiState.filters.contains("free"),
                     onClick = { if (neteaseEnabled) rankingsViewModel.setFilter("free", !uiState.filters.contains("free")) },
                     enabled = neteaseEnabled,
-                    label = { Text("免费", style = LocalTextStyle.current.copy(fontSize = 15.sp)) },
-                    modifier = Modifier.height(32.dp)
+                    label = { Text("免费", style = LocalTextStyle.current.copy(fontSize = scaledTextSize)) },
+                    modifier = Modifier.height(scaledChipHeight)
                 )
                 FilterChip(
                     selected = uiState.filters.contains("vip"),
                     onClick = { if (neteaseEnabled) rankingsViewModel.setFilter("vip", !uiState.filters.contains("vip")) },
                     enabled = neteaseEnabled,
-                    label = { Text("VIP", style = LocalTextStyle.current.copy(fontSize = 15.sp)) },
-                    modifier = Modifier.height(32.dp)
+                    label = { Text("VIP", style = LocalTextStyle.current.copy(fontSize = scaledTextSize)) },
+                    modifier = Modifier.height(scaledChipHeight)
                 )
                 FilterChip(
                     selected = uiState.filters.contains("single"),
                     onClick = { if (neteaseEnabled) rankingsViewModel.setFilter("single", !uiState.filters.contains("single")) },
                     enabled = neteaseEnabled,
-                    label = { Text("单曲购买", style = LocalTextStyle.current.copy(fontSize = 15.sp)) },
-                    modifier = Modifier.height(32.dp)
+                    label = { Text("单曲购买", style = LocalTextStyle.current.copy(fontSize = scaledTextSize)) },
+                    modifier = Modifier.height(scaledChipHeight)
                 )
                 Spacer(modifier = Modifier.weight(1f))
                 FilledTonalButton(
@@ -212,13 +229,13 @@ fun RankingsScreen(
                         }
                     },
                     enabled = uiState.displayedSongs.isNotEmpty(),
-                    modifier = Modifier.height(32.dp),
+                    modifier = Modifier.height(scaledChipHeight),
                     contentPadding = PaddingValues(horizontal = 12.dp, vertical = 0.dp),
                     shape = RoundedCornerShape(16.dp)
                 ) {
-                    Icon(Icons.Default.PlayArrow, null, Modifier.size(16.dp))
+                    Icon(Icons.Default.PlayArrow, null, Modifier.size((16.dp.value * scale).dp))
                     Spacer(Modifier.width(4.dp))
-                    Text("全部播放", style = LocalTextStyle.current.copy(fontSize = 15.sp))
+                    Text("全部播放", style = LocalTextStyle.current.copy(fontSize = scaledTextSize))
                 }
             }
         }
@@ -321,6 +338,7 @@ fun RankingsScreen(
                                             song = song,
                                             cardWidth = cardWidth.value.toInt(),
                                             showFeeBadge = uiState.source == "netease",
+                                            isExpanded = isExpanded,
                                             onClick = {
                                                 mainViewModel.playSongPrev(song)
                                                 onSongClick(song, uiState.displayedSongs)
@@ -517,8 +535,17 @@ fun RankingSongCard(
     song: Song,
     cardWidth: Int,
     showFeeBadge: Boolean = true,
-    onClick: () -> Unit
+    onClick: () -> Unit,
+    isExpanded: Boolean = false
 ) {
+    val scale = if (isExpanded) 1.3f else 1f
+    val baseBadgeSize = 14.dp
+    val baseBadgeFontSize = 6.sp
+    val baseBadgeIconSize = 8.sp
+    val scaledBadgeSize = (baseBadgeSize.value * scale).dp
+    val scaledBadgeFontSize = (baseBadgeFontSize.value * scale).sp
+    val scaledBadgeIconSize = (baseBadgeIconSize.value * scale).dp
+
     Column(
         modifier = Modifier
             .width(cardWidth.dp)
@@ -548,7 +575,7 @@ fun RankingSongCard(
                         modifier = Modifier
                             .align(Alignment.TopEnd)
                             .padding(3.dp)
-                            .size(14.dp)
+                            .size(scaledBadgeSize)
                             .background(
                                 if (song.fee == 1)
                                     Color(0xFFFF6B35).copy(alpha = 0.9f)
@@ -561,14 +588,14 @@ fun RankingSongCard(
                         if (song.fee == 1) {
                             Text(
                                 text = "VIP",
-                                fontSize = 6.sp,
+                                fontSize = scaledBadgeFontSize,
                                 color = Color.White
                             )
                         } else {
                             Icon(
                                 imageVector = Icons.Default.Lock,
                                 contentDescription = "版权限制",
-                                modifier = Modifier.size(8.dp),
+                                modifier = Modifier.size(scaledBadgeIconSize),
                                 tint = MaterialTheme.colorScheme.onErrorContainer
                             )
                         }

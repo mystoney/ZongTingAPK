@@ -17,6 +17,8 @@ import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Star
+import androidx.compose.material3.windowsizeclass.WindowSizeClass
+import androidx.compose.material3.windowsizeclass.WindowWidthSizeClass
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -39,7 +41,7 @@ import androidx.compose.material3.LocalTextStyle
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SearchScreen(
-    windowSizeClass: androidx.compose.material3.windowsizeclass.WindowSizeClass,
+    windowSizeClass: WindowSizeClass,
     viewModel: SearchViewModel = hiltViewModel(),
     userPlaylists: List<UserPlaylist>,
     onSongClick: (Song, List<Song>) -> Unit,
@@ -49,6 +51,17 @@ fun SearchScreen(
 ) {
     val uiState by viewModel.uiState.collectAsState()
     var searchText by remember { mutableStateOf("") }
+
+    val isExpanded = windowSizeClass.widthSizeClass == WindowWidthSizeClass.Expanded
+    val scale = if (isExpanded) 1.3f else 1f
+    val baseChipHeight = 32.dp
+    val baseTextSize = 15.sp
+    val baseSearchBtnHeight = 56.dp
+    val baseCoverSize = 48.dp
+    val scaledChipHeight = (baseChipHeight.value * scale).dp
+    val scaledTextSize = (baseTextSize.value * scale).sp
+    val scaledSearchBtnHeight = (baseSearchBtnHeight.value * scale).dp
+    val scaledCoverSize = (baseCoverSize.value * scale).dp
 
     Column(
         modifier = Modifier
@@ -61,53 +74,53 @@ fun SearchScreen(
         Text(
             text = "搜索歌曲",
             style = MaterialTheme.typography.titleLarge,
-            modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)
+            modifier = Modifier.padding(horizontal = scaledChipHeight, vertical = 4.dp)
         )
 
         // 来源切换 + 版权筛选（同一行）
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 2.dp),
+                .padding(horizontal = scaledChipHeight, vertical = 2.dp),
             horizontalArrangement = Arrangement.spacedBy(6.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             FilterChip(
                 selected = uiState.source == "kuwo",
                 onClick = { viewModel.setSource("kuwo") },
-                label = { Text("酷我", style = LocalTextStyle.current.copy(fontSize = 15.sp)) },
-                modifier = Modifier.height(32.dp)
+                label = { Text("酷我", style = LocalTextStyle.current.copy(fontSize = scaledTextSize)) },
+                modifier = Modifier.height(scaledChipHeight)
             )
             FilterChip(
                 selected = uiState.source == "netease",
                 onClick = { viewModel.setSource("netease") },
-                label = { Text("网易云", style = LocalTextStyle.current.copy(fontSize = 15.sp)) },
-                modifier = Modifier.height(32.dp)
+                label = { Text("网易云", style = LocalTextStyle.current.copy(fontSize = scaledTextSize)) },
+                modifier = Modifier.height(scaledChipHeight)
             )
             if (uiState.source == "netease" && uiState.searchResults.isNotEmpty()) {
                 HorizontalDivider(
                     modifier = Modifier
-                        .height(20.dp)
+                        .height((20.dp.value * scale).dp)
                         .width(1.dp),
                     color = MaterialTheme.colorScheme.outlineVariant
                 )
                 FilterChip(
                     selected = uiState.filters.contains("free"),
                     onClick = { viewModel.setFilter("free", !uiState.filters.contains("free")) },
-                    label = { Text("免费", style = LocalTextStyle.current.copy(fontSize = 15.sp)) },
-                    modifier = Modifier.height(32.dp)
+                    label = { Text("免费", style = LocalTextStyle.current.copy(fontSize = scaledTextSize)) },
+                    modifier = Modifier.height(scaledChipHeight)
                 )
                 FilterChip(
                     selected = uiState.filters.contains("vip"),
                     onClick = { viewModel.setFilter("vip", !uiState.filters.contains("vip")) },
-                    label = { Text("VIP", style = LocalTextStyle.current.copy(fontSize = 15.sp)) },
-                    modifier = Modifier.height(32.dp)
+                    label = { Text("VIP", style = LocalTextStyle.current.copy(fontSize = scaledTextSize)) },
+                    modifier = Modifier.height(scaledChipHeight)
                 )
                 FilterChip(
                     selected = uiState.filters.contains("lock"),
                     onClick = { viewModel.setFilter("lock", !uiState.filters.contains("lock")) },
-                    label = { Text("付费", style = LocalTextStyle.current.copy(fontSize = 15.sp)) },
-                    modifier = Modifier.height(32.dp)
+                    label = { Text("付费", style = LocalTextStyle.current.copy(fontSize = scaledTextSize)) },
+                    modifier = Modifier.height(scaledChipHeight)
                 )
             }
         }
@@ -116,7 +129,7 @@ fun SearchScreen(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 8.dp),
+                .padding(horizontal = scaledChipHeight, vertical = 8.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             OutlinedTextField(
@@ -158,7 +171,7 @@ fun SearchScreen(
                         viewModel.search(searchText)
                     }
                 },
-                modifier = Modifier.height(56.dp)
+                modifier = Modifier.height(scaledSearchBtnHeight)
             ) {
                 Text("搜索")
             }

@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.windowsizeclass.WindowWidthSizeClass
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.QueueMusic
 import androidx.compose.material.icons.filled.*
@@ -144,6 +145,9 @@ fun LibraryScreen(
         )
     }
 
+    val isExpanded = windowSizeClass.widthSizeClass == WindowWidthSizeClass.Expanded
+    val scale = if (isExpanded) 1.3f else 1f
+
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -161,16 +165,17 @@ fun LibraryScreen(
             // 左侧标签列表
             LazyColumn(
                 modifier = Modifier
-                    .width(100.dp)
+                    .width((100 * scale).dp)
                     .fillMaxHeight(),
-                verticalArrangement = Arrangement.spacedBy(6.dp),
-                contentPadding = PaddingValues(vertical = 6.dp)
+                verticalArrangement = Arrangement.spacedBy((6 * scale).dp),
+                contentPadding = PaddingValues(vertical = (6 * scale).dp)
             ) {
                 item {
                     LibraryTabItem(
                         icon = Icons.Default.Favorite,
                         title = "我喜欢",
                         isSelected = selectedTab == 0,
+                        isExpanded = isExpanded,
                         onClick = {
                             selectedTab = 0
                             expandedPlaylist = null
@@ -182,6 +187,7 @@ fun LibraryScreen(
                         icon = Icons.Default.History,
                         title = "最近播放",
                         isSelected = selectedTab == 1,
+                        isExpanded = isExpanded,
                         onClick = {
                             selectedTab = 1
                             expandedPlaylist = null
@@ -193,6 +199,7 @@ fun LibraryScreen(
                         icon = Icons.AutoMirrored.Filled.QueueMusic,
                         title = "我的歌单",
                         isSelected = selectedTab == 2,
+                        isExpanded = isExpanded,
                         onClick = {
                             selectedTab = 2
                             expandedPlaylist = null
@@ -204,6 +211,7 @@ fun LibraryScreen(
                         icon = Icons.Default.Download,
                         title = "下载管理",
                         isSelected = selectedTab == 3,
+                        isExpanded = isExpanded,
                         onClick = {
                             selectedTab = 3
                             expandedPlaylist = null
@@ -215,6 +223,7 @@ fun LibraryScreen(
                         icon = Icons.Default.Info,
                         title = "关于",
                         isSelected = selectedTab == 4,
+                        isExpanded = isExpanded,
                         onClick = {
                             selectedTab = 4
                             expandedPlaylist = null
@@ -301,10 +310,10 @@ fun LibraryScreen(
         ) {
             FloatingActionButton(
                 onClick = { showCreateDialog = true },
-                modifier = Modifier.padding(end = 16.dp, bottom = 180.dp),
+                modifier = Modifier.padding(end = (16 * scale).dp, bottom = (180 * scale).dp),
                 containerColor = MaterialTheme.colorScheme.primary
             ) {
-                Icon(Icons.Default.Add, contentDescription = "创建歌单")
+                Icon(Icons.Default.Add, contentDescription = "创建歌单", modifier = Modifier.size((24 * scale).dp))
             }
         }
     }
@@ -315,21 +324,24 @@ private fun LibraryTabItem(
     icon: androidx.compose.ui.graphics.vector.ImageVector,
     title: String,
     isSelected: Boolean,
+    isExpanded: Boolean,
     onClick: () -> Unit
 ) {
+    val iconSize = if (isExpanded) (22 * 1.3f).dp else 22.dp
+    val titleSize = if (isExpanded) (13 * 1.3f).sp else 13.sp
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 6.dp)
+            .padding(horizontal = (6 * if (isExpanded) 1.3f else 1f).dp)
             .background(
                 color = if (isSelected)
                     MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.85f)
                 else
                     Color(0xFFEEEEEE).copy(alpha = 0.1f),
-                shape = RoundedCornerShape(10.dp)
+                shape = RoundedCornerShape((10 * if (isExpanded) 1.3f else 1f).dp)
             )
             .clickable(onClick = onClick)
-            .padding(horizontal = 10.dp, vertical = 10.dp)
+            .padding(horizontal = (10 * if (isExpanded) 1.3f else 1f).dp, vertical = (10 * if (isExpanded) 1.3f else 1f).dp)
     ) {
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
@@ -338,16 +350,16 @@ private fun LibraryTabItem(
             Icon(
                 imageVector = icon,
                 contentDescription = null,
-                modifier = Modifier.size(22.dp),
+                modifier = Modifier.size(iconSize),
                 tint = if (isSelected)
                     MaterialTheme.colorScheme.onPrimaryContainer
                 else
                     MaterialTheme.colorScheme.onSurfaceVariant
             )
-            Spacer(modifier = Modifier.height(4.dp))
+            Spacer(modifier = Modifier.height((4 * if (isExpanded) 1.3f else 1f).dp))
             Text(
                 text = title,
-                style = MaterialTheme.typography.titleMedium.copy(fontSize = 13.sp),
+                style = MaterialTheme.typography.titleMedium.copy(fontSize = titleSize),
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
                 color = if (isSelected)
@@ -434,7 +446,8 @@ private fun LibraryFavoriteContent(
     onPlayAll: () -> Unit,
     onAddSong: (Song) -> Unit,
     onAddAll: (List<Song>) -> Unit,
-    onSongsAdded: (String) -> Unit
+    onSongsAdded: (String) -> Unit,
+    isExpanded: Boolean = false
 ) {
     if (songs.isEmpty()) {
         EmptyState(
@@ -462,25 +475,25 @@ private fun LibraryFavoriteContent(
                         Icon(
                             Icons.Default.PlaylistAdd,
                             contentDescription = "添加到歌单",
-                            modifier = Modifier.size(20.dp)
+                            modifier = Modifier.size((20 * if (isExpanded) 1.3f else 1f).dp)
                         )
                     }
                     FilledTonalButton(
                         onClick = onPlayAll,
-                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 0.dp),
-                        modifier = Modifier.height(32.dp),
-                        shape = RoundedCornerShape(16.dp)
+                        contentPadding = PaddingValues(horizontal = (12 * if (isExpanded) 1.3f else 1f).dp, vertical = 0.dp),
+                        modifier = Modifier.height((32 * if (isExpanded) 1.3f else 1f).dp),
+                        shape = RoundedCornerShape((16 * if (isExpanded) 1.3f else 1f).dp)
                     ) {
-                        Icon(Icons.Default.PlayArrow, contentDescription = null, modifier = Modifier.size(16.dp))
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Text("全部播放", style = LocalTextStyle.current.copy(fontSize = 13.sp))
+                        Icon(Icons.Default.PlayArrow, contentDescription = null, modifier = Modifier.size((16 * if (isExpanded) 1.3f else 1f).dp))
+                        Spacer(modifier = Modifier.width((4 * if (isExpanded) 1.3f else 1f).dp))
+                        Text("全部播放", style = LocalTextStyle.current.copy(fontSize = (13 * if (isExpanded) 1.3f else 1f).sp))
                     }
                 }
             }
             LazyColumn(
                 modifier = Modifier.fillMaxSize(),
                 contentPadding = PaddingValues(bottom = 165.dp),
-                verticalArrangement = Arrangement.spacedBy(6.dp)
+                verticalArrangement = Arrangement.spacedBy((6 * if (isExpanded) 1.3f else 1f).dp)
             ) {
                 items(songs, key = { it.rid }) { song ->
                     LibrarySongRow(
@@ -491,11 +504,12 @@ private fun LibraryFavoriteContent(
                             Icon(
                                 imageVector = Icons.Default.Favorite,
                                 contentDescription = "已收藏",
-                                modifier = Modifier.size(20.dp),
+                                modifier = Modifier.size((20 * if (isExpanded) 1.3f else 1f).dp),
                                 tint = MaterialTheme.colorScheme.primary
                             )
                         },
-                        onFavoriteClick = { onToggleFavorite(song) }
+                        onFavoriteClick = { onToggleFavorite(song) },
+                        isExpanded = isExpanded
                     )
                 }
             }
@@ -513,7 +527,8 @@ private fun LibraryRecentlyContent(
     onPlayAll: () -> Unit,
     onAddSong: (Song) -> Unit,
     onAddAll: (List<Song>) -> Unit,
-    onSongsAdded: (String) -> Unit
+    onSongsAdded: (String) -> Unit,
+    isExpanded: Boolean = false
 ) {
     if (songs.isEmpty()) {
         EmptyState(
@@ -526,13 +541,13 @@ private fun LibraryRecentlyContent(
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 4.dp),
+                    .padding(horizontal = (16 * if (isExpanded) 1.3f else 1f).dp, vertical = (4 * if (isExpanded) 1.3f else 1f).dp),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
                     text = "${songs.size} 首歌曲",
-                    style = MaterialTheme.typography.bodyMedium,
+                    style = MaterialTheme.typography.bodyMedium.copy(fontSize = (14 * if (isExpanded) 1.3f else 1f).sp),
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
                 Row(verticalAlignment = Alignment.CenterVertically) {
@@ -541,31 +556,32 @@ private fun LibraryRecentlyContent(
                         Icon(
                             Icons.Default.PlaylistAdd,
                             contentDescription = "添加到歌单",
-                            modifier = Modifier.size(20.dp)
+                            modifier = Modifier.size((20 * if (isExpanded) 1.3f else 1f).dp)
                         )
                     }
                     FilledTonalButton(
                         onClick = onPlayAll,
-                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 0.dp),
-                        modifier = Modifier.height(32.dp),
-                        shape = RoundedCornerShape(16.dp)
+                        contentPadding = PaddingValues(horizontal = (12 * if (isExpanded) 1.3f else 1f).dp, vertical = 0.dp),
+                        modifier = Modifier.height((32 * if (isExpanded) 1.3f else 1f).dp),
+                        shape = RoundedCornerShape((16 * if (isExpanded) 1.3f else 1f).dp)
                     ) {
-                        Icon(Icons.Default.PlayArrow, contentDescription = null, modifier = Modifier.size(16.dp))
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Text("全部播放", style = LocalTextStyle.current.copy(fontSize = 13.sp))
+                        Icon(Icons.Default.PlayArrow, contentDescription = null, modifier = Modifier.size((16 * if (isExpanded) 1.3f else 1f).dp))
+                        Spacer(modifier = Modifier.width((4 * if (isExpanded) 1.3f else 1f).dp))
+                        Text("全部播放", style = LocalTextStyle.current.copy(fontSize = (13 * if (isExpanded) 1.3f else 1f).sp))
                     }
                 }
             }
             LazyColumn(
                 modifier = Modifier.fillMaxSize(),
                 contentPadding = PaddingValues(bottom = 165.dp),
-                verticalArrangement = Arrangement.spacedBy(6.dp)
+                verticalArrangement = Arrangement.spacedBy((6 * if (isExpanded) 1.3f else 1f).dp)
             ) {
                 items(songs, key = { it.rid }) { song ->
                     LibrarySongRow(
                         song = song,
                         onClick = { onSongClick(song) },
-                        onLongClick = { onSongLongPress(song) }
+                        onLongClick = { onSongLongPress(song) },
+                        isExpanded = isExpanded
                     )
                 }
             }
@@ -588,7 +604,8 @@ private fun LibraryPlaylistContent(
     onPlayAll: (UserPlaylist) -> Unit,
     onAddSong: (Song) -> Unit,
     onAddAll: (List<Song>) -> Unit,
-    onBack: () -> Unit
+    onBack: () -> Unit,
+    isExpanded: Boolean = false
 ) {
     if (expandedPlaylist != null) {
         // 歌单详情视图（内联，与 RankingsScreen 风格一致）
@@ -652,14 +669,15 @@ private fun LibraryPlaylistContent(
                 LazyColumn(
                     modifier = Modifier.fillMaxSize(),
                     contentPadding = PaddingValues(bottom = 165.dp),
-                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                    verticalArrangement = Arrangement.spacedBy((6 * if (isExpanded) 1.3f else 1f).dp)
                 ) {
                     items(expandedPlaylist.songs, key = { it.rid }) { song ->
                         LibraryPlaylistSongRow(
                             song = song,
                             onClick = { onSongClick(song) },
                             onLongClick = { onSongLongPress(song) },
-                            onRemove = { onRemoveSong(expandedPlaylist.id, song.rid) }
+                            onRemove = { onRemoveSong(expandedPlaylist.id, song.rid) },
+                            isExpanded = isExpanded
                         )
                     }
                 }
@@ -674,8 +692,8 @@ private fun LibraryPlaylistContent(
     } else {
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(bottom = 165.dp, top = 6.dp),
-            verticalArrangement = Arrangement.spacedBy(6.dp)
+            contentPadding = PaddingValues(bottom = 165.dp, top = (6 * if (isExpanded) 1.3f else 1f).dp),
+            verticalArrangement = Arrangement.spacedBy((6 * if (isExpanded) 1.3f else 1f).dp)
         ) {
             item(key = "add_all_header") {
                 Row(
@@ -698,7 +716,8 @@ private fun LibraryPlaylistContent(
                     playlist = playlist,
                     onClick = { onPlaylistClick(playlist) },
                     onLongClick = { onPlaylistLongPress(playlist) },
-                    onDelete = { onPlaylistDelete(playlist) }
+                    onDelete = { onPlaylistDelete(playlist) },
+                    isExpanded = isExpanded
                 )
             }
         }
@@ -710,8 +729,12 @@ private fun LibraryPlaylistItem(
     playlist: UserPlaylist,
     onClick: () -> Unit,
     onLongClick: () -> Unit,
-    onDelete: () -> Unit
+    onDelete: () -> Unit,
+    isExpanded: Boolean = false
 ) {
+    val iconSize = if (isExpanded) (26 * 1.3f).dp else 26.dp
+    val coverSize = if (isExpanded) (52 * 1.3f).dp else 52.dp
+    val coverRad = if (isExpanded) (8 * 1.3f).dp else 8.dp
     var showMenu by remember { mutableStateOf(false) }
 
     Box(
@@ -733,15 +756,15 @@ private fun LibraryPlaylistItem(
         ) {
             Box(
                 modifier = Modifier
-                    .size(52.dp)
-                    .clip(RoundedCornerShape(8.dp))
+                    .size(coverSize)
+                    .clip(RoundedCornerShape(coverRad))
                     .background(MaterialTheme.colorScheme.primaryContainer),
                 contentAlignment = Alignment.Center
             ) {
                 Icon(
                     Icons.AutoMirrored.Filled.QueueMusic,
                     contentDescription = null,
-                    modifier = Modifier.size(26.dp),
+                    modifier = Modifier.size(iconSize),
                     tint = MaterialTheme.colorScheme.onPrimaryContainer
                 )
             }
@@ -804,41 +827,49 @@ private fun LibrarySongRow(
     onClick: () -> Unit,
     onLongClick: () -> Unit,
     trailing: @Composable (() -> Unit)? = null,
-    onFavoriteClick: (() -> Unit)? = null
+    onFavoriteClick: (() -> Unit)? = null,
+    isExpanded: Boolean = false
 ) {
+    val coverSize = if (isExpanded) (48 * 1.3f).dp else 48.dp
+    val cornerRad = if (isExpanded) (6 * 1.3f).dp else 6.dp
+    val padH = if (isExpanded) (6 * 1.3f).dp else 6.dp
+    val padV = if (isExpanded) (6 * 1.3f).dp else 6.dp
+    val iconSize = if (isExpanded) (20 * 1.3f).dp else 20.dp
+    val titleFont = if (isExpanded) (14 * 1.3f).sp else 14.sp
+    val subFont = if (isExpanded) (11 * 1.3f).sp else 11.sp
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 6.dp)
-            .clip(RoundedCornerShape(10.dp))
+            .padding(horizontal = (6 * if (isExpanded) 1f else 1f).dp)
+            .clip(RoundedCornerShape((10 * if (isExpanded) 1.3f else 1f).dp))
             .background(Color(0xFFEEEEEE).copy(alpha = 0.1f))
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
                 .combinedClickable(onClick = onClick, onLongClick = onLongClick)
-                .padding(horizontal = 6.dp, vertical = 6.dp),
+                .padding(horizontal = padH, vertical = padV),
             verticalAlignment = Alignment.CenterVertically
         ) {
             AsyncImage(
                 model = song.pic120,
                 contentDescription = null,
                 modifier = Modifier
-                    .size(48.dp)
-                    .clip(RoundedCornerShape(6.dp)),
+                    .size(coverSize)
+                    .clip(RoundedCornerShape(cornerRad)),
                 contentScale = ContentScale.Crop
             )
 
-            Column(modifier = Modifier.weight(1f).padding(horizontal = 8.dp)) {
+            Column(modifier = Modifier.weight(1f).padding(horizontal = (8 * if (isExpanded) 1.3f else 1f).dp)) {
                 Text(
                     text = song.name,
-                    style = MaterialTheme.typography.bodyMedium.copy(fontSize = 14.sp),
+                    style = MaterialTheme.typography.bodyMedium.copy(fontSize = titleFont),
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
                 Text(
                     text = song.artist,
-                    style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.sp),
+                    style = MaterialTheme.typography.bodySmall.copy(fontSize = subFont),
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
@@ -852,7 +883,7 @@ private fun LibrarySongRow(
                     Icon(
                         imageVector = Icons.Default.FavoriteBorder,
                         contentDescription = "收藏",
-                        modifier = Modifier.size(20.dp),
+                        modifier = Modifier.size(iconSize),
                         tint = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
@@ -866,41 +897,46 @@ private fun LibraryPlaylistSongRow(
     song: Song,
     onClick: () -> Unit,
     onLongClick: () -> Unit,
-    onRemove: () -> Unit
+    onRemove: () -> Unit,
+    isExpanded: Boolean = false
 ) {
+    val coverSize = if (isExpanded) (48 * 1.3f).dp else 48.dp
+    val iconSize = if (isExpanded) (20 * 1.3f).dp else 20.dp
+    val titleFont = if (isExpanded) (14 * 1.3f).sp else 14.sp
+    val subFont = if (isExpanded) (11 * 1.3f).sp else 11.sp
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 6.dp)
-            .clip(RoundedCornerShape(10.dp))
+            .padding(horizontal = (6 * if (isExpanded) 1f else 1f).dp)
+            .clip(RoundedCornerShape((10 * if (isExpanded) 1.3f else 1f).dp))
             .background(Color(0xFFEEEEEE).copy(alpha = 0.1f))
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
                 .combinedClickable(onClick = onClick, onLongClick = onLongClick)
-                .padding(horizontal = 6.dp, vertical = 6.dp),
+                .padding(horizontal = (6 * if (isExpanded) 1.3f else 1f).dp, vertical = (6 * if (isExpanded) 1.3f else 1f).dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             AsyncImage(
                 model = song.pic120,
                 contentDescription = null,
                 modifier = Modifier
-                    .size(48.dp)
-                    .clip(RoundedCornerShape(6.dp)),
+                    .size(coverSize)
+                    .clip(RoundedCornerShape((6 * if (isExpanded) 1.3f else 1f).dp)),
                 contentScale = ContentScale.Crop
             )
 
-            Column(modifier = Modifier.weight(1f).padding(horizontal = 8.dp)) {
+            Column(modifier = Modifier.weight(1f).padding(horizontal = (8 * if (isExpanded) 1.3f else 1f).dp)) {
                 Text(
                     text = song.name,
-                    style = MaterialTheme.typography.bodyMedium.copy(fontSize = 14.sp),
+                    style = MaterialTheme.typography.bodyMedium.copy(fontSize = titleFont),
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
                 Text(
                     text = song.artist,
-                    style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.sp),
+                    style = MaterialTheme.typography.bodySmall.copy(fontSize = subFont),
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
@@ -911,7 +947,7 @@ private fun LibraryPlaylistSongRow(
                 Icon(
                     Icons.Default.RemoveCircleOutline,
                     contentDescription = "移除",
-                    modifier = Modifier.size(20.dp),
+                    modifier = Modifier.size(iconSize),
                     tint = MaterialTheme.colorScheme.error
                 )
             }

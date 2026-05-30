@@ -336,7 +336,8 @@ fun PlayerScreen(
             onNext = { viewModel.playNext() },
             currentPlaylist = currentPlaylist,
             onPlaySong = { song -> viewModel.playSong(song, currentPlaylist) },
-            playlistListState = rememberLazyListState()
+            playlistListState = rememberLazyListState(),
+            windowSizeClass = windowSizeClass
         )
         }
 
@@ -422,7 +423,8 @@ private fun PlayerBottomBar(
     onNext: () -> Unit,
     currentPlaylist: List<Song>,
     onPlaySong: (Song) -> Unit,
-    playlistListState: androidx.compose.foundation.lazy.LazyListState
+    playlistListState: androidx.compose.foundation.lazy.LazyListState,
+    windowSizeClass: androidx.compose.material3.windowsizeclass.WindowSizeClass
 ) {
     // 乐观更新：本地记住当前图标状态，点击立即切换，异步同步真实 playMode
     var localPlayMode by remember { mutableIntStateOf(playMode) }
@@ -445,27 +447,42 @@ private fun PlayerBottomBar(
         color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
         tonalElevation = 4.dp
     ) {
-        Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)) {
+        val isExpanded = windowSizeClass.widthSizeClass == WindowWidthSizeClass.Expanded
+        val scale = if (isExpanded) 1.3f else 1f
+        val basePadding = 16.dp
+        val baseBtnSize = 48.dp
+        val baseFilledBtnSize = 56.dp
+        val baseIconSize = 28.dp
+        val baseLargeIconSize = 32.dp
+        val baseSmallIconSize = 24.dp
+        val scaledPadding = (basePadding.value * scale).dp.coerceAtLeast(basePadding)
+        val scaledBtnSize = (baseBtnSize.value * scale).dp.coerceAtLeast(baseBtnSize)
+        val scaledFilledBtnSize = (baseFilledBtnSize.value * scale).dp.coerceAtLeast(baseFilledBtnSize)
+        val scaledIconSize = (baseIconSize.value * scale).dp.coerceAtLeast(baseIconSize)
+        val scaledLargeIconSize = (baseLargeIconSize.value * scale).dp.coerceAtLeast(baseLargeIconSize)
+        val scaledSmallIconSize = (baseSmallIconSize.value * scale).dp.coerceAtLeast(baseSmallIconSize)
+
+        Column(modifier = Modifier.padding(horizontal = scaledPadding, vertical = 4.dp)) {
             // 上一首 / 播放暂停 / 下一首
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceEvenly,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                IconButton(onClick = onPrevious, modifier = Modifier.size(48.dp)) {
-                    Icon(Icons.Default.SkipPrevious, contentDescription = "上一首", modifier = Modifier.size(28.dp))
+                IconButton(onClick = onPrevious, modifier = Modifier.size(scaledBtnSize)) {
+                    Icon(Icons.Default.SkipPrevious, contentDescription = "上一首", modifier = Modifier.size(scaledIconSize))
                 }
 
-                FilledIconButton(onClick = onTogglePlay, modifier = Modifier.size(56.dp), shape = CircleShape) {
+                FilledIconButton(onClick = onTogglePlay, modifier = Modifier.size(scaledFilledBtnSize), shape = CircleShape) {
                     Icon(
                         if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
                         contentDescription = if (isPlaying) "暂停" else "播放",
-                        modifier = Modifier.size(32.dp)
+                        modifier = Modifier.size(scaledLargeIconSize)
                     )
                 }
 
-                IconButton(onClick = onNext, modifier = Modifier.size(48.dp)) {
-                    Icon(Icons.Default.SkipNext, contentDescription = "下一首", modifier = Modifier.size(28.dp))
+                IconButton(onClick = onNext, modifier = Modifier.size(scaledBtnSize)) {
+                    Icon(Icons.Default.SkipNext, contentDescription = "下一首", modifier = Modifier.size(scaledIconSize))
                 }
             }
 
@@ -480,15 +497,15 @@ private fun PlayerBottomBar(
                     localPlayMode = (localPlayMode + 1) % 3
                     onTogglePlayMode()
                 }) {
-                    Icon(imageVector = playModeIcon, contentDescription = playModeDesc, modifier = Modifier.size(24.dp))
+                    Icon(imageVector = playModeIcon, contentDescription = playModeDesc, modifier = Modifier.size(scaledSmallIconSize))
                 }
 
                 IconButton(onClick = { onShowPlaylist(true) }) {
-                    Icon(imageVector = Icons.AutoMirrored.Filled.PlaylistPlay, contentDescription = "播放列表", modifier = Modifier.size(24.dp))
+                    Icon(imageVector = Icons.AutoMirrored.Filled.PlaylistPlay, contentDescription = "播放列表", modifier = Modifier.size(scaledSmallIconSize))
                 }
 
                 IconButton(onClick = onToggleSavePlaylist) {
-                    Icon(imageVector = Icons.Default.PlaylistAdd, contentDescription = "保存到歌单", modifier = Modifier.size(24.dp))
+                    Icon(imageVector = Icons.Default.PlaylistAdd, contentDescription = "保存到歌单", modifier = Modifier.size(scaledSmallIconSize))
                 }
 
                 IconButton(onClick = onSleepTimerClick) {
@@ -496,7 +513,7 @@ private fun PlayerBottomBar(
                         imageVector = if (isTimerActive) Icons.Default.BedtimeOff else Icons.Default.Bedtime,
                         contentDescription = "定时关闭",
                         tint = if (isTimerActive) Color(0xFF7C4DFF) else MaterialTheme.colorScheme.onSurface,
-                        modifier = Modifier.size(24.dp)
+                        modifier = Modifier.size(scaledSmallIconSize)
                     )
                 }
 
@@ -505,7 +522,7 @@ private fun PlayerBottomBar(
                         imageVector = Icons.Default.MusicNote,
                         contentDescription = "设为铃声",
                         tint = MaterialTheme.colorScheme.onSurface,
-                        modifier = Modifier.size(24.dp)
+                        modifier = Modifier.size(scaledSmallIconSize)
                     )
                 }
 
@@ -514,7 +531,7 @@ private fun PlayerBottomBar(
                         imageVector = if (isFavorite) Icons.Filled.Favorite else Icons.Outlined.FavoriteBorder,
                         contentDescription = if (isFavorite) "取消喜欢" else "我喜欢",
                         tint = if (isFavorite) Color(0xFFFF5252) else MaterialTheme.colorScheme.onSurface,
-                        modifier = Modifier.size(24.dp)
+                        modifier = Modifier.size(scaledSmallIconSize)
                     )
                 }
             }
@@ -617,12 +634,15 @@ private fun PlayerBottomBar(
                                     )
                                 }
                                 if (isCurrentSong) {
+                                    val isExpandedRow = windowSizeClass.widthSizeClass == WindowWidthSizeClass.Expanded
+                                    val rowScale = if (isExpandedRow) 1.3f else 1f
+                                    val rowIconSize = (24.dp.value * rowScale).dp.coerceAtLeast(24.dp)
                                     IconButton(onClick = onTogglePlay) {
                                         Icon(
                                             imageVector = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
                                             contentDescription = if (isPlaying) "暂停" else "播放",
                                             tint = MaterialTheme.colorScheme.primary,
-                                            modifier = Modifier.size(24.dp)
+                                            modifier = Modifier.size(rowIconSize)
                                         )
                                     }
                                 }

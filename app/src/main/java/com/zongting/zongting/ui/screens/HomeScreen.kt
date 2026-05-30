@@ -521,8 +521,17 @@ fun DailyRecommendRow(
 @Composable
 fun SongListItem(
     song: Song,
-    onClick: () -> Unit
+    onClick: () -> Unit,
+    isExpanded: Boolean = false
 ) {
+    val scale = if (isExpanded) 1.3f else 1f
+    val baseCoverSize = 48.dp
+    val baseBadgeSize = 15.dp
+    val baseBadgeIconSize = 12.dp
+    val scaledCoverSize = (baseCoverSize.value * scale).dp.coerceAtLeast(baseCoverSize)
+    val scaledBadgeSize = (baseBadgeSize.value * scale).dp.coerceAtLeast(baseBadgeSize)
+    val scaledBadgeIconSize = (baseBadgeIconSize.value * scale).dp.coerceAtLeast(baseBadgeIconSize)
+
     ListItem(
         headlineContent = {
             Text(
@@ -545,7 +554,7 @@ fun SongListItem(
                     model = song.pic120,
                     contentDescription = null,
                     modifier = Modifier
-                        .size(48.dp)
+                        .size(scaledCoverSize)
                         .clip(RoundedCornerShape(4.dp)),
                     contentScale = ContentScale.Crop
                 )
@@ -554,7 +563,7 @@ fun SongListItem(
                     Box(
                         modifier = Modifier
                             .align(Alignment.BottomEnd)
-                            .size(15.dp)
+                            .size(scaledBadgeSize)
                             .background(
                                 if (song.fee == 1)
                                     Color(0xFFFF6B35).copy(alpha = 0.9f)  // VIP 橙色
@@ -574,7 +583,7 @@ fun SongListItem(
                             Icon(
                                 imageVector = Icons.Default.Lock,
                                 contentDescription = "版权限制",
-                                modifier = Modifier.size(12.dp),
+                                modifier = Modifier.size(scaledBadgeIconSize),
                                 tint = MaterialTheme.colorScheme.onErrorContainer
                             )
                         }
@@ -852,25 +861,29 @@ fun HomeScreenLandscape(
                     LandscapeIconButton(
                         icon = Icons.Filled.PlayArrow,
                         label = "播放",
-                        onClick = onGoToPlayer
+                        onClick = onGoToPlayer,
+                        isExpanded = true
                     )
                     // 搜索入口
                     LandscapeIconButton(
                         icon = Icons.Filled.Search,
                         label = "搜索",
-                        onClick = onGoToPlayer
+                        onClick = onGoToPlayer,
+                        isExpanded = true
                     )
                     // 排行榜入口
                     LandscapeIconButton(
                         icon = Icons.Filled.Leaderboard,
                         label = "排行榜",
-                        onClick = onGoToPlayer
+                        onClick = onGoToPlayer,
+                        isExpanded = true
                     )
                     // 音乐库入口
                     LandscapeIconButton(
                         icon = Icons.Filled.LibraryMusic,
                         label = "音乐库",
-                        onClick = onGoToPlayer
+                        onClick = onGoToPlayer,
+                        isExpanded = true
                     )
                 }
             }
@@ -882,8 +895,14 @@ fun HomeScreenLandscape(
 private fun LandscapeIconButton(
     icon: androidx.compose.ui.graphics.vector.ImageVector,
     label: String,
-    onClick: () -> Unit
+    onClick: () -> Unit,
+    isExpanded: Boolean = false
 ) {
+    val scale = if (isExpanded) 1.3f else 1f
+    val baseSize = 72.dp
+    val baseIconSize = 40.dp
+    val scaledSize = (baseSize.value * scale).dp.coerceAtLeast(baseSize)
+    val scaledIconSize = (baseIconSize.value * scale).dp.coerceAtLeast(baseIconSize)
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
         modifier = Modifier
@@ -893,14 +912,14 @@ private fun LandscapeIconButton(
         Surface(
             shape = RoundedCornerShape(16.dp),
             color = MaterialTheme.colorScheme.primaryContainer,
-            modifier = Modifier.size(72.dp)
+            modifier = Modifier.size(scaledSize)
         ) {
             Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
                 Icon(
                     imageVector = icon,
                     contentDescription = label,
                     tint = MaterialTheme.colorScheme.onPrimaryContainer,
-                    modifier = Modifier.size(40.dp)
+                    modifier = Modifier.size(scaledIconSize)
                 )
             }
         }

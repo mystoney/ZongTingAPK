@@ -45,10 +45,13 @@ fun MiniPlayer(
 ) {
     val isExpanded = windowSizeClass?.widthSizeClass == androidx.compose.material3.windowsizeclass.WindowWidthSizeClass.Expanded
     // 横屏 Expanded 高度为普通的 2.5 倍（普通约 64dp × 2.5 ≈ 160dp）
-    val coverSize = if (isExpanded) 120.dp else 48.dp
+    val scale = if (isExpanded) 1.3f else 1f
+    val baseCoverSize = 48.dp
+    val baseIconSize = 28.dp
+    val coverSize = (baseCoverSize.value * scale).dp.coerceAtLeast(baseCoverSize)
     val horizontalPadding = if (isExpanded) 16.dp else 8.dp
     val verticalPadding = if (isExpanded) 20.dp else 8.dp
-    val iconSize = if (isExpanded) 48.dp else 28.dp
+    val iconSize = (baseIconSize.value * scale).dp.coerceAtLeast(baseIconSize)
     val textStyleTitle = if (isExpanded) MaterialTheme.typography.headlineMedium else MaterialTheme.typography.bodyMedium
     val textStyleArtist = if (isExpanded) MaterialTheme.typography.titleMedium else MaterialTheme.typography.bodySmall
 

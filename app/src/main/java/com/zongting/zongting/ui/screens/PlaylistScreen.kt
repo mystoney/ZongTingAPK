@@ -19,6 +19,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import coil.compose.AsyncImage
 import com.zongting.zongting.data.model.Song
@@ -53,6 +54,17 @@ fun PlaylistScreen(
     }
 
     Log.d("HomeDebug", "PlaylistScreen: COMPOSING isLoading=${uiState.isLoading} playlist=${uiState.playlist?.name} songs=${uiState.songs.size}")
+
+    val isExpanded = windowSizeClass.widthSizeClass == androidx.compose.material3.windowsizeclass.WindowWidthSizeClass.Expanded
+    val scale = if (isExpanded) 1.3f else 1f
+    val baseCoverSize = 120.dp
+    val basePadding = 16.dp
+    val baseIconSize = 24.dp
+    val scaledCoverSize = (baseCoverSize.value * scale).dp
+    val scaledPadding = (basePadding.value * scale).dp
+    val scaledIconSize = (baseIconSize.value * scale).dp
+    val scaledTitleSize = (MaterialTheme.typography.titleMedium.fontSize.value * scale).sp
+    val scaledBodySize = (MaterialTheme.typography.bodySmall.fontSize.value * scale).sp
 
     Column(
         modifier = Modifier
@@ -95,36 +107,36 @@ fun PlaylistScreen(
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .padding(16.dp)
+                                .padding(scaledPadding)
                         ) {
                             AsyncImage(
                                 model = playlist.img300,
                                 contentDescription = null,
                                 modifier = Modifier
-                                    .size(120.dp)
+                                    .size(scaledCoverSize)
                                     .clip(RoundedCornerShape(8.dp)),
                                 contentScale = ContentScale.Crop
                             )
 
                             Column(
                                 modifier = Modifier
-                                    .padding(start = 16.dp)
+                                    .padding(start = scaledPadding)
                                     .weight(1f)
                             ) {
                                 Text(
                                     text = playlist.name,
-                                    style = MaterialTheme.typography.titleMedium,
+                                    style = MaterialTheme.typography.titleMedium.copy(fontSize = scaledTitleSize),
                                     maxLines = 2
                                 )
                                 Spacer(modifier = Modifier.height(8.dp))
                                 Text(
                                     text = playlist.userName,
-                                    style = MaterialTheme.typography.bodySmall,
+                                    style = MaterialTheme.typography.bodySmall.copy(fontSize = scaledBodySize),
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
                                 Text(
                                     text = "${playlist.total}首歌曲",
-                                    style = MaterialTheme.typography.bodySmall,
+                                    style = MaterialTheme.typography.bodySmall.copy(fontSize = scaledBodySize),
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
                             }
@@ -137,9 +149,9 @@ fun PlaylistScreen(
                             onClick = onPlayAll,
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .padding(horizontal = 16.dp)
+                                .padding(horizontal = scaledPadding)
                         ) {
-                            Icon(Icons.Default.PlayArrow, contentDescription = null)
+                            Icon(Icons.Default.PlayArrow, contentDescription = null, modifier = Modifier.size(scaledIconSize))
                             Spacer(modifier = Modifier.width(8.dp))
                             Text("播放全部")
                         }
