@@ -33,6 +33,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import coil.compose.AsyncImage
 import com.zongting.zongting.data.model.Song
 import com.zongting.zongting.data.model.UserPlaylist
+import com.zongting.zongting.ui.theme.AppColors
 import kotlinx.coroutines.delay
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.sp
@@ -171,7 +172,11 @@ fun SearchScreen(
                         viewModel.search(searchText)
                     }
                 },
-                modifier = Modifier.height(scaledSearchBtnHeight)
+                modifier = Modifier.height(scaledSearchBtnHeight),
+                colors = ButtonDefaults.filledTonalButtonColors(
+                    containerColor = AppColors.Primary,
+                    contentColor = AppColors.OnPrimary
+                )
             ) {
                 Text("搜索")
             }
@@ -207,7 +212,11 @@ fun SearchScreen(
                     },
                     contentPadding = PaddingValues(horizontal = 12.dp, vertical = 0.dp),
                     modifier = Modifier.height(32.dp),
-                    shape = RoundedCornerShape(16.dp)
+                    shape = RoundedCornerShape(16.dp),
+                    colors = ButtonDefaults.filledTonalButtonColors(
+                        containerColor = AppColors.Primary,
+                        contentColor = AppColors.OnPrimary
+                    )
                 ) {
                     Icon(Icons.Default.PlayArrow, contentDescription = null, modifier = Modifier.size(16.dp))
                     Spacer(modifier = Modifier.width(4.dp))
