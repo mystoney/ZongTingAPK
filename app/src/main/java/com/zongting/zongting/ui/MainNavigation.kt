@@ -40,6 +40,7 @@ import com.zongting.zongting.data.repository.UpdatePhase
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.NavigationBarItemDefaults
+import androidx.compose.material3.NavigationRailItemDefaults
 
 sealed class Screen(val route: String, val title: String, val icon: ImageVector) {
     object Home : Screen("home", "首页", Icons.Default.Home)
@@ -149,7 +150,7 @@ fun MainNavigation(
                         (screen.route != "rankings" && currentDestination?.route?.startsWith(screen.route) == true)
                     NavigationRailItem(
                         icon = { Icon(screen.icon, contentDescription = screen.title, modifier = Modifier.size(30.dp)) },
-                        label = { Text(screen.title, maxLines = 1, style = MaterialTheme.typography.titleMedium) },
+                        label = { Text(screen.title, maxLines = 1, style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)) },
                         selected = isSelected,
                         onClick = {
                             navController.navigate(screen.route) {
@@ -159,7 +160,10 @@ fun MainNavigation(
                                 launchSingleTop = true
                                 restoreState = false
                             }
-                        }
+                        },
+                        colors = NavigationRailItemDefaults.colors(
+                            indicatorColor = PrimaryVariant
+                        )
                     )
                 }
                 Spacer(Modifier.weight(1f))
@@ -185,7 +189,7 @@ fun MainNavigation(
                                     (screen.route != "rankings" && currentDestination?.route?.startsWith(screen.route) == true)
                                 NavigationBarItem(
                                     icon = { Icon(screen.icon, contentDescription = screen.title) },
-                                    label = { Text(screen.title) },
+                                    label = { Text(screen.title, style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold)) },
                                     selected = isSelected,
                                     colors = NavigationBarItemDefaults.colors(
                                         selectedIconColor = PrimaryVariant,
