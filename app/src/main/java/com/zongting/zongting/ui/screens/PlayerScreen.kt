@@ -1600,7 +1600,7 @@ fun SleepTimerDialog(
     )
 }
 
-/** 手机横屏简化播放页面：左侧封面 + 右侧信息 + 底部控制栏 */
+/** 手机横屏播放页面：左侧封面+信息+进度条，右侧制作名单，底部控制栏 */
 @Composable
 fun PlayerScreenLandscape(
     currentSong: Song?,
@@ -1634,62 +1634,117 @@ fun PlayerScreenLandscape(
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(16.dp),
-                horizontalArrangement = Arrangement.spacedBy(24.dp),
-                verticalAlignment = Alignment.CenterVertically
+                horizontalArrangement = Arrangement.spacedBy(24.dp)
             ) {
-                // ===== 左侧：封面 =====
-                val coverUrl = currentSong.coverUrl ?: currentSong.pic
-                AsyncImage(
-                    model = coil.request.ImageRequest.Builder(LocalContext.current)
-                        .data(coverUrl)
-                        .crossfade(true)
-                        .build(),
-                    imageLoader = imageLoader,
-                    contentDescription = "专辑封面",
-                    modifier = Modifier
-                        .fillMaxHeight(0.72f)
-                        .aspectRatio(1f)
-                        .clip(RoundedCornerShape(12.dp)),
-                    contentScale = ContentScale.Crop
-                )
-
-                // ===== 右侧：信息 + 控制 =====
+                // ===== 左侧：封面 + 歌曲信息 + 进度条 =====
                 Column(
                     modifier = Modifier
                         .weight(1f)
-                        .fillMaxHeight(0.72f),
+                        .fillMaxHeight(),
+                    horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.SpaceBetween
                 ) {
-                    // 顶部：返回 + 歌曲信息
-                    Column {
-                        IconButton(onClick = onBackClick) {
-                            Icon(
-                                Icons.Default.KeyboardArrowDown,
-                                contentDescription = "返回",
-                                tint = Color.White
-                            )
-                        }
-                        Spacer(modifier = Modifier.height(4.dp))
-                        Text(
-                            text = currentSong.name,
-                            style = MaterialTheme.typography.titleLarge,
-                            color = Color.White,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                            fontWeight = FontWeight.Bold
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    // 封面：黑胶唱片风格
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth(0.75f)
+                            .aspectRatio(1f),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        // 外圈：黑胶唱片底色
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .clip(RoundedCornerShape(16.dp))
+                                .background(Color(0xFF1A1A2E))
                         )
-                        Spacer(modifier = Modifier.height(4.dp))
-                        Text(
-                            text = currentSong.artist,
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = Color.White.copy(alpha = 0.7f),
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
+                        // 封面图片
+                        val coverUrl = currentSong.coverUrl ?: currentSong.pic
+                        AsyncImage(
+                            model = coil.request.ImageRequest.Builder(LocalContext.current)
+                                .data(coverUrl)
+                                .crossfade(true)
+                                .build(),
+                            imageLoader = imageLoader,
+                            contentDescription = "专辑封面",
+                            modifier = Modifier
+                                .fillMaxSize(0.82f)
+                                .clip(RoundedCornerShape(12.dp)),
+                            contentScale = ContentScale.Crop
                         )
                     }
 
-                    // 中间：进度条
-                    Column {
+                    // 歌曲信息
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 8.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.Center,
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text(
+                                text = currentSong.name,
+                                style = MaterialTheme.typography.titleMedium,
+                                color = Color.White,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.Center
+                        ) {
+                            // "无损" 标志
+                            Surface(
+                                shape = RoundedCornerShape(4.dp),
+                                color = Color(0xFF7C4DFF).copy(alpha = 0.9f)
+                            ) {
+                                Text(
+                                    text = "无损",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = Color.White,
+                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                )
+                            }
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = currentSong.artist,
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = Color.White.copy(alpha = 0.7f),
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                            Spacer(modifier = Modifier.width(12.dp))
+                            // 添加到歌单
+                            Icon(
+                                imageVector = Icons.Default.Add,
+                                contentDescription = "添加到歌单",
+                                tint = Color.White.copy(alpha = 0.7f),
+                                modifier = Modifier.size(20.dp)
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            // 收藏
+                            Icon(
+                                imageVector = if (isFavorite) Icons.Filled.Favorite else Icons.Outlined.FavoriteBorder,
+                                contentDescription = "收藏",
+                                tint = if (isFavorite) Color(0xFFFF6B6B) else Color.White.copy(alpha = 0.7f),
+                                modifier = Modifier
+                                    .size(20.dp)
+                                    .clickable { onToggleFavorite() }
+                            )
+                        }
+                    }
+
+                    // 进度条
+                    Column(modifier = Modifier.fillMaxWidth()) {
                         Slider(
                             value = if (playbackState.duration > 0) {
                                 playbackState.position.toFloat() / playbackState.duration.toFloat()
@@ -1712,17 +1767,50 @@ fun PlayerScreenLandscape(
                                 style = MaterialTheme.typography.bodySmall,
                                 color = Color.White.copy(alpha = 0.7f)
                             )
+                            val remaining = maxOf(0L, playbackState.duration - playbackState.position)
                             Text(
-                                text = formatTime(playbackState.duration),
+                                text = "剩余 ${formatTime(remaining)}",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = Color.White.copy(alpha = 0.7f)
                             )
                         }
                     }
                 }
+
+                // ===== 右侧：制作名单 =====
+                Column(
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxHeight()
+                        .padding(vertical = 8.dp),
+                    verticalArrangement = Arrangement.Center
+                ) {
+                    Text(
+                        text = "词/曲",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = Color.White.copy(alpha = 0.5f)
+                    )
+                    Text(
+                        text = currentSong.artist,
+                        style = MaterialTheme.typography.titleMedium,
+                        color = Color.White,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Spacer(modifier = Modifier.height(20.dp))
+                    Text(
+                        text = "制作人",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = Color.White.copy(alpha = 0.5f)
+                    )
+                    Text(
+                        text = "—",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = Color.White.copy(alpha = 0.7f)
+                    )
+                }
             }
 
-            // ===== 底部：统一播放控制栏（简化） =====
+            // ===== 底部：播放控制栏 =====
             Surface(
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
@@ -1737,12 +1825,18 @@ fun PlayerScreenLandscape(
                     horizontalArrangement = Arrangement.SpaceEvenly,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    // 收藏
-                    IconButton(onClick = onToggleFavorite) {
+                    // 播放模式
+                    IconButton(onClick = onTogglePlayMode) {
+                        val (icon, desc) = when (playMode) {
+                            0 -> Icons.Default.Repeat to "列表循环"
+                            1 -> Icons.Default.Repeat to "单曲循环"
+                            else -> Icons.Default.Shuffle to "随机播放"
+                        }
                         Icon(
-                            imageVector = if (isFavorite) Icons.Filled.Favorite else Icons.Outlined.FavoriteBorder,
-                            contentDescription = "收藏",
-                            tint = if (isFavorite) Color(0xFFFF6B6B) else Color.White.copy(alpha = 0.8f)
+                            imageVector = icon,
+                            contentDescription = desc,
+                            tint = Color.White.copy(alpha = 0.8f),
+                            modifier = Modifier.size(24.dp)
                         )
                     }
 
@@ -1756,7 +1850,7 @@ fun PlayerScreenLandscape(
                         )
                     }
 
-                    // 播放/暂停
+                    // 播放/暂停（圆形大按钮）
                     FilledIconButton(
                         onClick = onTogglePlay,
                         colors = IconButtonDefaults.filledIconButtonColors(
@@ -1782,18 +1876,13 @@ fun PlayerScreenLandscape(
                         )
                     }
 
-                    // 播放模式
-                    IconButton(onClick = onTogglePlayMode) {
-                        val (icon, desc) = when (playMode) {
-                            0 -> Icons.Default.Repeat to "列表循环"
-                            1 -> Icons.Default.Repeat to "单曲循环"
-                            else -> Icons.Default.Shuffle to "随机播放"
-                        }
+                    // 当前播放列表
+                    IconButton(onClick = { /* 播放列表 */ }) {
                         Icon(
-                            imageVector = icon,
-                            contentDescription = desc,
+                            imageVector = Icons.AutoMirrored.Filled.PlaylistPlay,
+                            contentDescription = "播放列表",
                             tint = Color.White.copy(alpha = 0.8f),
-                            modifier = Modifier.size(24.dp)
+                            modifier = Modifier.size(28.dp)
                         )
                     }
                 }
