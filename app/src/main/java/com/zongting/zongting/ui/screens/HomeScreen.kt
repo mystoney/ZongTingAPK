@@ -1,8 +1,10 @@
 package com.zongting.zongting.ui.screens
 
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.border
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -314,37 +316,6 @@ fun BannerCarousel(banners: List<Banner>) {
         while (true) {
             delay(3000)
             pagerState.animateScrollToPage((pagerState.currentPage + 1) % banners.size)
-        }
-    }
-
-    // 图片点击弹窗
-    selectedBannerImage?.let { imageUrl ->
-        Dialog(
-            onDismissRequest = { selectedBannerImage = null }
-        ) {
-            val (imgW, imgH) = selectedImageSize
-            val aspectRatio = if (imgH > 0) imgW / imgH else 16f / 9f
-            val dialogWidth = screenWidthPx * 0.85f
-            val dialogHeight = dialogWidth / aspectRatio
-
-            Box(
-                modifier = Modifier
-                    .width(dialogWidth)
-                    .height(dialogHeight)
-                    .clip(RoundedCornerShape(12.dp))
-                    .clickable { selectedBannerImage = null },
-                contentAlignment = Alignment.Center
-            ) {
-                AsyncImage(
-                    model = imageUrl,
-                    contentDescription = null,
-                    modifier = Modifier.fillMaxSize(),
-                    contentScale = ContentScale.Fit,
-                    onSuccess = {
-                        selectedImageSize = it.result.drawable.intrinsicWidth.toFloat() to it.result.drawable.intrinsicHeight.toFloat()
-                    }
-                )
-            }
         }
     }
 
