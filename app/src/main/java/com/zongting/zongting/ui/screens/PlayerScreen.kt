@@ -61,8 +61,8 @@ import com.zongting.zongting.ui.PlaybackState
 import com.zongting.zongting.data.model.Song
 import com.zongting.zongting.data.model.UserPlaylist
 import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.input.pointer.positionChanged
 import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
@@ -1210,77 +1210,106 @@ private fun LyricPage(
                     }
                 }
             } else {
-                // 竖屏：右侧纵向进度条 + 时间标签
+                // 竖屏：右侧纵向进度条（可拖动）+ 时间标签
+                var isDragging by remember { mutableStateOf(false) }
+                var dragProgress by remember { mutableFloatStateOf(0f) }
                 val progress = if (playbackState.duration > 0) {
                     playbackState.position.toFloat() / playbackState.duration.toFloat()
                 } else 0f
-                Row(
+                val displayProgress = if (isDragging) dragProgress else progress
+
+                Box(
                     modifier = Modifier
                         .align(Alignment.CenterEnd)
-                        .padding(end = 12.dp)
-                        .fillMaxHeight(0.7f),
-                    verticalAlignment = Alignment.CenterVertically
+                        .padding(end = 8.dp)
+                        .fillMaxHeight(0.65f)
+                        .pointerInput(Unit) {
+                            detectVerticalDragGestures(
+                                onDragStart = {
+                                    isDragging = true
+                                    dragProgress = displayProgress
+                                },
+                                onDragEnd = {
+                                    onSeek((dragProgress * playbackState.duration).toLong())
+                                    isDragging = false
+                                },
+                                onDragCancel = { isDragging = false },
+                                onVerticalDrag = { _, dragAmount ->
+                                    val fractionDelta = -dragAmount / size.height
+                                    val newProgress = (displayProgress + fractionDelta).coerceIn(0f, 1f)
+                                    if (isDragging) {
+                                        dragProgress = newProgress
+                                        onDrag((newProgress * playbackState.duration).toLong())
+                                    }
+                                }
+                            )
+                        },
+                    contentAlignment = Alignment.TopCenter
                 ) {
+                    // 外层容器：纵向排列：圆形指示器在上，轨道在下
                     Column(
-                        modifier = Modifier
-                            .padding(end = 8.dp)
-                            .fillMaxHeight(),
-                        horizontalAlignment = Alignment.End,
-                        verticalArrangement = Arrangement.SpaceBetween
+                        modifier = Modifier.fillMaxHeight(),
+                        verticalArrangement = Arrangement.Top,
+                        horizontalAlignment = Alignment.CenterHorizontally
                     ) {
-                        Text(
-                            text = formatDuration(playbackState.position),
-                            style = MaterialTheme.typography.labelSmall,
-                            color = Color(0xFFE53935),
-                            modifier = Modifier.padding(top = 2.dp)
-                        )
-                        Text(
-                            text = formatDuration(playbackState.duration),
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.padding(bottom = 2.dp)
-                        )
-                    }
-                    Box(
-                        modifier = Modifier
-                            .width(6.dp)
-                            .fillMaxHeight()
-                    ) {
+                        // 圆形指示器（直径 = 进度条宽度的两倍）
                         Box(
                             modifier = Modifier
-                                .fillMaxSize()
-                                .background(
-                                    Color.White.copy(alpha = 0.15f),
-                                    RoundedCornerShape(3.dp)
-                                )
+                                .size(12.dp)
+                                .offset(y = (-6).dp) // 圆形底部对齐进度条顶部
+                                .background(Color(0xFFE53935), CircleShape)
                         )
+                        // 轨道背景 + 已播放进度
                         Box(
                             modifier = Modifier
-                                .fillMaxWidth()
-                                .fillMaxHeight(progress)
-                                .align(Alignment.TopCenter)
-                                .background(
-                                    Color(0xFFE53935),
-                                    RoundedCornerShape(3.dp)
-                                )
-                        )
-                        BoxWithConstraints(
-                            modifier = Modifier.fillMaxSize()
+                                .weight(1f)
+                                .width(6.dp),
+                            contentAlignment = Alignment.BottomCenter
                         ) {
-                            val thumbOffset = with(LocalDensity.current) {
-                                (maxHeight.toPx() * progress).toDp()
-                            }
+                            // 轨道背景
                             Box(
                                 modifier = Modifier
-                                    .offset(x = (-3).dp, y = thumbOffset - 6.dp)
-                                    .size(12.dp)
+                                    .fillMaxHeight()
+                                    .width(6.dp)
+                                    .background(
+                                        Color.White.copy(alpha = 0.15f),
+                                        RoundedCornerShape(3.dp)
+                                    )
+                            )
+                            // 已播放进度（从底部往上填充）
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxHeight(displayProgress)
+                                    .width(6.dp)
                                     .background(
                                         Color(0xFFE53935),
-                                        CircleShape
+                                        RoundedCornerShape(3.dp)
                                     )
                             )
                         }
                     }
+                }
+                // 时间标签
+                Column(
+                    modifier = Modifier
+                        .align(Alignment.CenterEnd)
+                        .padding(end = 28.dp)
+                        .fillMaxHeight(0.65f),
+                    horizontalAlignment = Alignment.End,
+                    verticalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Text(
+                        text = formatDuration((if (isDragging) dragProgress * playbackState.duration else playbackState.position).toLong()),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = Color(0xFFE53935),
+                        modifier = Modifier.padding(top = 2.dp)
+                    )
+                    Text(
+                        text = formatDuration(playbackState.duration),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(bottom = 2.dp)
+                    )
                 }
             }
         }
