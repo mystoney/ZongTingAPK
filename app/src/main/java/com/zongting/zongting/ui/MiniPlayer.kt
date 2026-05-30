@@ -42,15 +42,15 @@ fun MiniPlayer(
     val coverSize = if (isExpanded) 120.dp else 48.dp
     val horizontalPadding = if (isExpanded) 16.dp else 8.dp
     val verticalPadding = if (isExpanded) 20.dp else 8.dp
-    val iconSize = if (isExpanded) 36.dp else 24.dp
-    val textStyleTitle = if (isExpanded) MaterialTheme.typography.titleMedium else MaterialTheme.typography.bodyMedium
-    val textStyleArtist = if (isExpanded) MaterialTheme.typography.bodyMedium else MaterialTheme.typography.bodySmall
+    val iconSize = if (isExpanded) 48.dp else 28.dp
+    val textStyleTitle = if (isExpanded) MaterialTheme.typography.headlineMedium else MaterialTheme.typography.bodyMedium
+    val textStyleArtist = if (isExpanded) MaterialTheme.typography.titleMedium else MaterialTheme.typography.bodySmall
 
     Surface(
         modifier = modifier
             .fillMaxWidth()
             .clickable(onClick = onClick),
-        color = Color(0xE60B1E10),
+        color = Color(0xBF0B1E10),
         tonalElevation = 4.dp
     ) {
         Row(
@@ -93,7 +93,7 @@ fun MiniPlayer(
             }
 
             // 喜欢按钮
-            IconButton(onClick = onToggleFavorite, modifier = Modifier.size(iconSize * 1.5f)) {
+            IconButton(onClick = onToggleFavorite, modifier = Modifier.size(iconSize * 2f)) {
                 Icon(
                     imageVector = if (isFavorite) Icons.Filled.Favorite else Icons.Outlined.FavoriteBorder,
                     contentDescription = if (isFavorite) "取消喜欢" else "我喜欢",
@@ -103,7 +103,7 @@ fun MiniPlayer(
             }
 
             // 上一首
-            IconButton(onClick = onPrevious, modifier = Modifier.size(iconSize * 1.5f)) {
+            IconButton(onClick = onPrevious, modifier = Modifier.size(iconSize * 2f)) {
                 Icon(
                     Icons.Default.SkipPrevious,
                     contentDescription = "上一首",
@@ -113,7 +113,7 @@ fun MiniPlayer(
             }
 
             // 播放/暂停按钮
-            IconButton(onClick = onPlayPause, modifier = Modifier.size(iconSize * 1.5f)) {
+            IconButton(onClick = onPlayPause, modifier = Modifier.size(iconSize * 2f)) {
                 Icon(
                     if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
                     contentDescription = if (isPlaying) "暂停" else "播放",
@@ -123,7 +123,7 @@ fun MiniPlayer(
             }
 
             // 下一首
-            IconButton(onClick = onNext, modifier = Modifier.size(iconSize * 1.5f)) {
+            IconButton(onClick = onNext, modifier = Modifier.size(iconSize * 2f)) {
                 Icon(
                     Icons.Default.SkipNext,
                     contentDescription = "下一首",

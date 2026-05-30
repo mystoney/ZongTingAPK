@@ -63,6 +63,7 @@ import com.zongting.zongting.data.model.UserPlaylist
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
@@ -1216,6 +1217,13 @@ private fun LyricPage(
                 val progress = if (playbackState.duration > 0) {
                     playbackState.position.toFloat() / playbackState.duration.toFloat()
                 } else 0f
+                // 用 Channel 把 pointerInput 协程里的绝对 Y 坐标传进组合层级
+                val dragChannel = remember { Channel<Float>(Channel.RENDEZVOUS) }
+                LaunchedEffect(dragChannel) {
+                    for (absY in dragChannel) {
+                        dragProgress = absY.coerceIn(0f, 1f)
+                    }
+                }
                 val displayProgress = if (isDragging) dragProgress else progress
                 val density = LocalDensity.current
 
@@ -1228,20 +1236,17 @@ private fun LyricPage(
                             detectVerticalDragGestures(
                                 onDragStart = {
                                     isDragging = true
-                                    dragProgress = displayProgress
+                                    dragProgress = progress
                                 },
                                 onDragEnd = {
                                     onSeek((dragProgress * playbackState.duration).toLong())
                                     isDragging = false
                                 },
                                 onDragCancel = { isDragging = false },
-                                onVerticalDrag = { _, dragAmount ->
-                                    val fractionDelta = -dragAmount / size.height
-                                    val newProgress = (displayProgress + fractionDelta).coerceIn(0f, 1f)
-                                    if (isDragging) {
-                                        dragProgress = newProgress
-                                        onDrag((newProgress * playbackState.duration).toLong())
-                                    }
+                                onVerticalDrag = { change, _ ->
+                                    // 用手指的绝对 Y 位置（相对于进度条顶部）算进度
+                                    val absProgress = change.position.y / size.height
+                                    dragChannel.trySend(absProgress.coerceIn(0f, 1f))
                                 }
                             )
                         }
@@ -1249,51 +1254,49 @@ private fun LyricPage(
                     // 使用 density.density 和 Dp.value 做像素换算，避免 toPx/toDp 扩展函数
                     val densityVal = density.density
                     val barHeightPx = maxHeight.value * densityVal
-                    val thumbDiaPx = 12f * densityVal
-                    // 圆形 Y：进度 0=底部，进度 1=顶部
-                    val thumbY = (barHeightPx * (1f - displayProgress) - thumbDiaPx / 2).coerceIn(0f, barHeightPx - thumbDiaPx)
+                    val thumbDiaPx = 18f * densityVal
+                    // 圆形 Y：progress=0→顶部，progress=1→底部（初始在顶部，向下移动）
+                    val thumbY = (barHeightPx * displayProgress - thumbDiaPx / 2).coerceIn(0f, barHeightPx - thumbDiaPx)
+                    // 红色填充高度（从顶部往下）
+                    val fillHeightPx = barHeightPx * displayProgress
 
-                    // 轨道背景
+                    // 轨道背景（灰色，居中）
                     Box(
                         modifier = Modifier
                             .fillMaxHeight()
                             .width(6.dp)
+                            .align(Alignment.TopCenter)
                             .background(
                                 Color.White.copy(alpha = 0.15f),
                                 RoundedCornerShape(3.dp)
                             )
                     )
-                    // 已播放进度（从上往下填充）
+                    // 已播放进度（红色，居中）
                     Box(
                         modifier = Modifier
-                            .fillMaxHeight(displayProgress)
+                            .height((fillHeightPx / densityVal).dp)
                             .width(6.dp)
+                            .align(Alignment.TopCenter)
                             .background(
                                 Color(0xFFE53935),
                                 RoundedCornerShape(3.dp)
                             )
                     )
-                    // 圆形指示器（直径=进度条宽度的两倍=12dp）
+                    // 圆形指示器（居中）
                     Box(
                         modifier = Modifier
-                            .fillMaxHeight()
-                            .width(6.dp),
-                        contentAlignment = Alignment.TopStart
-                    ) {
-                        Box(
-                            modifier = Modifier
-                                .offset(y = (thumbY / densityVal).dp)
-                                .size(12.dp)
-                                .background(Color(0xFFE53935), CircleShape)
-                        )
-                    }
+                            .offset(y = (thumbY / densityVal).dp)
+                            .size(18.dp)
+                            .align(Alignment.TopCenter)
+                            .background(Color(0xFFE53935), CircleShape)
+                    )
                 }
                 // 时间标签
                 Column(
                     modifier = Modifier
                         .align(Alignment.CenterEnd)
-                        .padding(end = 28.dp)
-                        .fillMaxHeight(0.65f),
+                        .padding(end = 30.dp)
+                        .fillMaxHeight(0.95f),
                     horizontalAlignment = Alignment.End,
                     verticalArrangement = Arrangement.SpaceBetween
                 ) {
