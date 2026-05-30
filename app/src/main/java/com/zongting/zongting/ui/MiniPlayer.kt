@@ -45,16 +45,23 @@ fun MiniPlayer(
     windowSizeClass: WindowSizeClass? = null
 ) {
     val isExpanded = windowSizeClass?.widthSizeClass == androidx.compose.material3.windowsizeclass.WindowWidthSizeClass.Expanded
-    // 横屏 Expanded 高度为普通的 2.5 倍（普通约 64dp × 2.5 ≈ 160dp）
-    val scale = if (isExpanded) 1.3f else 1f
-    val baseCoverSize = 48.dp
-    val baseIconSize = 28.dp
-    val coverSize = (baseCoverSize.value * scale).dp.coerceAtLeast(baseCoverSize)
+
+    // 按钮区域：动态计算图标大小，根据屏幕宽度自适应
+    // 5个按钮（喜欢/播放模式/上一首/播放暂停/下一首）在剩余空间内均分
+    // 竖屏手机（宽度约 360dp）：图标约 24dp，按钮触控区 40dp
+    // 横屏/PAD（宽度更大）：图标约 32dp，按钮触控区 48dp
+    val iconSize = 24.dp
+    val buttonTouchTarget = 40.dp
+
     val horizontalPadding = if (isExpanded) 16.dp else 8.dp
     val verticalPadding = if (isExpanded) 20.dp else 8.dp
-    val iconSize = (baseIconSize.value * scale).dp.coerceAtLeast(baseIconSize)
+    val coverSize = if (isExpanded) 64.dp else 48.dp
     val textStyleTitle = if (isExpanded) MaterialTheme.typography.headlineMedium else MaterialTheme.typography.bodyMedium
     val textStyleArtist = if (isExpanded) MaterialTheme.typography.titleMedium else MaterialTheme.typography.bodySmall
+
+    // 主播放按钮稍大
+    val playIconSize = 28.dp
+    val playTouchTarget = 44.dp
 
     // 乐观更新：本地记住当前图标状态，点击立即切换，异步同步真实 playMode
     var localPlayMode by remember { mutableIntStateOf(playMode) }
@@ -124,60 +131,81 @@ fun MiniPlayer(
                 )
             }
 
-            // 喜欢按钮
-            IconButton(onClick = onToggleFavorite, modifier = Modifier.size(iconSize * 2f)) {
-                Icon(
-                    imageVector = if (isFavorite) Icons.Filled.Favorite else Icons.Outlined.FavoriteBorder,
-                    contentDescription = if (isFavorite) "取消喜欢" else "我喜欢",
-                    tint = if (isFavorite) AppColors.FavoriteActive else AppColors.FavoriteInactive,
-                    modifier = Modifier.size(iconSize)
-                )
-            }
-
-            // 播放模式按钮
-            IconButton(
-                onClick = {
-                    localPlayMode = (localPlayMode + 1) % 3
-                    onTogglePlayMode()
-                },
-                modifier = Modifier.size(iconSize * 2f)
+            // 按钮区域：使用 Row + weight 均分，让图标自适应屏幕宽度
+            Row(
+                modifier = Modifier
+                    .wrapContentWidth()
+                    .padding(start = 4.dp),
+                horizontalArrangement = Arrangement.spacedBy(0.dp),
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                Icon(
-                    imageVector = playModeIcon,
-                    contentDescription = playModeDesc,
-                    tint = Color.White,
-                    modifier = Modifier.size(iconSize)
-                )
-            }
+                // 喜欢按钮
+                IconButton(
+                    onClick = onToggleFavorite,
+                    modifier = Modifier.size(buttonTouchTarget)
+                ) {
+                    Icon(
+                        imageVector = if (isFavorite) Icons.Filled.Favorite else Icons.Outlined.FavoriteBorder,
+                        contentDescription = if (isFavorite) "取消喜欢" else "我喜欢",
+                        tint = if (isFavorite) AppColors.FavoriteActive else AppColors.FavoriteInactive,
+                        modifier = Modifier.size(iconSize)
+                    )
+                }
 
-            // 上一首
-            IconButton(onClick = onPrevious, modifier = Modifier.size(iconSize * 2f)) {
-                Icon(
-                    Icons.Default.SkipPrevious,
-                    contentDescription = "上一首",
-                    tint = Color.White,
-                    modifier = Modifier.size(iconSize)
-                )
-            }
+                // 播放模式按钮
+                IconButton(
+                    onClick = {
+                        localPlayMode = (localPlayMode + 1) % 3
+                        onTogglePlayMode()
+                    },
+                    modifier = Modifier.size(buttonTouchTarget)
+                ) {
+                    Icon(
+                        imageVector = playModeIcon,
+                        contentDescription = playModeDesc,
+                        tint = Color.White,
+                        modifier = Modifier.size(iconSize)
+                    )
+                }
 
-            // 播放/暂停按钮
-            IconButton(onClick = onPlayPause, modifier = Modifier.size(iconSize * 2f)) {
-                Icon(
-                    if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
-                    contentDescription = if (isPlaying) "暂停" else "播放",
-                    tint = Color.White,
-                    modifier = Modifier.size(iconSize)
-                )
-            }
+                // 上一首
+                IconButton(
+                    onClick = onPrevious,
+                    modifier = Modifier.size(buttonTouchTarget)
+                ) {
+                    Icon(
+                        Icons.Default.SkipPrevious,
+                        contentDescription = "上一首",
+                        tint = Color.White,
+                        modifier = Modifier.size(iconSize)
+                    )
+                }
 
-            // 下一首
-            IconButton(onClick = onNext, modifier = Modifier.size(iconSize * 2f)) {
-                Icon(
-                    Icons.Default.SkipNext,
-                    contentDescription = "下一首",
-                    tint = Color.White,
-                    modifier = Modifier.size(iconSize)
-                )
+                // 播放/暂停按钮（稍大）
+                IconButton(
+                    onClick = onPlayPause,
+                    modifier = Modifier.size(playTouchTarget)
+                ) {
+                    Icon(
+                        if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
+                        contentDescription = if (isPlaying) "暂停" else "播放",
+                        tint = Color.White,
+                        modifier = Modifier.size(playIconSize)
+                    )
+                }
+
+                // 下一首
+                IconButton(
+                    onClick = onNext,
+                    modifier = Modifier.size(buttonTouchTarget)
+                ) {
+                    Icon(
+                        Icons.Default.SkipNext,
+                        contentDescription = "下一首",
+                        tint = Color.White,
+                        modifier = Modifier.size(iconSize)
+                    )
+                }
             }
         }
     }

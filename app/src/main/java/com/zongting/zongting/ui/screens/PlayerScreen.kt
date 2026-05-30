@@ -523,7 +523,7 @@ private fun PlayerBottomBar(
                     Icon(
                         imageVector = if (isFavorite) Icons.Filled.Favorite else Icons.Outlined.FavoriteBorder,
                         contentDescription = if (isFavorite) "取消喜欢" else "我喜欢",
-                        tint = if (isFavorite) Color(0xFFFF5252) else MaterialTheme.colorScheme.onSurface,
+                        tint = if (isFavorite) AppColors.FavoriteActive else MaterialTheme.colorScheme.onSurface,
                         modifier = Modifier.size(scaledSmallIconSize)
                     )
                 }
@@ -1391,7 +1391,7 @@ private fun LyricPage(
                             .width(6.dp)
                             .align(Alignment.TopCenter)
                             .background(
-                                Color(0xFFE53935),
+                                AppColors.Accent,
                                 RoundedCornerShape(3.dp)
                             )
                     )
@@ -1401,7 +1401,7 @@ private fun LyricPage(
                             .offset(y = (thumbY / densityVal).dp)
                             .size(18.dp)
                             .align(Alignment.TopCenter)
-                            .background(Color(0xFFE53935), CircleShape)
+                            .background(AppColors.Accent, CircleShape)
                     )
                 }
                 // 时间标签
@@ -1416,7 +1416,7 @@ private fun LyricPage(
                     Text(
                         text = formatDuration((if (isDragging) dragProgress * playbackState.duration else playbackState.position).toLong()),
                         style = MaterialTheme.typography.labelSmall,
-                        color = Color(0xFFE53935),
+                        color = AppColors.Accent,
                         modifier = Modifier.padding(top = 2.dp)
                     )
                     Text(
