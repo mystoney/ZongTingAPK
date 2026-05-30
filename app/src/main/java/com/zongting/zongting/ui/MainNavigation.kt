@@ -32,7 +32,7 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.zongting.zongting.ui.screens.*
-import com.zongting.zongting.ui.theme.PrimaryVariant
+import com.zongting.zongting.ui.theme.AppColors
 import com.zongting.zongting.data.model.Bang
 import com.zongting.zongting.data.model.UserPlaylist
 import com.zongting.zongting.data.repository.UpdateEvent
@@ -162,7 +162,7 @@ fun MainNavigation(
                             }
                         },
                         colors = NavigationRailItemDefaults.colors(
-                            indicatorColor = PrimaryVariant
+                            indicatorColor = AppColors.PrimaryVariant
                         )
                     )
                 }
@@ -182,7 +182,7 @@ fun MainNavigation(
         Scaffold(
             bottomBar = {
                 if (showBottomBar) {
-                    Surface(color = PrimaryVariant) {
+                    Surface(color = AppColors.PrimaryVariant) {
                         NavigationBar {
                             bottomNavItems.forEach { screen ->
                                 val isSelected = currentDestination?.route == screen.route ||
@@ -192,9 +192,9 @@ fun MainNavigation(
                                     label = { Text(screen.title, style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold)) },
                                     selected = isSelected,
                                     colors = NavigationBarItemDefaults.colors(
-                                        selectedIconColor = PrimaryVariant,
-                                        selectedTextColor = PrimaryVariant,
-                                        indicatorColor = PrimaryVariant.copy(alpha = 0.3f)
+                                        selectedIconColor = AppColors.NavSelected,
+                                        selectedTextColor = AppColors.NavSelected,
+                                        indicatorColor = AppColors.PrimaryVariant.copy(alpha = 0.5f)
                                     ),
                                     onClick = {
                                         navController.navigate(screen.route) {

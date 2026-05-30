@@ -32,8 +32,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import com.zongting.zongting.data.model.Bang
 import com.zongting.zongting.data.model.Song
 import com.zongting.zongting.ui.MainViewModel
-import com.zongting.zongting.ui.theme.Primary
-import com.zongting.zongting.ui.theme.PrimaryVariant
+import com.zongting.zongting.ui.theme.AppColors
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable

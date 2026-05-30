@@ -14,8 +14,7 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.zongting.zongting.ui.theme.Primary
-import com.zongting.zongting.ui.theme.Background
+import com.zongting.zongting.ui.theme.AppColors
 import dagger.hilt.android.EntryPointAccessors
 import kotlinx.coroutines.delay
 
@@ -57,8 +56,8 @@ fun SplashScreen(
             .background(
                 Brush.verticalGradient(
                     colors = listOf(
-                        Background,
-                        Background.copy(alpha = 0.95f)
+                        AppColors.Background,
+                        AppColors.Background.copy(alpha = 0.95f)
                     )
                 )
             ),
@@ -73,7 +72,7 @@ fun SplashScreen(
                 text = "纵听",
                 fontSize = 48.sp,
                 fontWeight = FontWeight.Bold,
-                color = Primary
+                color = AppColors.Primary
             )
 
             Spacer(modifier = Modifier.height(8.dp))

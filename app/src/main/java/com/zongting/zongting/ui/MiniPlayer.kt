@@ -27,6 +27,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.material3.windowsizeclass.WindowSizeClass
 import coil.compose.AsyncImage
 import com.zongting.zongting.data.model.Song
+import com.zongting.zongting.ui.theme.AppColors
 
 @Composable
 fun MiniPlayer(
@@ -128,7 +129,7 @@ fun MiniPlayer(
                 Icon(
                     imageVector = if (isFavorite) Icons.Filled.Favorite else Icons.Outlined.FavoriteBorder,
                     contentDescription = if (isFavorite) "取消喜欢" else "我喜欢",
-                    tint = if (isFavorite) Color(0xFFFF5252) else Color.White,
+                    tint = if (isFavorite) AppColors.FavoriteActive else AppColors.FavoriteInactive,
                     modifier = Modifier.size(iconSize)
                 )
             }

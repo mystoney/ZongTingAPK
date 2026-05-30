@@ -12,19 +12,22 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import androidx.core.view.WindowCompat
 
-// 品牌颜色（墨绿色系）
-val Primary = Color(0xFF2E7D32)       // 墨绿
-val PrimaryVariant = Color(0xFF1B5E20) // 深墨绿
-val Secondary = Color(0xFF4CAF50)     // 翠绿
-val Tertiary = Color(0xFF388E3C)      // 中绿
-val Accent = Color(0xFF66BB6A)         // 浅绿
-val Background = Color(0xFF121212)
-val Surface = Color(0xFF1E1E1E)
-val SurfaceVariant = Color(0xFF2A2A2A)
-val OnPrimary = Color.White
-val OnBackground = Color.White
-val OnSurface = Color.White
-val OnSurfaceVariant = Color(0xFFB0B0B0)
+// ═══════════════════════════════════════════════════════════════════
+// 品牌颜色（墨绿色系）— 统一在 AppColors 中管理
+// ═══════════════════════════════════════════════════════════════════
+
+private val Primary = AppColors.Primary
+private val PrimaryVariant = AppColors.PrimaryVariant
+private val Secondary = AppColors.Secondary
+private val Tertiary = AppColors.Tertiary
+private val Accent = AppColors.Accent
+private val Background = AppColors.Background
+private val Surface = AppColors.Surface
+private val SurfaceVariant = AppColors.SurfaceVariant
+private val OnPrimary = AppColors.OnPrimary
+private val OnBackground = AppColors.OnBackground
+private val OnSurface = AppColors.OnSurface
+private val OnSurfaceVariant = AppColors.OnSurfaceVariant
 
 private val DarkColorScheme = darkColorScheme(
     primary = Primary,
