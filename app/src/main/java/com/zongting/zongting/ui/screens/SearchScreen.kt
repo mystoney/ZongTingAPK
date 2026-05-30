@@ -166,20 +166,19 @@ fun SearchScreen(
                 shape = RoundedCornerShape(24.dp)
             )
             Spacer(modifier = Modifier.width(8.dp))
-            FilledTonalButton(
+            FilterChip(
+                selected = false,
                 onClick = {
                     if (searchText.isNotBlank()) {
                         viewModel.search(searchText)
                     }
                 },
+                label = { Text("搜索") },
                 modifier = Modifier.height(scaledSearchBtnHeight),
-                colors = ButtonDefaults.filledTonalButtonColors(
-                    containerColor = AppColors.Primary,
-                    contentColor = AppColors.OnPrimary
-                )
-            ) {
-                Text("搜索")
-            }
+                leadingIcon = {
+                    Icon(Icons.Default.Search, contentDescription = null)
+                }
+            )
         }
 
         if (uiState.isLoading) {
