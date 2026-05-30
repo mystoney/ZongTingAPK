@@ -1689,50 +1689,36 @@ fun PlayerScreenLandscape(
                     .navigationBarsPadding(),
                 horizontalArrangement = Arrangement.spacedBy(20.dp)
             ) {
-                // ==================== 左侧：封面 + 歌曲信息 + 进度条 + 控制按钮 ====================
                 BoxWithConstraints(
                     modifier = Modifier
                         .weight(1f)
                         .fillMaxHeight(),
                     contentAlignment = Alignment.Center
                 ) {
-                    // 动态计算布局：先量可用高度，再分配封面大小
-                    val availableH = maxHeight
-                    // 封面最大高度：可用高度减去歌名(≈40dp)、进度条(≈50dp)、控制按钮(≈70dp)、间距余量
-                    val coverMaxH = availableH - 180.dp
-                    val coverSize = minOf(maxWidth * 0.65f, coverMaxH.coerceAtLeast(80.dp))
+                    val coverSize = minOf(maxWidth * 0.92f, maxHeight * 0.92f)
 
+                    // 1. 大黑胶唱片铺满（旋转动画）
+                    VinylRecord(
+                        albumArtUrl = currentSong.coverUrl ?: currentSong.pic,
+                        isPlaying = isPlaying,
+                        modifier = Modifier.size(coverSize),
+                        imageLoader = imageLoader
+                    )
+
+                    // 2. 底部半透明控制面板（进度条 + 按钮）
                     Column(
-                        modifier = Modifier.fillMaxSize(),
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        // 封面
-                        Box(
-                            modifier = Modifier
-                                .size(coverSize)
-                                .clip(CircleShape)
-                                .background(Color(0xFF1A1A2E)),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            val coverUrl = currentSong.coverUrl ?: currentSong.pic
-                            AsyncImage(
-                                model = coil.request.ImageRequest.Builder(LocalContext.current)
-                                    .data(coverUrl)
-                                    .crossfade(true)
-                                    .build(),
-                                imageLoader = imageLoader,
-                                contentDescription = "专辑封面",
-                                modifier = Modifier
-                                    .fillMaxSize(0.88f)
-                                    .clip(CircleShape),
-                                contentScale = ContentScale.Crop
+                        modifier = Modifier
+                            .align(Alignment.BottomCenter)
+                            .fillMaxWidth()
+                            .background(
+                                Color.Black.copy(alpha = 0.55f),
+                                RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp)
                             )
-                        }
-
-
+                            .padding(horizontal = 12.dp, vertical = 8.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
                         // 进度条
-                        Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp)) {
+                        Column(modifier = Modifier.fillMaxWidth()) {
                             Slider(
                                 value = if (playbackState.duration > 0) {
                                     playbackState.position.toFloat() / playbackState.duration.toFloat()
@@ -1838,7 +1824,6 @@ fun PlayerScreenLandscape(
                             .align(Alignment.TopStart)
                             .padding(12.dp)
                     ) {
-                        // 阴影层
                         Text(
                             text = currentSong.name,
                             color = Color.Black.copy(alpha = 0.8f),
@@ -1848,7 +1833,6 @@ fun PlayerScreenLandscape(
                             overflow = TextOverflow.Ellipsis,
                             modifier = Modifier.offset(x = 1.5.dp, y = 1.5.dp)
                         )
-                        // 主文字层
                         Text(
                             text = currentSong.name,
                             color = Color.White,
