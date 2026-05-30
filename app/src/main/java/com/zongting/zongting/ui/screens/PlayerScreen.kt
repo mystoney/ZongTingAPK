@@ -1915,7 +1915,7 @@ fun PlayerScreenLandscape(
                                                     contentDescription = null,
                                                     tint = Color.White,
                                                     modifier = Modifier
-                                                        .size(18.dp)
+                                                        .size(22.dp)
                                                         .padding(end = 6.dp)
                                                 )
                                             } else {
