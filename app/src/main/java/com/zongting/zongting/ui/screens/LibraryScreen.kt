@@ -12,6 +12,7 @@ import androidx.compose.material3.windowsizeclass.WindowWidthSizeClass
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.QueueMusic
 import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.outlined.FavoriteBorder
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -1227,29 +1228,24 @@ fun EmptyState(
     }
 }
 
-/**
- * 收藏图标：选中时白色描边 + tint 填充
- */
 @Composable
 private fun LibraryFavoriteIcon(
     isFavorite: Boolean,
     tint: Color,
     modifier: Modifier = Modifier
 ) {
-    Canvas(modifier = modifier) {
-        val path = Path().apply {
-            val w = size.width
-            val h = size.height
-            moveTo(w * 0.5f, h * 0.85f)
-            cubicTo(w * 0.1f, h * 0.65f, 0f, h * 0.35f, w * 0.25f, h * 0.15f)
-            cubicTo(w * 0.4f, 0f, w * 0.5f, h * 0.1f, w * 0.5f, h * 0.1f)
-            cubicTo(w * 0.5f, h * 0.1f, w * 0.6f, 0f, w * 0.75f, h * 0.15f)
-            cubicTo(w * 1f, h * 0.35f, w * 0.9f, h * 0.65f, w * 0.5f, h * 0.85f)
-            close()
-        }
-        if (isFavorite) {
-            drawPath(path, AppColors.FavoriteActive, style = Fill)
-        }
-        drawPath(path, Color.White, style = Stroke(width = 3f))
+    Icon(
+        imageVector = Icons.Filled.Favorite,
+        contentDescription = "收藏",
+        tint = if (isFavorite) AppColors.FavoriteActive else Color.Transparent,
+        modifier = modifier
+    )
+    if (isFavorite) {
+        Icon(
+            imageVector = Icons.Outlined.FavoriteBorder,
+            contentDescription = null,
+            tint = Color.White,
+            modifier = modifier
+        )
     }
 }

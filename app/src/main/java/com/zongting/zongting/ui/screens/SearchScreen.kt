@@ -141,7 +141,7 @@ fun SearchScreen(
                         viewModel.searchSuggest(text)
                     }
                 },
-                placeholder = { Text("搜索歌曲、歌手") },
+                placeholder = { Text("歌手/歌曲") },
                 leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
                 trailingIcon = {
                     if (searchText.isNotEmpty()) {
