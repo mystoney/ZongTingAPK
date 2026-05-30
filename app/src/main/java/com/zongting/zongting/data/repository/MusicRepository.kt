@@ -803,11 +803,10 @@ class MusicRepository @Inject constructor() {
         val result = songs.toMutableList()
         for (batch in result.chunked(batchSize)) {
             batch.forEach { song ->
-                if (song.coverUrl.isNullOrBlank()) {
-                    val artwork = fetchItunesArtwork(song.name, song.artist)
-                    if (artwork != null) {
-                        result[result.indexOf(song)] = song.copy(coverUrl = artwork)
-                    }
+                // 始终尝试 iTunes 封面（iTunes > 酷我 web_albumpic > pic120）
+                val artwork = fetchItunesArtwork(song.name, song.artist)
+                if (artwork != null) {
+                    result[result.indexOf(song)] = song.copy(coverUrl = artwork)
                 }
             }
             kotlinx.coroutines.delay(200) // 避免iTunes限流
