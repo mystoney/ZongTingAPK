@@ -274,6 +274,7 @@ fun PlayerScreen(
                         onTogglePlay = { viewModel.togglePlayPause() },
                         onPrevious = { viewModel.playPrevious() },
                         onNext = { viewModel.playNext() },
+                        onDrag = { pos -> viewModel.updateProgress(pos, playbackState.duration) },
                         onSeek = { viewModel.seekTo(it) }
                     )
                 }
@@ -1009,6 +1010,7 @@ private fun LyricPage(
     onTogglePlay: () -> Unit,
     onPrevious: () -> Unit,
     onNext: () -> Unit,
+    onDrag: (Long) -> Unit,
     onSeek: (Long) -> Unit
 ) {
     val lazyListState = rememberLazyListState()
@@ -1156,6 +1158,128 @@ private fun LyricPage(
                         contentAlignment = Alignment.Center
                     ) {
                         Text(text = "正在加载歌词...", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                }
+            }
+            // 进度条（始终显示）
+            val config = LocalConfiguration.current
+            val isLandscape = config.orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE
+            if (isLandscape) {
+                // 横屏：底部横向 Slider
+                var isDragging by remember { mutableStateOf(false) }
+                var dragProgress by remember { mutableFloatStateOf(0f) }
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.BottomCenter)
+                        .fillMaxWidth()
+                        .padding(horizontal = 24.dp, vertical = 8.dp)
+                ) {
+                    Column {
+                        Slider(
+                            value = if (isDragging) dragProgress else {
+                                if (playbackState.duration > 0) {
+                                    playbackState.position.toFloat() / playbackState.duration.toFloat()
+                                } else 0f
+                            },
+                            onValueChange = { newProgress ->
+                                if (!isDragging) isDragging = true
+                                dragProgress = newProgress
+                                onDrag((newProgress * playbackState.duration).toLong())
+                            },
+                            onValueChangeFinished = {
+                                onSeek((dragProgress * playbackState.duration).toLong())
+                                isDragging = false
+                            },
+                            valueRange = 0f..1f,
+                        )
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Text(
+                                text = formatDuration((if (isDragging) dragProgress * playbackState.duration else playbackState.position).toLong()),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            Text(
+                                text = formatDuration(playbackState.duration),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+                }
+            } else {
+                // 竖屏：右侧纵向进度条 + 时间标签
+                val progress = if (playbackState.duration > 0) {
+                    playbackState.position.toFloat() / playbackState.duration.toFloat()
+                } else 0f
+                Row(
+                    modifier = Modifier
+                        .align(Alignment.CenterEnd)
+                        .padding(end = 12.dp)
+                        .fillMaxHeight(0.7f),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .padding(end = 8.dp)
+                            .fillMaxHeight(),
+                        horizontalAlignment = Alignment.End,
+                        verticalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Text(
+                            text = formatDuration(playbackState.position),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = Color(0xFFE53935),
+                            modifier = Modifier.padding(top = 2.dp)
+                        )
+                        Text(
+                            text = formatDuration(playbackState.duration),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(bottom = 2.dp)
+                        )
+                    }
+                    Box(
+                        modifier = Modifier
+                            .width(6.dp)
+                            .fillMaxHeight()
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .background(
+                                    Color.White.copy(alpha = 0.15f),
+                                    RoundedCornerShape(3.dp)
+                                )
+                        )
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .fillMaxHeight(progress)
+                                .align(Alignment.TopCenter)
+                                .background(
+                                    Color(0xFFE53935),
+                                    RoundedCornerShape(3.dp)
+                                )
+                        )
+                        BoxWithConstraints(
+                            modifier = Modifier.fillMaxSize()
+                        ) {
+                            val thumbOffset = with(LocalDensity.current) {
+                                (maxHeight.toPx() * progress).toDp()
+                            }
+                            Box(
+                                modifier = Modifier
+                                    .offset(x = (-3).dp, y = thumbOffset - 6.dp)
+                                    .size(12.dp)
+                                    .background(
+                                        Color(0xFFE53935),
+                                        CircleShape
+                                    )
+                            )
+                        }
                     }
                 }
             }
