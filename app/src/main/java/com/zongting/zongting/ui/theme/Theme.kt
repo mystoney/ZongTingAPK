@@ -12,12 +12,12 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import androidx.core.view.WindowCompat
 
-// 品牌颜色（粉色系）
-val Primary = Color(0xFFFF6F91)       // 桃红
-val PrimaryVariant = Color(0xFFE91E8C) // 深粉
-val Secondary = Color(0xFFFFB6C1)     // 浅粉
-val Tertiary = Color(0xFFFF69B4)      // 亮粉
-val Accent = Color(0xFFFF1493)        // 深桃红
+// 品牌颜色（墨绿色系）
+val Primary = Color(0xFF2E7D32)       // 墨绿
+val PrimaryVariant = Color(0xFF1B5E20) // 深墨绿
+val Secondary = Color(0xFF4CAF50)     // 翠绿
+val Tertiary = Color(0xFF388E3C)      // 中绿
+val Accent = Color(0xFF66BB6A)         // 浅绿
 val Background = Color(0xFF121212)
 val Surface = Color(0xFF1E1E1E)
 val SurfaceVariant = Color(0xFF2A2A2A)
