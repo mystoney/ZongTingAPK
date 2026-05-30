@@ -62,6 +62,7 @@ import com.zongting.zongting.player.SleepTimerManager
 import com.zongting.zongting.ui.LyricLine
 import com.zongting.zongting.ui.LyricState
 import com.zongting.zongting.ui.MainViewModel
+import com.zongting.zongting.ui.theme.AppColors
 import com.zongting.zongting.ui.PlaybackState
 import androidx.compose.material3.windowsizeclass.WindowSizeClass
 import androidx.compose.material3.windowsizeclass.WindowWidthSizeClass
@@ -1657,7 +1658,7 @@ fun PlayerScreenLandscape(
     imageLoader: coil.ImageLoader
 ) {
     val backgroundColor = Color(0xFF0D0D1A)
-    val accentColor = Color(0xFFE53935) // 参考图的红色强调
+    val accentColor = AppColors.Accent
 
     Box(modifier = Modifier.fillMaxSize().background(backgroundColor)) {
         // 模糊背景封面
