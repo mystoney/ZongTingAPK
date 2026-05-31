@@ -1162,12 +1162,17 @@ private fun LyricPage(
                         val rowOffset = if (isLandscape) 0 else if (isExpanded) 2 else 4
 
                         // 目标行始终为 currentLineIndex（切歌时自动更新）
+                        // 使用 debounce 避免频繁触发动画导致的跳动
                         LaunchedEffect(position, currentLineIndex) {
                             if (lines.isNotEmpty() && currentLineIndex in lines.indices) {
-                                lazyListState.animateScrollToItem(
-                                    index = currentLineIndex,
-                                    scrollOffset = (verticalPaddingPx + (currentLineIndex - rowOffset) * lineHeightPx).toInt()
-                                )
+                                // debounce：只在前一个动画真正完成后才启动新的
+                                kotlinx.coroutines.delay(100)
+                                if (!lazyListState.isScrollInProgress) {
+                                    lazyListState.animateScrollToItem(
+                                        index = currentLineIndex,
+                                        scrollOffset = (verticalPaddingPx + (currentLineIndex - rowOffset) * lineHeightPx).toInt()
+                                    )
+                                }
                             }
                         }
 

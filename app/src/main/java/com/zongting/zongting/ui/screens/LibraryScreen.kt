@@ -1234,17 +1234,19 @@ private fun LibraryFavoriteIcon(
     tint: Color,
     modifier: Modifier = Modifier
 ) {
+    // 始终显示空心轮廓，保持位置稳定
     Icon(
-        imageVector = Icons.Filled.Favorite,
-        contentDescription = "收藏",
-        tint = if (isFavorite) AppColors.FavoriteActive else Color.Transparent,
+        imageVector = Icons.Outlined.FavoriteBorder,
+        contentDescription = null,
+        tint = Color.White.copy(alpha = 0.6f),
         modifier = modifier
     )
+    // 收藏时叠加绿色实心
     if (isFavorite) {
         Icon(
-            imageVector = Icons.Outlined.FavoriteBorder,
-            contentDescription = null,
-            tint = Color.White,
+            imageVector = Icons.Filled.Favorite,
+            contentDescription = "收藏",
+            tint = AppColors.FavoriteActive,
             modifier = modifier
         )
     }
