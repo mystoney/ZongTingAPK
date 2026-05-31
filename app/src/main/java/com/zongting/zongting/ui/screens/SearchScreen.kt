@@ -57,11 +57,9 @@ fun SearchScreen(
     val scale = if (isExpanded) 1.3f else 1f
     val baseChipHeight = 32.dp
     val baseTextSize = 15.sp
-    val baseSearchBtnHeight = 56.dp
     val baseCoverSize = 48.dp
     val scaledChipHeight = (baseChipHeight.value * scale).dp
     val scaledTextSize = (baseTextSize.value * scale).sp
-    val scaledSearchBtnHeight = (baseSearchBtnHeight.value * scale).dp
     val scaledCoverSize = (baseCoverSize.value * scale).dp
 
     Column(
@@ -162,8 +160,10 @@ fun SearchScreen(
                         }
                     }
                 ),
-                modifier = Modifier.weight(1f),
-                shape = RoundedCornerShape(24.dp)
+                modifier = Modifier
+                    .weight(1f)
+                    .height(scaledChipHeight),
+                shape = RoundedCornerShape(scaledChipHeight.value.toInt().dp)
             )
             Spacer(modifier = Modifier.width(8.dp))
             FilterChip(
@@ -174,7 +174,7 @@ fun SearchScreen(
                     }
                 },
                 label = { Text("搜索") },
-                modifier = Modifier.height(scaledSearchBtnHeight),
+                modifier = Modifier.height(scaledChipHeight),
                 leadingIcon = {
                     Icon(Icons.Default.Search, contentDescription = null)
                 }

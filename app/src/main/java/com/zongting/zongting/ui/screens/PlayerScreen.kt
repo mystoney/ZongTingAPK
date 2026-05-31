@@ -871,6 +871,16 @@ private fun AlbumCoverPage(
                         verticalArrangement = Arrangement.Top,
                         horizontalAlignment = Alignment.Start
                     ) {
+                        // 歌名阴影
+                        Text(
+                            text = song.name,
+                            color = Color.Black.copy(alpha = 0.6f),
+                            fontSize = 34.sp,
+                            fontWeight = FontWeight.Bold,
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.offset(x = 1.5.dp, y = 1.5.dp)
+                        )
                         Text(
                             text = song.name,
                             style = MaterialTheme.typography.displayMedium,
@@ -880,6 +890,16 @@ private fun AlbumCoverPage(
                             color = MaterialTheme.colorScheme.onSurface
                         )
                         Spacer(modifier = Modifier.height(10.dp))
+                        // 歌手阴影
+                        Text(
+                            text = song.artist,
+                            color = Color.Black.copy(alpha = 0.6f),
+                            fontSize = 22.sp,
+                            fontWeight = FontWeight.Normal,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.offset(x = 1.dp, y = 1.dp)
+                        )
                         Text(
                             text = song.artist,
                             style = MaterialTheme.typography.headlineMedium,
@@ -889,6 +909,16 @@ private fun AlbumCoverPage(
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                         Spacer(modifier = Modifier.height(6.dp))
+                        // 专辑名阴影
+                        Text(
+                            text = song.album,
+                            color = Color.Black.copy(alpha = 0.5f),
+                            fontSize = 18.sp,
+                            fontWeight = FontWeight.Normal,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.offset(x = 1.dp, y = 1.dp)
+                        )
                         Text(
                             text = song.album,
                             style = MaterialTheme.typography.titleLarge,
