@@ -1157,9 +1157,11 @@ private fun LyricPage(
                             if (lines.isNotEmpty() && currentLineIndex in lines.indices) {
                                 if (lastScrolledIndex == currentLineIndex) return@LaunchedEffect
                                 // 调试：先用 scrollOffset=0 看自然位置，确认后再调 offset
+                                // 居中位置 = boxHeightPx * 0.5，向上偏移到 40% = scrollOffset = -(0.1 * boxHeightPx)
+                                val scrollUpOffset = -(boxHeightPx * 0.1f).toInt()
                                 lazyListState.scrollToItem(
                                     index = currentLineIndex,
-                                    scrollOffset = 0
+                                    scrollOffset = scrollUpOffset
                                 )
                                 lastScrolledIndex = currentLineIndex
                             }
@@ -1986,10 +1988,9 @@ private fun formatTime(ms: Long): String {
 }
 
 /**
- * 收藏图标：
+ * 收藏图标（PlayerScreen 用）：
  * - 未选中：白色描边空心心形（白色半透明 60%）
- * - 选中：绿色实心心形（无描边，几何干净）
- * 不需要两层叠加——绿色实心本身够醒目，叠加描边反而会有半像素偏移导致视觉错位
+ * - 选中：绿色实心心形 + 白色描边叠加（同一 path 几何，无错位）
  */
 @Composable
 private fun FavoriteIcon(
@@ -2000,28 +2001,42 @@ private fun FavoriteIcon(
 ) {
     val heartPath = remember {
         Path().apply {
-            // 爱心路径，中心在 (12, 12)，适配 24x24 坐标系
-            moveTo(12f, 17f)
-            cubicTo(12f, 17f, 4f, 12f, 4f, 7.5f)
-            cubicTo(4f, 4.5f, 6.5f, 2f, 9.5f, 2f)
-            cubicTo(11f, 2f, 12f, 3f, 12f, 3f)
-            cubicTo(12f, 3f, 13f, 2f, 14.5f, 2f)
-            cubicTo(17.5f, 2f, 20f, 4.5f, 20f, 7.5f)
-            cubicTo(20f, 12f, 12f, 17f, 12f, 17f)
+            // 爱心路径，24x24 坐标系
+            moveTo(12f, 19f)
+            cubicTo(12f, 19f, 4f, 13.5f, 4f, 8.5f)
+            cubicTo(4f, 5.5f, 6.5f, 3f, 9.5f, 3f)
+            cubicTo(11f, 3f, 12f, 4f, 12f, 4f)
+            cubicTo(12f, 4f, 13f, 3f, 14.5f, 3f)
+            cubicTo(17.5f, 3f, 20f, 5.5f, 20f, 8.5f)
+            cubicTo(20f, 13.5f, 12f, 19f, 12f, 19f)
             close()
         }
     }
 
     Canvas(modifier = modifier) {
-        when {
-            isFavorite -> {
-                // 选中：绿色实心，干净无描边（避免描边扩张导致视觉错位）
-                drawPath(path = heartPath, color = AppColors.FavoriteActive, style = Fill)
-            }
-            else -> {
-                // 未选中：白色描边空心
-                drawPath(path = heartPath, color = Color.White.copy(alpha = 0.6f), style = Stroke(width = 1.5f))
-            }
+        val scale = size.minDimension / 24f
+        val strokeWidth = 1.5f * scale
+
+        if (isFavorite) {
+            // 选中：绿色实心（先画）
+            drawPath(
+                path = heartPath,
+                color = AppColors.FavoriteActive,
+                style = Fill
+            )
+            // 白色描边叠加（同一 path，无几何错位）
+            drawPath(
+                path = heartPath,
+                color = Color.White,
+                style = Stroke(width = strokeWidth)
+            )
+        } else {
+            // 未选中：白色描边空心
+            drawPath(
+                path = heartPath,
+                color = Color.White.copy(alpha = 0.6f),
+                style = Stroke(width = strokeWidth)
+            )
         }
     }
 }
