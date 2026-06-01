@@ -2111,13 +2111,13 @@ fun PlayerScreenPADLandscape(
                                 Text(
                                     text = sourceText,
                                     color = Color.Black.copy(alpha = 0.6f),
-                                    fontSize = 11.sp,
+                                    fontSize = 14.sp,
                                     modifier = Modifier.offset(x = 1.dp, y = 1.dp)
                                 )
                                 Text(
                                     text = sourceText,
                                     color = Color.White.copy(alpha = 0.6f),
-                                    fontSize = 11.sp
+                                    fontSize = 14.sp
                                 )
                             }
                             Spacer(modifier = Modifier.height(2.dp))
@@ -2126,7 +2126,7 @@ fun PlayerScreenPADLandscape(
                                 Text(
                                     text = currentSong.name,
                                     color = Color.Black.copy(alpha = 0.8f),
-                                    fontSize = 20.sp,
+                                    fontSize = 26.sp,
                                     fontWeight = FontWeight.Bold,
                                     maxLines = 2,
                                     overflow = TextOverflow.Ellipsis,
@@ -2135,7 +2135,7 @@ fun PlayerScreenPADLandscape(
                                 Text(
                                     text = currentSong.name,
                                     color = Color.White,
-                                    fontSize = 20.sp,
+                                    fontSize = 26.sp,
                                     fontWeight = FontWeight.Bold,
                                     maxLines = 2,
                                     overflow = TextOverflow.Ellipsis
@@ -2147,13 +2147,13 @@ fun PlayerScreenPADLandscape(
                                 Text(
                                     text = currentSong.artist,
                                     color = Color.Black.copy(alpha = 0.6f),
-                                    fontSize = 13.sp,
+                                    fontSize = 17.sp,
                                     modifier = Modifier.offset(x = 1.dp, y = 1.dp)
                                 )
                                 Text(
                                     text = currentSong.artist,
                                     color = Color.White.copy(alpha = 0.7f),
-                                    fontSize = 13.sp,
+                                    fontSize = 17.sp,
                                     maxLines = 1,
                                     overflow = TextOverflow.Ellipsis
                                 )
@@ -2196,24 +2196,24 @@ fun PlayerScreenPADLandscape(
                                     }
 
                                     LazyColumn(
-                                        modifier = Modifier.fillMaxSize(),
+                                        modifier = Modifier.fillMaxSize().padding(end = 48.dp),
                                         state = listState,
                                         horizontalAlignment = Alignment.End,
                                         verticalArrangement = Arrangement.spacedBy(10.dp),
-                                        contentPadding = PaddingValues(vertical = 16.dp, horizontal = 16.dp)
+                                        contentPadding = PaddingValues(vertical = 16.dp)
                                     ) {
                                         itemsIndexed(lyrics) { index, line ->
                                             val isCurrent = index == currentIndex
                                             val isNext = index == currentIndex + 1
                                             val alpha = if (isCurrent) 1f else 0.5f
-                                            val fontSize = if (isCurrent) 24.sp else if (isNext) 20.sp else 14.sp
+                                            val fontSize = if (isCurrent) 30.sp else if (isNext) 24.sp else 18.sp
 
                                             Box {
                                                 if (isCurrent) {
                                                     Text(
                                                         text = line.text.ifEmpty { " " },
                                                         color = Color.Black.copy(alpha = 0.8f),
-                                                        fontSize = 24.sp,
+                                                        fontSize = 30.sp,
                                                         fontWeight = FontWeight.Bold,
                                                         modifier = Modifier.offset(x = 1.5.dp, y = 1.5.dp)
                                                     )
@@ -2295,7 +2295,7 @@ fun PlayerScreenPADLandscape(
                             modifier = Modifier.size(coreBtnSize)
                         )
                     }
-                    Spacer(modifier = Modifier.width(16.dp))
+                    Spacer(modifier = Modifier.width(32.dp))
                     FilledIconButton(
                         onClick = onTogglePlay,
                         colors = IconButtonDefaults.filledIconButtonColors(containerColor = accentColor),
@@ -2308,7 +2308,7 @@ fun PlayerScreenPADLandscape(
                             modifier = Modifier.size(coreBtnSize)
                         )
                     }
-                    Spacer(modifier = Modifier.width(16.dp))
+                    Spacer(modifier = Modifier.width(32.dp))
                     IconButton(onClick = onNext, modifier = Modifier.size(coreBtnSize * 1.4f)) {
                         Icon(
                             imageVector = Icons.Default.SkipNext,
