@@ -2191,7 +2191,7 @@ fun PlayerScreenPADLandscape(
                                 val listState = rememberLazyListState()
                                 val density = LocalDensity.current
                                 val itemSpacing = with(density) { 10.dp.toPx() }
-                                val itemHeight = with(density) { 36.dp.toPx() }
+                                val itemHeight = with(density) { 40.dp.toPx() }
                                 val totalItemHeight = itemHeight + itemSpacing
                                 val paddingTop = with(density) { 16.dp.toPx() }
 
@@ -2213,14 +2213,14 @@ fun PlayerScreenPADLandscape(
                                             val isCurrent = index == currentIndex
                                             val isNext = index == currentIndex + 1
                                             val alpha = if (isCurrent) 1f else 0.5f
-                                            val fontSize = if (isCurrent) 30.sp else if (isNext) 24.sp else 18.sp
+                                            val fontSize = if (isCurrent) 32.sp else if (isNext) 30.sp else 22.sp
 
                                             Box {
                                                 if (isCurrent) {
                                                     Text(
                                                         text = line.text.ifEmpty { " " },
                                                         color = Color.Black.copy(alpha = 0.8f),
-                                                        fontSize = 30.sp,
+                                                        fontSize = 32.sp,
                                                         fontWeight = FontWeight.Bold,
                                                         modifier = Modifier.offset(x = 1.5.dp, y = 1.5.dp)
                                                     )
