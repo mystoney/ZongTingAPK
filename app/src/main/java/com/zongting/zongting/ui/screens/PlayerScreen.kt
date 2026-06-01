@@ -1147,8 +1147,8 @@ private fun LyricPage(
                         val boxHeightPx = with(LocalDensity.current) { maxHeight.toPx() }
                         val lineHeightPx = with(LocalDensity.current) { lineHeightDp.toPx() }
                         // 固定行策略：当前播放行始终对齐固定行位置，不随 currentLineIndex 变化而飘移
-                        // 竖屏：第7行（第1行+下移6行）| 横屏：第1行（顶部）
-                        val rowOffset = if (isLandscape) 0 else 7
+                        // 竖屏：第3行 | 横屏：第1行（顶部）
+                        val rowOffset = if (isLandscape) 0 else 3
 
                         // 渐变叠加层已移除
                         var lastScrolledIndex by remember { mutableIntStateOf(-1) }
