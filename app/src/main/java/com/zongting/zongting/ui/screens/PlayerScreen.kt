@@ -1146,16 +1146,11 @@ private fun LyricPage(
                         val horizontalPadding = if (isExpanded) 48.dp else if (isLandscape) 40.dp else 24.dp
                         val boxHeightPx = with(LocalDensity.current) { maxHeight.toPx() }
                         val lineHeightPx = with(LocalDensity.current) { lineHeightDp.toPx() }
-                        val lineHeight3xPx = lineHeightPx * 3f
                         // 固定行策略：当前播放行始终对齐固定行位置，不随 currentLineIndex 变化而飘移
-                        // PAD 竖屏：第3行 | 手机竖屏：第5行 | 横屏：第1行（顶部）
-                        val rowOffset = if (isLandscape) 0 else if (isExpanded) 3 else 5
+                        // 竖屏：第2行 | 横屏：第1行（顶部）
+                        val rowOffset = if (isLandscape) 0 else if (isExpanded) 1 else 1
 
-                        // 渐变叠加层：绝对定位于当前行中心线，上下各 1.5 倍行高
-
-                        // 目标行始终为 currentLineIndex（切歌时自动更新）
-                        // 注意：只监听 currentLineIndex，不监听 position，
-                        // position 变化会通过 recompose 更新 currentLineIndex，从而触发此 LaunchedEffect
+                        // 渐变叠加层已移除
                         var lastScrolledIndex by remember { mutableIntStateOf(-1) }
                         LaunchedEffect(currentLineIndex, lazyListState) {
                             if (lines.isNotEmpty() && currentLineIndex in lines.indices) {
@@ -1185,42 +1180,15 @@ private fun LyricPage(
                                 }
                         }
 
-                        // 渐变叠加层：绝对定位于当前行中心线，上下各 1.5 倍行高
-                        Box(
-                            modifier = Modifier.fillMaxSize()
-                        ) {
-                            // 单一垂直渐变背景：定位于当前行中心线，上下各 1.5x 行高（在歌词之后）
-                            // 当前行在视口中的内容顶部 = 固定行 * lineHeightPx
-                            // 当前行在视口中的内容中心 = 固定行 * lineHeightPx + lineHeightPx/2
-                            val currentLineCenterY = rowOffset * lineHeightPx + lineHeightPx / 2f
-                            // 上下限 clamp 防止 offset 越界
-                            val gradientTopY = (currentLineCenterY - lineHeight3xPx / 2f).coerceIn(0f, boxHeightPx - lineHeight3xPx)
-                            val gradientHeight = lineHeight3xPx.coerceAtMost(boxHeightPx)
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .offset(y = with(LocalDensity.current) { gradientTopY.toDp() })
-                                    .height(with(LocalDensity.current) { gradientHeight.toDp() })
-                                    .background(
-                                        brush = Brush.verticalGradient(
-                                            colorStops = arrayOf(
-                                                0f to Color.Black.copy(alpha = 0f),
-                                                0.5f to Color.Black.copy(alpha = 0.80f),
-                                                1f to Color.Black.copy(alpha = 0f)
-                                            )
-                                        ),
-                                        shape = RoundedCornerShape(0.dp)
-                                    )
-                            )
-
-                            val verticalPadding = 0.dp
+                        // 顶部和底部边缘渐变遮罩保留，3行高渐变背景已移除
+                        Box(modifier = Modifier.fillMaxSize()) {
                             LazyColumn(
                                 state = lazyListState,
                                 modifier = Modifier
                                     .fillMaxSize()
                                     .padding(horizontal = horizontalPadding),
                                 horizontalAlignment = Alignment.Start,
-                                contentPadding = PaddingValues(vertical = verticalPadding)
+                                contentPadding = PaddingValues(vertical = 0.dp)
                             ) {
                                 itemsIndexed(
                                     items = lines,
