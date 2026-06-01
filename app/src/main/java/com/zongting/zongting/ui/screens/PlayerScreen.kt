@@ -1169,9 +1169,11 @@ private fun LyricPage(
                         LaunchedEffect(currentLineIndex, lazyListState) {
                             if (lines.isNotEmpty() && currentLineIndex in lines.indices) {
                                 if (lastScrolledIndex == currentLineIndex) return@LaunchedEffect
+                                // 当前播放行：对齐到视口顶部 1/3 处
+                                val targetPosition = lazyListState.layoutInfo.viewportSize.height / 3
                                 lazyListState.scrollToItem(
                                     index = currentLineIndex,
-                                    scrollOffset = -(lazyListState.layoutInfo.viewportSize.height / 2) + (lineHeightPx / 2).toInt()
+                                    scrollOffset = (currentLineIndex * lineHeightPx - targetPosition + lineHeightPx / 2).toInt() - verticalPaddingPx.toInt()
                                 )
                                 lastScrolledIndex = currentLineIndex
                             }
