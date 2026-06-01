@@ -1152,12 +1152,10 @@ private fun LyricPage(
                         // 滚动时 firstVisibleItemIndex / firstVisibleItemScrollOffset 变化，触发 recomposition
                         val firstVisibleIdx = lazyListState.firstVisibleItemIndex
                         val firstVisibleOffset = lazyListState.firstVisibleItemScrollOffset
-                        // 垂直 padding：内容区上下对称留白，使内容可居中
-                        val verticalPaddingPx = maxOf(0f, (boxHeightPx - lineHeightPx) / 2f)
-                        // 当前行在视口中的中心 Y 坐标
-                        val currentLineCenterY = verticalPaddingPx +
-                            (currentLineIndex - firstVisibleIdx) * lineHeightPx -
-                            firstVisibleOffset +
+                        // contentPadding=0，内容区从 scrollOffset 位置开始在视口中显示
+                        // 当前行在视口中的实际 Y 中心 = scrollOffset + i * lineHeightPx + lineHeightPx/2
+                        val currentLineCenterY = firstVisibleOffset +
+                            currentLineIndex * lineHeightPx +
                             lineHeightPx / 2f
 
                         // 目标行始终为 currentLineIndex（切歌时自动更新）
@@ -1168,11 +1166,14 @@ private fun LyricPage(
                             if (lines.isNotEmpty() && currentLineIndex in lines.indices) {
                                 if (lastScrolledIndex == currentLineIndex) return@LaunchedEffect
                                 // 居中策略：当前行中心对齐视口垂直中心
-                                // scrollOffset 相对于内容起点（contentPadding 已在 LazyColumn 上设置）
-                                // item i 的顶部在视口中位置 = verticalPadding + i * lineHeightPx + scrollOffset
-                                // 居中条件：verticalPadding + i*lineHeightPx + scrollOffset + lineHeight/2 = boxHeight/2
-                                // → scrollOffset = i*lineHeightPx - (boxHeightPx - lineHeightPx) / 2
-                                val targetScrollOffset = (currentLineIndex * lineHeightPx - (boxHeightPx - lineHeightPx) / 2f).toInt()
+                                // contentPadding=0，内容区从 scrollOffset 开始在视口中显示
+                                // item i 的内容顶部 = scrollOffset + i * lineHeightPx
+                                // 居中条件：scrollOffset + i*lineHeightPx + lineHeightPx/2 = boxHeightPx/2
+                                // → scrollOffset = boxHeightPx/2 - i*lineHeightPx - lineHeightPx/2
+                                // 注意：scrollOffset 必须 >= 0，否则内容区起点在视口上方（无效）
+                                // 当计算值为负时，说明当前行本身就在视口上半部分，scrollOffset=0 即可（当前行贴近顶部）
+                                val rawScrollOffset = (boxHeightPx / 2f - currentLineIndex * lineHeightPx - lineHeightPx / 2f)
+                                val targetScrollOffset = maxOf(0f, rawScrollOffset).toInt()
                                 lazyListState.scrollToItem(
                                     index = currentLineIndex,
                                     scrollOffset = targetScrollOffset
@@ -1214,7 +1215,7 @@ private fun LyricPage(
                                     )
                             )
 
-                            val verticalPadding = with(LocalDensity.current) { verticalPaddingPx.toDp() }
+                            val verticalPadding = 0.dp
                             LazyColumn(
                                 state = lazyListState,
                                 modifier = Modifier
@@ -1305,14 +1306,8 @@ private fun LyricPage(
                                     )
                             )
 
-                            LaunchedEffect(isUserScrolling, currentLineIndex) {
-                                if (!isUserScrolling && lines.isNotEmpty()) {
-                                    kotlinx.coroutines.delay(5000)
-                                    if (!lazyListState.isScrollInProgress) {
-                                        lazyListState.animateScrollToItem(index = currentLineIndex)
-                                    }
-                                }
-                            }
+                            // 5秒无操作后自动回正逻辑已移除
+                            // 主滚动逻辑（scrollToItem）已在 LaunchedEffect 中保证居中，无需额外补偿
                         }
                     }
                 }
