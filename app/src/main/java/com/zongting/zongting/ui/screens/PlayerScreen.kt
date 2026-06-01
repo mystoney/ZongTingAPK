@@ -1152,15 +1152,13 @@ private fun LyricPage(
                         // 滚动时 firstVisibleItemIndex / firstVisibleItemScrollOffset 变化，触发 recomposition
                         val firstVisibleIdx = lazyListState.firstVisibleItemIndex
                         val firstVisibleOffset = lazyListState.firstVisibleItemScrollOffset
-                        // 垂直 padding 必须 >= 0，防止 boxHeightPx < lineHeightPx 时崩溃
+                        // 垂直 padding：内容区上下对称留白，使内容可居中
                         val verticalPaddingPx = maxOf(0f, (boxHeightPx - lineHeightPx) / 2f)
+                        // 当前行在视口中的中心 Y 坐标
                         val currentLineCenterY = verticalPaddingPx +
                             (currentLineIndex - firstVisibleIdx) * lineHeightPx -
                             firstVisibleOffset +
                             lineHeightPx / 2f
-
-                        // 行偏移量：PAD 当前行在第3行(偏移2)，手机竖屏当前行在第5行(偏移4)，横屏不需要歌词
-                        val rowOffset = if (isLandscape) 0 else if (isExpanded) 2 else 4
 
                         // 目标行始终为 currentLineIndex（切歌时自动更新）
                         // 注意：只监听 currentLineIndex，不监听 position，
@@ -1169,11 +1167,15 @@ private fun LyricPage(
                         LaunchedEffect(currentLineIndex, lazyListState) {
                             if (lines.isNotEmpty() && currentLineIndex in lines.indices) {
                                 if (lastScrolledIndex == currentLineIndex) return@LaunchedEffect
-                                // 当前播放行：对齐到视口顶部 1/3 处
-                                val targetPosition = lazyListState.layoutInfo.viewportSize.height / 3
+                                // 居中策略：当前行中心对齐视口垂直中心
+                                // scrollOffset 相对于内容起点（contentPadding 已在 LazyColumn 上设置）
+                                // item i 的顶部在视口中位置 = verticalPadding + i * lineHeightPx + scrollOffset
+                                // 居中条件：verticalPadding + i*lineHeightPx + scrollOffset + lineHeight/2 = boxHeight/2
+                                // → scrollOffset = i*lineHeightPx - (boxHeightPx - lineHeightPx) / 2
+                                val targetScrollOffset = (currentLineIndex * lineHeightPx - (boxHeightPx - lineHeightPx) / 2f).toInt()
                                 lazyListState.scrollToItem(
                                     index = currentLineIndex,
-                                    scrollOffset = (currentLineIndex * lineHeightPx - targetPosition + lineHeightPx / 2).toInt() - verticalPaddingPx.toInt()
+                                    scrollOffset = targetScrollOffset
                                 )
                                 lastScrolledIndex = currentLineIndex
                             }

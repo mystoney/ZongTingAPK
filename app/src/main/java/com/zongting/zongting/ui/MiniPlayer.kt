@@ -221,7 +221,14 @@ private fun MiniFavoriteIcon(
     tint: Color,
     modifier: Modifier = Modifier
 ) {
-    // 收藏时先画绿色实心（底层），再画白色空心轮廓（上层），确保选中时轮廓仍在最上方
+    // 白色空心轮廓始终在底层
+    Icon(
+        imageVector = Icons.Outlined.FavoriteBorder,
+        contentDescription = null,
+        tint = Color.White,
+        modifier = modifier
+    )
+    // 绿色实心在心形选中时渲染在最上层
     if (isFavorite) {
         Icon(
             imageVector = Icons.Filled.Favorite,
@@ -230,10 +237,4 @@ private fun MiniFavoriteIcon(
             modifier = modifier
         )
     }
-    Icon(
-        imageVector = Icons.Outlined.FavoriteBorder,
-        contentDescription = null,
-        tint = Color.White,
-        modifier = modifier
-    )
 }

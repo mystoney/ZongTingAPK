@@ -464,6 +464,36 @@ class MusicRepository @Inject constructor() {
         return "$seconds.${cs.toString().padStart(2, '0')}"
     }
 
+    /** 将时间字符串转换为毫秒，支持三种格式:
+     *  1. "mm.ss"（酷我格式，如 "102.50"）
+     *  2. "mm:ss"（LRC 标准格式，如 "01:42"）
+     *  3. "[mm:ss.xx]" 或 "[mm:ss.xxx]"（带 LRC 时间戳前缀）
+     */
+    private fun parseTimeToMs(timeStr: String): Long? {
+        return try {
+            var cleaned = timeStr.trim()
+            // 去掉首尾方括号（处理 "[mm:ss.xx]" 格式）
+            if (cleaned.startsWith("[") && cleaned.endsWith("]")) {
+                cleaned = cleaned.substring(1, cleaned.length - 1)
+            }
+            // 去掉毫秒部分只保留秒（简化处理）
+            if (cleaned.contains(":")) {
+                val parts = cleaned.split(":")
+                if (parts.size == 2) {
+                    val min = parts[0].toInt()
+                    val secPart = parts[1].replace(Regex("[^0-9.]"), "")
+                    val sec = secPart.toDouble()
+                    return ((min * 60 + sec) * 1000).toLong()
+                }
+            }
+            // mm.ss 格式
+            val seconds = cleaned.toDouble()
+            (seconds * 1000).toLong()
+        } catch (e: Exception) {
+            null
+        }
+    }
+
     /** 获取歌词 - source=kuwo 失败时自动用 name+artist 搜索网易云取歌词，失败后重试一次（间隔1秒） */
     suspend fun getLyric(musicId: Long, source: String = "kuwo", name: String = "", artist: String = ""): Result<List<LyricLineRaw>> = withContext(Dispatchers.IO) {
         repeat(2) { attempt ->
