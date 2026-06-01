@@ -1146,30 +1146,32 @@ private fun LyricPage(
                         val horizontalPadding = if (isExpanded) 48.dp else if (isLandscape) 40.dp else 24.dp
                         val boxHeightPx = with(LocalDensity.current) { maxHeight.toPx() }
                         val lineHeightPx = with(LocalDensity.current) { lineHeightDp.toPx() }
+                        val lineHeight3xPx = lineHeightPx * 3f
                         // 固定行策略：当前播放行始终对齐固定行位置，不随 currentLineIndex 变化而飘移
                         // PAD 竖屏：第3行 | 手机竖屏：第5行 | 横屏：第1行（顶部）
                         val rowOffset = if (isLandscape) 0 else if (isExpanded) 3 else 5
-                        // contentPadding top 让 item rowOffset 的内容顶部对齐视口中心
-                        // 当 scrollOffset=0 时，item rowOffset 的内容顶部 = topPaddingPx = rowOffset * lineHeightPx
-                        val topPaddingPx = rowOffset * lineHeightPx
-                        val targetScrollOffset = (currentLineIndex - rowOffset) * lineHeightPx
+
+                        // 渐变叠加层：绝对定位于当前行中心线，上下各 1.5 倍行高
 
                         // 目标行始终为 currentLineIndex（切歌时自动更新）
                         // 注意：只监听 currentLineIndex，不监听 position，
                         // position 变化会通过 recompose 更新 currentLineIndex，从而触发此 LaunchedEffect
                         var lastScrolledIndex by remember { mutableIntStateOf(-1) }
                         LaunchedEffect(currentLineIndex, lazyListState) {
-                            // 防御：LazyColumn 首次 measure 完成前不滚动
-                            val vp = lazyListState.layoutInfo.viewportSize
-                            if (vp.height <= 0 || lineHeightPx <= 0f) return@LaunchedEffect
                             if (lines.isNotEmpty() && currentLineIndex in lines.indices) {
                                 if (lastScrolledIndex == currentLineIndex) return@LaunchedEffect
-                                // 居中策略：当前行内容顶部 = rowOffset * lineHeightPx（始终固定）
-                                // scrollOffset = boxHeightPx/2 - rowOffset*LH
-                                val rawScrollOffset = vp.height / 2f - rowOffset * lineHeightPx
+                                // 固定行策略：当前行内容顶部 = rowOffset * lineHeightPx（始终不变）
+                                // contentPadding=0，scrollOffset 直接决定 item 0 的内容顶部位置
+                                // scrollOffset = rowOffset * lineHeightPx - (boxHeightPx - lineHeightPx) / 2
+                                // 推导：
+                                //   item i 的内容顶部 = scrollOffset + i * lineHeightPx
+                                //   固定行位置：scrollOffset + rowOffset * lineHeightPx = boxHeightPx/2
+                                //   → scrollOffset = boxHeightPx/2 - rowOffset * lineHeightPx
+                                val rawScrollOffset = boxHeightPx / 2f - rowOffset * lineHeightPx
+                                val targetScrollOffset = maxOf(0, rawScrollOffset.toInt())
                                 lazyListState.scrollToItem(
                                     index = currentLineIndex,
-                                    scrollOffset = maxOf(0, rawScrollOffset.toInt())
+                                    scrollOffset = targetScrollOffset
                                 )
                                 lastScrolledIndex = currentLineIndex
                             }
@@ -1183,120 +1185,128 @@ private fun LyricPage(
                                 }
                         }
 
-                        LazyColumn(
-                            state = lazyListState,
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .padding(horizontal = horizontalPadding),
-                            horizontalAlignment = Alignment.Start,
-                            contentPadding = PaddingValues(
-                                vertical = with(LocalDensity.current) { topPaddingPx.toDp() }
-                            )
+                        // 渐变叠加层：绝对定位于当前行中心线，上下各 1.5 倍行高
+                        Box(
+                            modifier = Modifier.fillMaxSize()
                         ) {
-                            itemsIndexed(
-                                items = lines,
-                                key = { idx, _ -> idx }
-                            ) { idx, lyricLine ->
-                                val isCurrent = idx == currentLineIndex
-                                val isNext = idx == currentLineIndex + 1
-                                // 每个 item 用独立 label，避免所有歌词共享同一个动画状态导致高亮混乱
-                                val alpha by animateFloatAsState(
-                                    targetValue = if (isCurrent) 1f else 0.45f,
-                                    animationSpec = tween(300),
-                                    label = "lyricAlpha_$idx"
-                                )
-                                val textColor = if (isCurrent) Color.White else MaterialTheme.colorScheme.onSurface.copy(alpha = alpha)
-                                Box {
-                                    // 阴影层（黑色描边）+ 暗色背景（当前行）
-                                    if (isCurrent) {
+                            // 单一垂直渐变背景：定位于当前行中心线，上下各 1.5x 行高（在歌词之后）
+                            // 当前行在视口中的内容顶部 = 固定行 * lineHeightPx
+                            // 当前行在视口中的内容中心 = 固定行 * lineHeightPx + lineHeightPx/2
+                            val currentLineCenterY = rowOffset * lineHeightPx + lineHeightPx / 2f
+                            // 上下限 clamp 防止 offset 越界
+                            val gradientTopY = (currentLineCenterY - lineHeight3xPx / 2f).coerceIn(0f, boxHeightPx - lineHeight3xPx)
+                            val gradientHeight = lineHeight3xPx.coerceAtMost(boxHeightPx)
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .offset(y = with(LocalDensity.current) { gradientTopY.toDp() })
+                                    .height(with(LocalDensity.current) { gradientHeight.toDp() })
+                                    .background(
+                                        brush = Brush.verticalGradient(
+                                            colorStops = arrayOf(
+                                                0f to Color.Black.copy(alpha = 0f),
+                                                0.5f to Color.Black.copy(alpha = 0.80f),
+                                                1f to Color.Black.copy(alpha = 0f)
+                                            )
+                                        ),
+                                        shape = RoundedCornerShape(0.dp)
+                                    )
+                            )
+
+                            val verticalPadding = 0.dp
+                            LazyColumn(
+                                state = lazyListState,
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .padding(horizontal = horizontalPadding),
+                                horizontalAlignment = Alignment.Start,
+                                contentPadding = PaddingValues(vertical = verticalPadding)
+                            ) {
+                                itemsIndexed(
+                                    items = lines,
+                                    key = { idx, _ -> idx }
+                                ) { idx, lyricLine ->
+                                    val isCurrent = idx == currentLineIndex
+                                    val isNext = idx == currentLineIndex + 1
+                                    // 每个 item 用独立 label，避免所有歌词共享同一个动画状态导致高亮混乱
+                                    val alpha by animateFloatAsState(
+                                        targetValue = if (isCurrent) 1f else 0.45f,
+                                        animationSpec = tween(300),
+                                        label = "lyricAlpha_$idx"
+                                    )
+                                    val textColor = if (isCurrent) Color.White else MaterialTheme.colorScheme.onSurface.copy(alpha = alpha)
+                                    Box {
+                                        // 阴影层（黑色描边）
+                                        if (isCurrent) {
+                                            Text(
+                                                text = lyricLine.text,
+                                                color = Color.Black.copy(alpha = 0.8f),
+                                                fontSize = currentLineFontSize,
+                                                fontWeight = FontWeight.Bold,
+                                                textAlign = TextAlign.Start,
+                                                modifier = Modifier
+                                                    .fillMaxWidth()
+                                                    .offset(x = 1.5.dp, y = 1.5.dp)
+                                                    .graphicsLayer {
+                                                        scaleX = if (isCurrent) 1.05f else 1f
+                                                        scaleY = if (isCurrent) 1.05f else 1f
+                                                    }
+                                            )
+                                        }
+                                        // 主文字层
                                         Text(
                                             text = lyricLine.text,
-                                            color = Color.Black.copy(alpha = 0.8f),
-                                            fontSize = currentLineFontSize,
-                                            fontWeight = FontWeight.Bold,
+                                            fontSize = if (isCurrent) currentLineFontSize else if (isNext) nextLineFontSize else otherLineFontSize,
+                                            fontWeight = if (isCurrent) FontWeight.Bold else FontWeight.Normal,
+                                            color = textColor,
                                             textAlign = TextAlign.Start,
                                             modifier = Modifier
                                                 .fillMaxWidth()
-                                                .background(
-                                                    brush = Brush.verticalGradient(
-                                                        colorStops = arrayOf(
-                                                            0.0f to Color.Black.copy(alpha = 0f),
-                                                            0.3f to Color.Black.copy(alpha = 0.85f),
-                                                            0.7f to Color.Black.copy(alpha = 0.85f),
-                                                            1.0f to Color.Black.copy(alpha = 0f)
-                                                        )
-                                                    ),
-                                                    shape = RoundedCornerShape(4.dp)
-                                                )
-                                                .padding(horizontal = 8.dp, vertical = 4.dp)
-                                                .offset(x = 1.5.dp, y = 1.5.dp)
                                                 .graphicsLayer {
                                                     scaleX = if (isCurrent) 1.05f else 1f
                                                     scaleY = if (isCurrent) 1.05f else 1f
                                                 }
+                                                .clickable { onSeek(lyricLine.timestamp) }
+                                                .padding(vertical = 8.dp)
                                         )
                                     }
-                                    // 主文字层
-                                    Text(
-                                        text = lyricLine.text,
-                                        fontSize = if (isCurrent) currentLineFontSize else if (isNext) nextLineFontSize else otherLineFontSize,
-                                        fontWeight = if (isCurrent) FontWeight.Bold else FontWeight.Normal,
-                                        color = textColor,
-                                        textAlign = TextAlign.Start,
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .background(
-                                                brush = if (isCurrent) Brush.verticalGradient(
-                                                    colorStops = arrayOf(
-                                                        0.0f to Color.Black.copy(alpha = 0f),
-                                                        0.3f to Color.Black.copy(alpha = 0.80f),
-                                                        0.7f to Color.Black.copy(alpha = 0.80f),
-                                                        1.0f to Color.Black.copy(alpha = 0f)
-                                                    )
-                                                ) else Brush.verticalGradient(colorStops = arrayOf(0f to Color.Transparent)),
-                                                shape = RoundedCornerShape(4.dp)
-                                            )
-                                            .padding(horizontal = 8.dp, vertical = 4.dp)
-                                            .graphicsLayer {
-                                                scaleX = if (isCurrent) 1.05f else 1f
-                                                scaleY = if (isCurrent) 1.05f else 1f
-                                            }
-                                            .clickable { onSeek(lyricLine.timestamp) }
-                                    )
                                 }
                             }
-                        }
 
-                        // 顶部渐变遮罩（边缘渐隐）
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(with(LocalDensity.current) { (boxHeightPx / 2).toDp() })
-                                .align(Alignment.TopCenter)
-                                .background(
-                                    brush = Brush.verticalGradient(
-                                        colors = listOf(
-                                            MaterialTheme.colorScheme.surface.copy(alpha = 0.85f),
-                                            Color.Transparent
+                            // 顶部渐变遮罩（边缘渐隐）
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(with(LocalDensity.current) { (boxHeightPx / 2).toDp() })
+                                    .align(Alignment.TopCenter)
+                                    .background(
+                                        brush = Brush.verticalGradient(
+                                            colors = listOf(
+                                                MaterialTheme.colorScheme.surface.copy(alpha = 0.85f),
+                                                Color.Transparent
+                                            )
                                         )
                                     )
-                                )
-                        )
-                        // 底部渐变遮罩
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(with(LocalDensity.current) { (boxHeightPx / 2).toDp() })
-                                .align(Alignment.BottomCenter)
-                                .background(
-                                    brush = Brush.verticalGradient(
-                                        colors = listOf(
-                                            Color.Transparent,
-                                            MaterialTheme.colorScheme.surface.copy(alpha = 0.85f)
+                            )
+                            // 底部渐变遮罩
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(with(LocalDensity.current) { (boxHeightPx / 2).toDp() })
+                                    .align(Alignment.BottomCenter)
+                                    .background(
+                                        brush = Brush.verticalGradient(
+                                            colors = listOf(
+                                                Color.Transparent,
+                                                MaterialTheme.colorScheme.surface.copy(alpha = 0.85f)
+                                            )
                                         )
                                     )
-                                )
-                        )
+                            )
+
+                            // 5秒无操作后自动回正逻辑已移除
+                            // 主滚动逻辑（scrollToItem）已在 LaunchedEffect 中保证居中，无需额外补偿
+                        }
                     }
                 }
                 is LyricState.Error -> {
