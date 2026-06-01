@@ -831,6 +831,20 @@ private fun VinylRecord(
             }
             nc.drawCircle(cx, cy, holeR, holePaint)
 
+            // 中心孔金属光泽描边（孔外圈加一圈金属灰高光）
+            nc.drawCircle(cx, cy, holeR * 1.4f, android.graphics.Paint().apply {
+                isAntiAlias = true
+                style = android.graphics.Paint.Style.STROKE
+                strokeWidth = (holeR * 0.3f).coerceAtLeast(2f)
+                color = android.graphics.Color.parseColor("#C0C0C0")
+            })
+            nc.drawCircle(cx, cy, holeR * 1.4f, android.graphics.Paint().apply {
+                isAntiAlias = true
+                style = android.graphics.Paint.Style.STROKE
+                strokeWidth = 1f
+                color = android.graphics.Color.parseColor("#707070")
+            })
+
             // 唱片外圈描边（银灰色描边，贴合金属边缘内侧）
             nc.drawCircle(cx, cy, artR, android.graphics.Paint().apply {
                 isAntiAlias = true
@@ -2089,7 +2103,7 @@ fun PlayerScreenPADLandscape(
                             VinylRecord(
                                 albumArtUrl = currentSong.coverUrl ?: currentSong.pic,
                                 isPlaying = isPlaying,
-                                modifier = Modifier.size(coverSize),
+                                modifier = Modifier.size(coverSize * 0.9f),
                                 imageLoader = imageLoader
                             )
                         }
@@ -2216,7 +2230,7 @@ fun PlayerScreenPADLandscape(
                                             val isPrev = index == currentIndex - 1
                                             val alpha = if (isCurrent) 1f else 0.5f
                                             val fontSize = if (isCurrent) 32.sp else if (isNext) 30.sp else 22.sp
-                                            val leadSpace = if (isPrev || isCurrent) "    " else ""
+                                            val leadSpace = if (isNext) "  " else ""
 
                                             Row(
                                                 modifier = Modifier.fillMaxWidth(),
@@ -2303,10 +2317,6 @@ fun PlayerScreenPADLandscape(
                     horizontalArrangement = Arrangement.SpaceEvenly,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    // 播放列表
-                    IconButton(onClick = { /* 暂时不实现 */ }, modifier = Modifier.size(fnBtnSize * 1.4f)) {
-                        Icon(imageVector = Icons.AutoMirrored.Filled.PlaylistPlay, contentDescription = "播放列表", tint = Color.White.copy(alpha = 0.8f), modifier = Modifier.size(fnBtnSize))
-                    }
                     // 上一首
                     IconButton(onClick = onPrevious, modifier = Modifier.size(coreBtnSize * 1.3f)) {
                         Icon(imageVector = Icons.Default.SkipPrevious, contentDescription = "上一首", tint = Color.White, modifier = Modifier.size(coreBtnSize))
@@ -2322,6 +2332,10 @@ fun PlayerScreenPADLandscape(
                     // 下一首
                     IconButton(onClick = onNext, modifier = Modifier.size(coreBtnSize * 1.3f)) {
                         Icon(imageVector = Icons.Default.SkipNext, contentDescription = "下一首", tint = Color.White, modifier = Modifier.size(coreBtnSize))
+                    }
+                    // 播放列表
+                    IconButton(onClick = { /* 暂时不实现 */ }, modifier = Modifier.size(fnBtnSize * 1.4f)) {
+                        Icon(imageVector = Icons.AutoMirrored.Filled.PlaylistPlay, contentDescription = "播放列表", tint = Color.White.copy(alpha = 0.8f), modifier = Modifier.size(fnBtnSize))
                     }
                     // 循环模式
                     IconButton(onClick = onTogglePlayMode, modifier = Modifier.size(fnBtnSize * 1.4f)) {
