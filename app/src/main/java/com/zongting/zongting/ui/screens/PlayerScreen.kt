@@ -1235,7 +1235,7 @@ private fun LyricPage(
                                                     scaleY = if (isCurrent) 1.05f else 1f
                                                 }
                                                 .clickable { onSeek(lyricLine.timestamp) }
-                                                .padding(vertical = 8.dp)
+                                                .padding(vertical = 2.dp)
                                         )
                                     }
                                 }
