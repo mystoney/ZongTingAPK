@@ -1159,20 +1159,17 @@ private fun LyricPage(
                         // position 变化会通过 recompose 更新 currentLineIndex，从而触发此 LaunchedEffect
                         var lastScrolledIndex by remember { mutableIntStateOf(-1) }
                         LaunchedEffect(currentLineIndex, lazyListState) {
-                            // 防御：LazyColumn 首次 measure 完成前不滚动，防止 viewportSize=0 导致崩溃
-                            val viewportHeight = lazyListState.layoutInfo.viewportSize.height
-                            if (viewportHeight <= 0) return@LaunchedEffect
+                            // 防御：LazyColumn 首次 measure 完成前不滚动
+                            val vp = lazyListState.layoutInfo.viewportSize
+                            if (vp.height <= 0 || lineHeightPx <= 0f) return@LaunchedEffect
                             if (lines.isNotEmpty() && currentLineIndex in lines.indices) {
                                 if (lastScrolledIndex == currentLineIndex) return@LaunchedEffect
-                                // contentPadding top 让 item rowOffset 的内容顶部 = topPaddingPx
-                                // scrollOffset 控制内容在视口中的起始偏移
-                                // scrollOffset = (currentLineIndex - rowOffset) * lineHeightPx
-                                // → item currentLineIndex 的内容顶部 = topPaddingPx - scrollOffset + currentLineIndex * lineHeightPx
-                                //   = rowOffset * LH - (currentLineIndex - rowOffset) * LH + currentLineIndex * LH
-                                //   = rowOffset * LH（始终固定！）
+                                // 居中策略：当前行内容顶部 = rowOffset * lineHeightPx（始终固定）
+                                // scrollOffset = boxHeightPx/2 - rowOffset*LH
+                                val rawScrollOffset = vp.height / 2f - rowOffset * lineHeightPx
                                 lazyListState.scrollToItem(
                                     index = currentLineIndex,
-                                    scrollOffset = maxOf(0, targetScrollOffset.toInt())
+                                    scrollOffset = maxOf(0, rawScrollOffset.toInt())
                                 )
                                 lastScrolledIndex = currentLineIndex
                             }

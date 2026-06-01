@@ -36,7 +36,7 @@ echo "=========================================="
 MODE="${1:-both}"
 
 do_test() {
-    local src="/root/ZongTing/app/build/outputs/apk/test/app-beta-debug.apk"
+    local src="/root/ZongTing/app/build/outputs/apk/beta/debug/app-beta-debug.apk"
     local dest="/usr/ZongTing/test/zongting-test.apk"
     local vjson="/usr/ZongTing/test/version.json"
     local url="http://172.16.1.93:8080/ZongTing/test/zongting-test.apk"
