@@ -1142,7 +1142,7 @@ private fun LyricPage(
                         val nextLineFontSize = if (isLandscape) {
                             if (isExpanded) 44.sp else 32.sp
                         } else 20.sp
-                        val lineHeightDp = if (isLandscape) 46.dp else 30.dp
+                        val lineHeightDp = if (isLandscape) 40.dp else 26.dp
                         val horizontalPadding = if (isExpanded) 48.dp else if (isLandscape) 40.dp else 24.dp
                         val boxHeightPx = with(LocalDensity.current) { maxHeight.toPx() }
                         // 固定行策略：当前播放行始终对齐固定行位置，不随 currentLineIndex 变化而飘移
@@ -1196,7 +1196,7 @@ private fun LyricPage(
                                     .fillMaxSize()
                                     .padding(horizontal = horizontalPadding),
                                 horizontalAlignment = Alignment.Start,
-                                verticalArrangement = Arrangement.spacedBy(lineHeightDp),
+                                verticalArrangement = Arrangement.spacedBy(0.dp),
                                 contentPadding = lyricContentPadding
                             ) {
                                 itemsIndexed(
