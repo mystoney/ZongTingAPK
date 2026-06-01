@@ -2226,7 +2226,7 @@ fun PlayerScreenPADLandscape(
                                                     )
                                                 }
                                                 Text(
-                                                    text = line.text.ifEmpty { " " },
+                                                    text = if (isCurrent) (line.text + " ").ifEmpty { " " } else line.text.ifEmpty { " " },
                                                     color = Color.White.copy(alpha = alpha),
                                                     fontSize = fontSize,
                                                     fontWeight = if (isCurrent) FontWeight.Bold else FontWeight.Normal,
