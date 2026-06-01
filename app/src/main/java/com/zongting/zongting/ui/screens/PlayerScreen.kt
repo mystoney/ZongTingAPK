@@ -1145,10 +1145,11 @@ private fun LyricPage(
                         val lineHeightDp = if (isLandscape) 60.dp else 44.dp
                         val horizontalPadding = if (isExpanded) 48.dp else if (isLandscape) 40.dp else 24.dp
                         val boxHeightPx = with(LocalDensity.current) { maxHeight.toPx() }
-                        val lineHeightPx = with(LocalDensity.current) { lineHeightDp.toPx() }
                         // 固定行策略：当前播放行始终对齐固定行位置，不随 currentLineIndex 变化而飘移
                         // 竖屏：第3行 | 横屏：第1行（顶部）
                         val rowOffset = if (isLandscape) 0 else 3
+                        // 统一行距44dp，与滚动计算 lineHeightPx 一致
+                        val lineHeightPx = with(LocalDensity.current) { lineHeightDp.toPx() }
 
                         // 渐变叠加层已移除
                         var lastScrolledIndex by remember { mutableIntStateOf(-1) }
@@ -1188,6 +1189,7 @@ private fun LyricPage(
                                     .fillMaxSize()
                                     .padding(horizontal = horizontalPadding),
                                 horizontalAlignment = Alignment.Start,
+                                verticalArrangement = Arrangement.spacedBy(lineHeightDp),
                                 contentPadding = PaddingValues(vertical = 0.dp)
                             ) {
                                 itemsIndexed(
@@ -1203,7 +1205,7 @@ private fun LyricPage(
                                         label = "lyricAlpha_$idx"
                                     )
                                     val textColor = if (isCurrent) Color.White else MaterialTheme.colorScheme.onSurface.copy(alpha = alpha)
-                                    Box {
+                                    Box(modifier = Modifier.height(lineHeightDp).fillMaxWidth()) {
                                         // 阴影层（黑色描边）
                                         if (isCurrent) {
                                             Text(
@@ -1235,7 +1237,6 @@ private fun LyricPage(
                                                     scaleY = if (isCurrent) 1.05f else 1f
                                                 }
                                                 .clickable { onSeek(lyricLine.timestamp) }
-                                                .padding(vertical = 2.dp)
                                         )
                                     }
                                 }
