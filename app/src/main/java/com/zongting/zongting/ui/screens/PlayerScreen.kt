@@ -1146,8 +1146,8 @@ private fun LyricPage(
                         val horizontalPadding = if (isExpanded) 48.dp else if (isLandscape) 40.dp else 24.dp
                         val boxHeightPx = with(LocalDensity.current) { maxHeight.toPx() }
                         val boxHeightDp = maxHeight
-                        // 滚动时当前行对齐屏幕 1/3 处（网易云风格：上方约 4-5 行，下方约 5-6 行）
-                        val scrollToPosition = boxHeightPx / 3f
+                        // 滚动时当前行对齐屏幕 2/5 处（网易云风格）
+                        val scrollToPosition = boxHeightPx * 2 / 5f
                         val lineSpacing = if (isLandscape) 16.dp else 12.dp
                         val centerPadding = boxHeightDp / 2
 
