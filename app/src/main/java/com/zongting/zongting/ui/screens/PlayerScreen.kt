@@ -1126,16 +1126,10 @@ private fun LyricPage(
                 }
                 is LyricState.Success -> {
                     val lines = lyricState.lyrics
-                    // 渐变遮罩只依赖 currentLineIndex，避免每秒 recomposition
-                    // 注意：playbackState.position 必须直接在 derivedStateOf lambda 内读取，
-                    // 不能用中间变量 val position = playbackState.position，
-                    // 否则 derivedStateOf 无法追踪 position 的变化
-                    val currentLineIndex by remember {
-                        derivedStateOf {
-                            val pos = playbackState.position
-                            lines.indices.lastOrNull { lines[it].timestamp <= pos } ?: 0
-                        }
-                    }
+                    val position = playbackState.position
+
+                    // 实时计算当前行，保证 position 变化时立即更新高亮
+                    val currentLineIndex = lines.indices.lastOrNull { lines[it].timestamp <= position } ?: 0
 
                     BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
                         val configuration = LocalConfiguration.current
@@ -1168,15 +1162,17 @@ private fun LyricPage(
                         val rowOffset = if (isLandscape) 0 else if (isExpanded) 2 else 4
 
                         // 目标行始终为 currentLineIndex（切歌时自动更新）
-                        // 注意：不要在这里检查 isScrollInProgress，否则每次 currentLineIndex 变化
-                        // 都会因为上一个动画还在跑（300ms）而被跳过，导致歌词永远滚不动
-                        LaunchedEffect(currentLineIndex) {
+                        // 使用 debounce 避免频繁触发动画导致的跳动
+                        LaunchedEffect(position, currentLineIndex) {
                             if (lines.isNotEmpty() && currentLineIndex in lines.indices) {
+                                // debounce：只在前一个动画真正完成后才启动新的
                                 kotlinx.coroutines.delay(100)
-                                lazyListState.animateScrollToItem(
-                                    index = currentLineIndex,
-                                    scrollOffset = (verticalPaddingPx + (currentLineIndex - rowOffset) * lineHeightPx).toInt()
-                                )
+                                if (!lazyListState.isScrollInProgress) {
+                                    lazyListState.animateScrollToItem(
+                                        index = currentLineIndex,
+                                        scrollOffset = (verticalPaddingPx + (currentLineIndex - rowOffset) * lineHeightPx).toInt()
+                                    )
+                                }
                             }
                         }
 
