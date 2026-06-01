@@ -1142,12 +1142,12 @@ private fun LyricPage(
                         val nextLineFontSize = if (isLandscape) {
                             if (isExpanded) 44.sp else 32.sp
                         } else 20.sp
-                        val lineHeightDp = if (isLandscape) 50.dp else 36.dp
+                        val lineHeightDp = if (isLandscape) 46.dp else 30.dp
                         val horizontalPadding = if (isExpanded) 48.dp else if (isLandscape) 40.dp else 24.dp
                         val boxHeightPx = with(LocalDensity.current) { maxHeight.toPx() }
                         // 固定行策略：当前播放行始终对齐固定行位置，不随 currentLineIndex 变化而飘移
-                        // 竖屏：第3行 | 横屏：第1行（顶部）
-                        val rowOffset = if (isLandscape) 0 else 3
+                        // 竖屏：第2行 | 横屏：第1行（顶部）
+                        val rowOffset = if (isLandscape) 0 else 2
                         // 统一行距44dp，与滚动计算 lineHeightPx 一致
                         val lineHeightPx = with(LocalDensity.current) { lineHeightDp.toPx() }
                         // 顶部/底部 padding = rowOffset * lineHeightDp，确保：
