@@ -1150,6 +1150,10 @@ private fun LyricPage(
                         val rowOffset = if (isLandscape) 0 else 3
                         // 统一行距44dp，与滚动计算 lineHeightPx 一致
                         val lineHeightPx = with(LocalDensity.current) { lineHeightDp.toPx() }
+                        // 顶部/底部 padding = rowOffset * lineHeightDp，确保：
+                        // 1. 前 rowOffset 行歌词显示在顶部渐变遮罩下方
+                        // 2. 后 rowOffset 行歌词显示在底部渐变遮罩上方
+                        val lyricContentPadding = PaddingValues(vertical = lineHeightDp * rowOffset)
 
                         // 渐变叠加层已移除
                         var lastScrolledIndex by remember { mutableIntStateOf(-1) }
@@ -1157,17 +1161,20 @@ private fun LyricPage(
                             if (lines.isNotEmpty() && currentLineIndex in lines.indices) {
                                 if (lastScrolledIndex == currentLineIndex) return@LaunchedEffect
                                 // 固定行策略：当前行内容顶部 = rowOffset * lineHeightPx（始终不变）
-                                // contentPadding=0，scrollOffset 直接决定 item 0 的内容顶部位置
-                                // scrollOffset = rowOffset * lineHeightPx - (boxHeightPx - lineHeightPx) / 2
+                                // scrollOffset = boxHeightPx/2 - rowOffset * lineHeightPx
                                 // 推导：
-                                //   item i 的内容顶部 = scrollOffset + i * lineHeightPx
+                                //   item i 的内容顶部 = scrollOffset + i * lineHeightPx（contentPadding 之后的起点）
                                 //   固定行位置：scrollOffset + rowOffset * lineHeightPx = boxHeightPx/2
                                 //   → scrollOffset = boxHeightPx/2 - rowOffset * lineHeightPx
-                                val rawScrollOffset = boxHeightPx / 2f - rowOffset * lineHeightPx
-                                val targetScrollOffset = maxOf(0, rawScrollOffset.toInt())
+                                // 当 currentLineIndex < rowOffset 时，让内容从开头自然显示（前几行在顶部渐变下方）
+                                val rawScrollOffset = if (currentLineIndex < rowOffset) {
+                                    0 // scrollToItem(index, 0) 让 item index 的顶部对齐内容起点
+                                } else {
+                                    (boxHeightPx / 2f - rowOffset * lineHeightPx).toInt().coerceAtLeast(0)
+                                }
                                 lazyListState.scrollToItem(
                                     index = currentLineIndex,
-                                    scrollOffset = targetScrollOffset
+                                    scrollOffset = rawScrollOffset
                                 )
                                 lastScrolledIndex = currentLineIndex
                             }
@@ -1190,7 +1197,7 @@ private fun LyricPage(
                                     .padding(horizontal = horizontalPadding),
                                 horizontalAlignment = Alignment.Start,
                                 verticalArrangement = Arrangement.spacedBy(lineHeightDp),
-                                contentPadding = PaddingValues(vertical = 0.dp)
+                                contentPadding = lyricContentPadding
                             ) {
                                 itemsIndexed(
                                     items = lines,
