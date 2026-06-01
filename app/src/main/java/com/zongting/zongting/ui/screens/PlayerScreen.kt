@@ -2283,61 +2283,40 @@ fun PlayerScreenPADLandscape(
                     )
                 }
 
-                // ── 核心播放控制 ─────────────────────────────────────────
+                // ── 全部按钮一行 ──────────────────────────────────────────
                 val screenWidth = LocalConfiguration.current.screenWidthDp
+                val fnBtnSize = (screenWidth * 0.028f).coerceIn(20f, 28f).dp
                 val coreBtnSize = (28 + (screenWidth - 360) * 0.04f).coerceIn(26f, 40f).dp
 
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(vertical = 4.dp),
-                    horizontalArrangement = Arrangement.Center,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    IconButton(onClick = onPrevious, modifier = Modifier.size(coreBtnSize * 1.4f)) {
-                        Icon(
-                            imageVector = Icons.Default.SkipPrevious,
-                            contentDescription = "上一首",
-                            tint = Color.White,
-                            modifier = Modifier.size(coreBtnSize)
-                        )
-                    }
-                    Spacer(modifier = Modifier.width(32.dp))
-                    FilledIconButton(
-                        onClick = onTogglePlay,
-                        colors = IconButtonDefaults.filledIconButtonColors(containerColor = accentColor),
-                        modifier = Modifier.size(coreBtnSize * 1.8f)
-                    ) {
-                        Icon(
-                            imageVector = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
-                            contentDescription = if (isPlaying) "暂停" else "播放",
-                            tint = Color.White,
-                            modifier = Modifier.size(coreBtnSize)
-                        )
-                    }
-                    Spacer(modifier = Modifier.width(32.dp))
-                    IconButton(onClick = onNext, modifier = Modifier.size(coreBtnSize * 1.4f)) {
-                        Icon(
-                            imageVector = Icons.Default.SkipNext,
-                            contentDescription = "下一首",
-                            tint = Color.White,
-                            modifier = Modifier.size(coreBtnSize)
-                        )
-                    }
-                }
-
-                // ── 功能按钮行 ────────────────────────────────────────────
-                val fnBtnSize = (screenWidth * 0.028f).coerceIn(20f, 28f).dp
-
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 8.dp, vertical = 2.dp),
+                        .padding(vertical = 4.dp, horizontal = 8.dp),
                     horizontalArrangement = Arrangement.SpaceEvenly,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
+                    // 播放列表
+                    IconButton(onClick = { /* 暂时不实现 */ }, modifier = Modifier.size(fnBtnSize * 1.4f)) {
+                        Icon(imageVector = Icons.AutoMirrored.Filled.PlaylistPlay, contentDescription = "播放列表", tint = Color.White.copy(alpha = 0.8f), modifier = Modifier.size(fnBtnSize))
+                    }
+                    // 上一首
+                    IconButton(onClick = onPrevious, modifier = Modifier.size(coreBtnSize * 1.3f)) {
+                        Icon(imageVector = Icons.Default.SkipPrevious, contentDescription = "上一首", tint = Color.White, modifier = Modifier.size(coreBtnSize))
+                    }
+                    // 播放
+                    FilledIconButton(
+                        onClick = onTogglePlay,
+                        colors = IconButtonDefaults.filledIconButtonColors(containerColor = accentColor),
+                        modifier = Modifier.size(coreBtnSize * 1.7f)
+                    ) {
+                        Icon(imageVector = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow, contentDescription = if (isPlaying) "暂停" else "播放", tint = Color.White, modifier = Modifier.size(coreBtnSize))
+                    }
+                    // 下一首
+                    IconButton(onClick = onNext, modifier = Modifier.size(coreBtnSize * 1.3f)) {
+                        Icon(imageVector = Icons.Default.SkipNext, contentDescription = "下一首", tint = Color.White, modifier = Modifier.size(coreBtnSize))
+                    }
                     // 循环模式
-                    IconButton(onClick = onTogglePlayMode) {
+                    IconButton(onClick = onTogglePlayMode, modifier = Modifier.size(fnBtnSize * 1.4f)) {
                         val (icon, desc) = when (playMode) {
                             0 -> Icons.Default.Repeat to "列表循环"
                             1 -> Icons.Default.Repeat to "单曲循环"
@@ -2345,35 +2324,21 @@ fun PlayerScreenPADLandscape(
                         }
                         Icon(imageVector = icon, contentDescription = desc, tint = Color.White.copy(alpha = 0.8f), modifier = Modifier.size(fnBtnSize))
                     }
-
-                    // 播放列表
-                    IconButton(onClick = { /* 暂时不实现 */ }) {
-                        Icon(imageVector = Icons.AutoMirrored.Filled.PlaylistPlay, contentDescription = "播放列表", tint = Color.White.copy(alpha = 0.8f), modifier = Modifier.size(fnBtnSize))
+                    // 收藏
+                    IconButton(onClick = onToggleFavorite, modifier = Modifier.size(fnBtnSize * 1.4f)) {
+                        FavoriteIcon(isFavorite = isFavorite, tint = if (isFavorite) AppColors.FavoriteActive else Color.White.copy(alpha = 0.8f), contentDescription = "收藏", modifier = Modifier.size(fnBtnSize))
                     }
-
-                    // 添加到歌单
-                    IconButton(onClick = { /* 暂时不实现 */ }) {
-                        Icon(imageVector = Icons.Default.PlaylistAdd, contentDescription = "添加", tint = Color.White.copy(alpha = 0.8f), modifier = Modifier.size(fnBtnSize))
-                    }
-
-                    // 定时关闭
-                    IconButton(onClick = { /* 暂时不实现 */ }) {
+                    // 定时
+                    IconButton(onClick = { /* 暂时不实现 */ }, modifier = Modifier.size(fnBtnSize * 1.4f)) {
                         Icon(imageVector = Icons.Default.Timer, contentDescription = "定时", tint = Color.White.copy(alpha = 0.8f), modifier = Modifier.size(fnBtnSize))
                     }
-
-                    // 设为铃声
-                    IconButton(onClick = { /* 暂时不实现 */ }) {
+                    // 铃声
+                    IconButton(onClick = { /* 暂时不实现 */ }, modifier = Modifier.size(fnBtnSize * 1.4f)) {
                         Icon(imageVector = Icons.Default.Notifications, contentDescription = "铃声", tint = Color.White.copy(alpha = 0.8f), modifier = Modifier.size(fnBtnSize))
                     }
-
-                    // 收藏
-                    IconButton(onClick = onToggleFavorite) {
-                        FavoriteIcon(
-                            isFavorite = isFavorite,
-                            tint = if (isFavorite) AppColors.FavoriteActive else Color.White.copy(alpha = 0.8f),
-                            contentDescription = "收藏",
-                            modifier = Modifier.size(fnBtnSize)
-                        )
+                    // 添加到播放列表
+                    IconButton(onClick = { /* 暂时不实现 */ }, modifier = Modifier.size(fnBtnSize * 1.4f)) {
+                        Icon(imageVector = Icons.Default.PlaylistAdd, contentDescription = "添加", tint = Color.White.copy(alpha = 0.8f), modifier = Modifier.size(fnBtnSize))
                     }
                 }
             }
