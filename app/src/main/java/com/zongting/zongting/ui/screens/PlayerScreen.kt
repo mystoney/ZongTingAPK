@@ -1156,9 +1156,10 @@ private fun LyricPage(
                         LaunchedEffect(currentLineIndex, lazyListState) {
                             if (lines.isNotEmpty() && currentLineIndex in lines.indices) {
                                 if (lastScrolledIndex == currentLineIndex) return@LaunchedEffect
+                                // 调试：先用 scrollOffset=0 看自然位置，确认后再调 offset
                                 lazyListState.scrollToItem(
                                     index = currentLineIndex,
-                                    scrollOffset = scrollToPosition.toInt()
+                                    scrollOffset = 0
                                 )
                                 lastScrolledIndex = currentLineIndex
                             }
