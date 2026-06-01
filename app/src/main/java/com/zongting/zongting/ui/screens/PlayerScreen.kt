@@ -1128,7 +1128,8 @@ private fun LyricPage(
                     val lines = lyricState.lyrics
                     val position = playbackState.position
 
-                    // 实时计算当前行，保证 position 变化时立即更新高亮
+                    // 直接计算 currentLineIndex，不套 derivedStateOf
+                    // derivedStateOf 会阻断 recompose，导致 LaunchedEffect 无法正常响应 currentLineIndex 变化
                     val currentLineIndex = lines.indices.lastOrNull { lines[it].timestamp <= position } ?: 0
 
                     BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
@@ -1165,22 +1166,14 @@ private fun LyricPage(
                         // 注意：只监听 currentLineIndex，不监听 position，
                         // position 变化会通过 recompose 更新 currentLineIndex，从而触发此 LaunchedEffect
                         var lastScrolledIndex by remember { mutableIntStateOf(-1) }
-                        LaunchedEffect(currentLineIndex) {
+                        LaunchedEffect(currentLineIndex, lazyListState) {
                             if (lines.isNotEmpty() && currentLineIndex in lines.indices) {
-                                // 只在目标行与上次滚动行不同（相差 > 1 行）时才触发滚动
-                                // 避免在同一行附近微小振荡时反复滚动
-                                val lineDelta = kotlin.math.abs(currentLineIndex - lastScrolledIndex)
-                                if (lineDelta > 1) {
-                                    kotlinx.coroutines.delay(80)
-                                    if (!lazyListState.isScrollInProgress) {
-                                        // scrollToItem：立即跳转（无动画），避免 animateScrollToItem 的 offset 震荡问题
-                                        lazyListState.scrollToItem(
-                                            index = currentLineIndex,
-                                            scrollOffset = (lineHeightPx * 1.5f).toInt() // 当前行距视口顶部 1.5 倍行高
-                                        )
-                                        lastScrolledIndex = currentLineIndex
-                                    }
-                                }
+                                if (lastScrolledIndex == currentLineIndex) return@LaunchedEffect
+                                lazyListState.scrollToItem(
+                                    index = currentLineIndex,
+                                    scrollOffset = -(lazyListState.layoutInfo.viewportSize.height / 2) + (lineHeightPx / 2).toInt()
+                                )
+                                lastScrolledIndex = currentLineIndex
                             }
                         }
 

@@ -1238,20 +1238,20 @@ private fun LibraryFavoriteIcon(
     tint: Color,
     modifier: Modifier = Modifier
 ) {
-    // 白色空心轮廓始终显示在最上层（完全可见）
+    // 收藏时先画绿色实心（底层）
+    if (isFavorite) {
+        Icon(
+            imageVector = Icons.Filled.Favorite,
+            contentDescription = "收藏",
+            tint = tint,
+            modifier = modifier
+        )
+    }
+    // 白色空心轮廓始终显示在最上层（完整白色边框）
     Icon(
         imageVector = Icons.Outlined.FavoriteBorder,
         contentDescription = null,
         tint = Color.White,
         modifier = modifier
     )
-    // 收藏时叠加绿色实心（镂空效果：透明色盖住白色填充，只留边框）
-    if (isFavorite) {
-        Icon(
-            imageVector = Icons.Filled.Favorite,
-            contentDescription = "收藏",
-            tint = AppColors.FavoriteActive,
-            modifier = modifier
-        )
-    }
 }
