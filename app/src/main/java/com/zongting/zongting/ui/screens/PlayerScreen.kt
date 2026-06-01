@@ -1159,6 +1159,9 @@ private fun LyricPage(
                         // position 变化会通过 recompose 更新 currentLineIndex，从而触发此 LaunchedEffect
                         var lastScrolledIndex by remember { mutableIntStateOf(-1) }
                         LaunchedEffect(currentLineIndex, lazyListState) {
+                            // 防御：LazyColumn 首次 measure 完成前不滚动，防止 viewportSize=0 导致崩溃
+                            val viewportHeight = lazyListState.layoutInfo.viewportSize.height
+                            if (viewportHeight <= 0) return@LaunchedEffect
                             if (lines.isNotEmpty() && currentLineIndex in lines.indices) {
                                 if (lastScrolledIndex == currentLineIndex) return@LaunchedEffect
                                 // contentPadding top 让 item rowOffset 的内容顶部 = topPaddingPx
