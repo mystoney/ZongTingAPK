@@ -1996,21 +1996,22 @@ private fun FavoriteIcon(
 ) {
     val favoritePath = remember {
         Path().apply {
-            // 爱心路径（左半，中心在0,0，尺寸约 24x24）
-            moveTo(0f, 3f)
-            cubicTo(-1f, -2f, -8f, -2f, -8f, 5f)
-            cubicTo(-8f, 10f, 0f, 15f, 0f, 15f)
-            cubicTo(0f, 15f, 8f, 10f, 8f, 5f)
-            cubicTo(8f, -2f, 1f, -2f, 0f, 3f)
+            // 爱心路径，中心在 (12, 12)，适配 24x24 坐标系
+            moveTo(12f, 17f)
+            cubicTo(12f, 17f, 4f, 12f, 4f, 7.5f)
+            cubicTo(4f, 4.5f, 6.5f, 2f, 9.5f, 2f)
+            cubicTo(11f, 2f, 12f, 3f, 12f, 3f)
+            cubicTo(12f, 3f, 13f, 2f, 14.5f, 2f)
+            cubicTo(17.5f, 2f, 20f, 4.5f, 20f, 7.5f)
+            cubicTo(20f, 12f, 12f, 17f, 12f, 17f)
             close()
         }
     }
 
     Canvas(modifier = modifier) {
-        val scale = size.minDimension / 24f
         val filledColor = if (isFavorite) AppColors.FavoriteActive else Color.Transparent
         val outlineColor = if (isFavorite) Color.White else Color.White.copy(alpha = 0.6f)
-        val strokeWidth = 1.5f * scale
+        val strokeWidth = 1.5f
 
         // 先画绿色实心
         drawPath(
