@@ -1156,12 +1156,12 @@ private fun LyricPage(
                         LaunchedEffect(currentLineIndex, lazyListState) {
                             if (lines.isNotEmpty() && currentLineIndex in lines.indices) {
                                 if (lastScrolledIndex == currentLineIndex) return@LaunchedEffect
-                                // 调试：先用 scrollOffset=0 看自然位置，确认后再调 offset
-                                // 居中位置 = boxHeightPx * 0.5，向上偏移到 40% = scrollOffset = -(0.1 * boxHeightPx)
-                                val scrollUpOffset = -(boxHeightPx * 0.1f).toInt()
+                                // 居中位置 = scrollOffset=0，当前行在屏幕中心
+                                // 目标 40%：需要内容向下滚，即 scrollOffset 为正值
+                                val scrollDownOffset = (boxHeightPx * 0.1f).toInt()
                                 lazyListState.scrollToItem(
                                     index = currentLineIndex,
-                                    scrollOffset = scrollUpOffset
+                                    scrollOffset = scrollDownOffset
                                 )
                                 lastScrolledIndex = currentLineIndex
                             }
