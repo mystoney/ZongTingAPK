@@ -1126,12 +1126,14 @@ private fun LyricPage(
                 }
                 is LyricState.Success -> {
                     val lines = lyricState.lyrics
-                    val position = playbackState.position
-
                     // 渐变遮罩只依赖 currentLineIndex，避免每秒 recomposition
+                    // 注意：playbackState.position 必须直接在 derivedStateOf lambda 内读取，
+                    // 不能用中间变量 val position = playbackState.position，
+                    // 否则 derivedStateOf 无法追踪 position 的变化
                     val currentLineIndex by remember {
                         derivedStateOf {
-                            lines.indices.lastOrNull { lines[it].timestamp <= position } ?: 0
+                            val pos = playbackState.position
+                            lines.indices.lastOrNull { lines[it].timestamp <= pos } ?: 0
                         }
                     }
 

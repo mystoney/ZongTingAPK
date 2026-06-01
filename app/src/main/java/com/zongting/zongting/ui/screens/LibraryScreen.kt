@@ -1238,14 +1238,14 @@ private fun LibraryFavoriteIcon(
     tint: Color,
     modifier: Modifier = Modifier
 ) {
-    // 始终显示空心轮廓，保持位置稳定
+    // 白色空心轮廓始终显示在最上层（完全可见）
     Icon(
         imageVector = Icons.Outlined.FavoriteBorder,
         contentDescription = null,
-        tint = Color.White.copy(alpha = 0.6f),
+        tint = Color.White,
         modifier = modifier
     )
-    // 收藏时叠加绿色实心
+    // 收藏时叠加绿色实心（镂空效果：透明色盖住白色填充，只留边框）
     if (isFavorite) {
         Icon(
             imageVector = Icons.Filled.Favorite,

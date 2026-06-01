@@ -233,7 +233,7 @@ private fun MiniFavoriteIcon(
     Icon(
         imageVector = Icons.Outlined.FavoriteBorder,
         contentDescription = null,
-        tint = Color.White.copy(alpha = 0.6f),
+        tint = Color.White,
         modifier = modifier
     )
 }
