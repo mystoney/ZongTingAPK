@@ -2084,6 +2084,7 @@ fun PlayerScreenPADLandscape(
                             verticalArrangement = Arrangement.Center,
                             modifier = Modifier.fillMaxSize()
                         ) {
+                            Spacer(modifier = Modifier.height(24.dp))
                             // 黑胶唱片（旋转动画）
                             VinylRecord(
                                 albumArtUrl = currentSong.coverUrl ?: currentSong.pic,
@@ -2097,7 +2098,7 @@ fun PlayerScreenPADLandscape(
                         Column(
                             modifier = Modifier
                                 .align(Alignment.TopStart)
-                                .padding(12.dp)
+                                .padding(top = 24.dp, start = 12.dp, end = 12.dp)
                         ) {
                             // 来源小字
                             val sourceText = when (currentSong.source) {
@@ -2188,50 +2189,57 @@ fun PlayerScreenPADLandscape(
                                     val currentIndex = lyrics.indexOfLast { it.timestamp <= playbackState.position }
                                         .coerceAtLeast(0)
 
-                                val listState = rememberLazyListState()
-                                val density = LocalDensity.current
-                                val itemSpacing = with(density) { 10.dp.toPx() }
-                                val itemHeight = with(density) { 40.dp.toPx() }
-                                val totalItemHeight = itemHeight + itemSpacing
-                                val paddingTop = with(density) { 16.dp.toPx() }
+                                    val listState = rememberLazyListState()
+                                    val density = LocalDensity.current
+                                    val itemSpacing = with(density) { 10.dp.toPx() }
+                                    val itemHeight = with(density) { 40.dp.toPx() }
+                                    val totalItemHeight = itemHeight + itemSpacing
+                                    val paddingTop = with(density) { 16.dp.toPx() }
 
-                                LaunchedEffect(currentIndex) {
-                                    listState.animateScrollToItem(
-                                        index = maxOf(0, currentIndex - 1),
-                                        scrollOffset = -((listState.layoutInfo.viewportSize.height / 2) - (2 * totalItemHeight + itemHeight / 2)).toInt()
-                                    )
-                                }
+                                    LaunchedEffect(currentIndex) {
+                                        listState.animateScrollToItem(
+                                            index = maxOf(0, currentIndex - 1),
+                                            scrollOffset = -((listState.layoutInfo.viewportSize.height / 2) - (2 * totalItemHeight + itemHeight / 2)).toInt()
+                                        )
+                                    }
 
-                                LazyColumn(
-                                    modifier = Modifier.fillMaxSize().padding(end = 48.dp),
+                                    LazyColumn(
+                                        modifier = Modifier.fillMaxSize().padding(end = 48.dp),
                                         state = listState,
-                                        horizontalAlignment = Alignment.End,
+                                        horizontalAlignment = Alignment.Start,
                                         verticalArrangement = Arrangement.spacedBy(10.dp),
                                         contentPadding = PaddingValues(vertical = 16.dp)
                                     ) {
                                         itemsIndexed(lyrics) { index, line ->
                                             val isCurrent = index == currentIndex
                                             val isNext = index == currentIndex + 1
+                                            val isPrev = index == currentIndex - 1
                                             val alpha = if (isCurrent) 1f else 0.5f
                                             val fontSize = if (isCurrent) 32.sp else if (isNext) 30.sp else 22.sp
+                                            val leadSpace = if (isPrev || isCurrent) "    " else ""
 
-                                            Box {
-                                                if (isCurrent) {
+                                            Row(
+                                                modifier = Modifier.fillMaxWidth(),
+                                                horizontalArrangement = if (isPrev || isCurrent) Arrangement.Start else Arrangement.End
+                                            ) {
+                                                val displayText = if (isCurrent) line.text.ifEmpty { " " }.let { if (line.text.isEmpty()) " " else line.text + " " } else line.text.ifEmpty { " " }
+                                                Box {
+                                                    if (isCurrent) {
+                                                        Text(
+                                                            text = "$leadSpace$displayText",
+                                                            color = Color.Black.copy(alpha = 0.8f),
+                                                            fontSize = fontSize,
+                                                            fontWeight = FontWeight.Bold,
+                                                            modifier = Modifier.offset(x = 1.5.dp, y = 1.5.dp)
+                                                        )
+                                                    }
                                                     Text(
-                                                        text = line.text.ifEmpty { " " },
-                                                        color = Color.Black.copy(alpha = 0.8f),
-                                                        fontSize = 32.sp,
-                                                        fontWeight = FontWeight.Bold,
-                                                        modifier = Modifier.offset(x = 1.5.dp, y = 1.5.dp)
+                                                        text = "$leadSpace$displayText",
+                                                        color = Color.White.copy(alpha = alpha),
+                                                        fontSize = fontSize,
+                                                        fontWeight = if (isCurrent) FontWeight.Bold else FontWeight.Normal
                                                     )
                                                 }
-                                                Text(
-                                                    text = if (isCurrent) (line.text + " ").ifEmpty { " " } else line.text.ifEmpty { " " },
-                                                    color = Color.White.copy(alpha = alpha),
-                                                    fontSize = fontSize,
-                                                    fontWeight = if (isCurrent) FontWeight.Bold else FontWeight.Normal,
-                                                    textAlign = TextAlign.End
-                                                )
                                             }
                                         }
                                     }
