@@ -1135,14 +1135,14 @@ private fun LyricPage(
                     BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
                         val configuration = LocalConfiguration.current
                         val isLandscape = configuration.orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE
-                        // 字号：参考网易云，当前行 20sp，非当前行 14sp，下一行 17sp
+                        // 字号：参考网易云，当前行 22sp(+2)，非当前行 14sp，下一行 20sp(+3)
                         val currentLineFontSize = if (isLandscape) {
-                            if (isExpanded) 36.sp else 28.sp
-                        } else 20.sp
+                            if (isExpanded) 38.sp else 30.sp
+                        } else 22.sp
                         val otherLineFontSize = if (isLandscape) 22.sp else 14.sp
                         val nextLineFontSize = if (isLandscape) {
-                            if (isExpanded) 32.sp else 24.sp
-                        } else 17.sp
+                            if (isExpanded) 35.sp else 27.sp
+                        } else 20.sp
                         val horizontalPadding = if (isExpanded) 48.dp else if (isLandscape) 40.dp else 24.dp
                         val boxHeightPx = with(LocalDensity.current) { maxHeight.toPx() }
                         val boxHeightDp = maxHeight
