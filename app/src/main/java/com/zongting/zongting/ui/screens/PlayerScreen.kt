@@ -1128,8 +1128,12 @@ private fun LyricPage(
                     val lines = lyricState.lyrics
                     val position = playbackState.position
 
-                    // 实时计算当前行，保证 position 变化时立即更新高亮
-                    val currentLineIndex = lines.indices.lastOrNull { lines[it].timestamp <= position } ?: 0
+                    // 渐变遮罩只依赖 currentLineIndex，避免每秒 recomposition
+                    val currentLineIndex by remember {
+                        derivedStateOf {
+                            lines.indices.lastOrNull { lines[it].timestamp <= position } ?: 0
+                        }
+                    }
 
                     BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
                         val configuration = LocalConfiguration.current
@@ -1162,7 +1166,7 @@ private fun LyricPage(
                         val rowOffset = if (isLandscape) 0 else if (isExpanded) 2 else 4
 
                         // 目标行始终为 currentLineIndex（切歌时自动更新）
-                        // 只监听 currentLineIndex，避免播放进度变化时频繁触发滚动
+                        // derivedStateOf 确保只在行索引变化时触发滚动
                         LaunchedEffect(currentLineIndex) {
                             if (lines.isNotEmpty() && currentLineIndex in lines.indices) {
                                 // debounce：只在前一个动画真正完成后才启动新的
@@ -1216,10 +1220,11 @@ private fun LyricPage(
                                 ) { idx, lyricLine ->
                                     val isCurrent = idx == currentLineIndex
                                     val isNext = idx == currentLineIndex + 1
+                                    // 复用同一个 label，derivedStateOf 确保只在行索引变化时触发动画重建
                                     val alpha by animateFloatAsState(
                                         targetValue = if (isCurrent) 1f else 0.45f,
                                         animationSpec = tween(300),
-                                        label = "lyricAlpha_$idx"
+                                        label = "lyricAlpha"
                                     )
                                     val textColor = if (isCurrent) Color.White else MaterialTheme.colorScheme.onSurface.copy(alpha = alpha)
                                     Box {
