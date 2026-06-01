@@ -1146,7 +1146,7 @@ private fun LyricPage(
                         val horizontalPadding = if (isExpanded) 48.dp else if (isLandscape) 40.dp else 24.dp
                         val boxHeightPx = with(LocalDensity.current) { maxHeight.toPx() }
                         val boxHeightDp = maxHeight
-                        // 滚动时当前行对齐屏幕 2/5 处（网易云风格）
+                        // 滚动时当前行对齐屏幕 40% 处
                         val scrollToPosition = boxHeightPx * 2 / 5f
                         val lineSpacing = if (isLandscape) 16.dp else 12.dp
                         val centerPadding = boxHeightDp / 2
@@ -1985,7 +1985,7 @@ private fun formatTime(ms: Long): String {
 }
 
 /**
- * 收藏图标：选中时白色描边 + AppColors.FavoriteActive 填充
+ * 收藏图标：用 Canvas 绘制实心心 + 白色描边，确保几何完全重合
  */
 @Composable
 private fun FavoriteIcon(
@@ -1994,16 +1994,35 @@ private fun FavoriteIcon(
     modifier: Modifier = Modifier,
     contentDescription: String? = null
 ) {
-    Icon(
-        imageVector = Icons.Filled.Favorite,
-        contentDescription = contentDescription,
-        tint = if (isFavorite) AppColors.FavoriteActive else Color.Transparent,
-        modifier = modifier
-    )
-    Icon(
-        imageVector = Icons.Outlined.FavoriteBorder,
-        contentDescription = null,
-        tint = Color.White,
-        modifier = modifier
-    )
+    val favoritePath = remember {
+        Path().apply {
+            // 爱心路径（左半，中心在0,0，尺寸约 24x24）
+            moveTo(0f, 3f)
+            cubicTo(-1f, -2f, -8f, -2f, -8f, 5f)
+            cubicTo(-8f, 10f, 0f, 15f, 0f, 15f)
+            cubicTo(0f, 15f, 8f, 10f, 8f, 5f)
+            cubicTo(8f, -2f, 1f, -2f, 0f, 3f)
+            close()
+        }
+    }
+
+    Canvas(modifier = modifier) {
+        val scale = size.minDimension / 24f
+        val filledColor = if (isFavorite) AppColors.FavoriteActive else Color.Transparent
+        val outlineColor = if (isFavorite) Color.White else Color.White.copy(alpha = 0.6f)
+        val strokeWidth = 1.5f * scale
+
+        // 先画绿色实心
+        drawPath(
+            path = favoritePath,
+            color = filledColor,
+            style = Fill
+        )
+        // 再画白色描边
+        drawPath(
+            path = favoritePath,
+            color = outlineColor,
+            style = Stroke(width = strokeWidth)
+        )
+    }
 }
