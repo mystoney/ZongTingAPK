@@ -1162,16 +1162,24 @@ private fun LyricPage(
                         val rowOffset = if (isLandscape) 0 else if (isExpanded) 2 else 4
 
                         // 目标行始终为 currentLineIndex（切歌时自动更新）
-                        // 使用 debounce 避免频繁触发动画导致的跳动
-                        LaunchedEffect(position, currentLineIndex) {
+                        // 注意：只监听 currentLineIndex，不监听 position，
+                        // position 变化会通过 recompose 更新 currentLineIndex，从而触发此 LaunchedEffect
+                        var lastScrolledIndex by remember { mutableIntStateOf(-1) }
+                        LaunchedEffect(currentLineIndex) {
                             if (lines.isNotEmpty() && currentLineIndex in lines.indices) {
-                                // debounce：只在前一个动画真正完成后才启动新的
-                                kotlinx.coroutines.delay(100)
-                                if (!lazyListState.isScrollInProgress) {
-                                    lazyListState.animateScrollToItem(
-                                        index = currentLineIndex,
-                                        scrollOffset = (verticalPaddingPx + (currentLineIndex - rowOffset) * lineHeightPx).toInt()
-                                    )
+                                // 只在目标行与上次滚动行不同（相差 > 1 行）时才触发滚动
+                                // 避免在同一行附近微小振荡时反复滚动
+                                val lineDelta = kotlin.math.abs(currentLineIndex - lastScrolledIndex)
+                                if (lineDelta > 1) {
+                                    kotlinx.coroutines.delay(80)
+                                    if (!lazyListState.isScrollInProgress) {
+                                        // scrollToItem：立即跳转（无动画），避免 animateScrollToItem 的 offset 震荡问题
+                                        lazyListState.scrollToItem(
+                                            index = currentLineIndex,
+                                            scrollOffset = (lineHeightPx * 1.5f).toInt() // 当前行距视口顶部 1.5 倍行高
+                                        )
+                                        lastScrolledIndex = currentLineIndex
+                                    }
                                 }
                             }
                         }
