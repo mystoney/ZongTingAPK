@@ -1985,7 +1985,10 @@ private fun formatTime(ms: Long): String {
 }
 
 /**
- * 收藏图标：用 Canvas 绘制实心心 + 白色描边，确保几何完全重合
+ * 收藏图标：
+ * - 未选中：白色描边空心心形（白色半透明 60%）
+ * - 选中：绿色实心心形（无描边，几何干净）
+ * 不需要两层叠加——绿色实心本身够醒目，叠加描边反而会有半像素偏移导致视觉错位
  */
 @Composable
 private fun FavoriteIcon(
@@ -1994,7 +1997,7 @@ private fun FavoriteIcon(
     modifier: Modifier = Modifier,
     contentDescription: String? = null
 ) {
-    val favoritePath = remember {
+    val heartPath = remember {
         Path().apply {
             // 爱心路径，中心在 (12, 12)，适配 24x24 坐标系
             moveTo(12f, 17f)
@@ -2009,21 +2012,15 @@ private fun FavoriteIcon(
     }
 
     Canvas(modifier = modifier) {
-        val filledColor = if (isFavorite) AppColors.FavoriteActive else Color.Transparent
-        val outlineColor = if (isFavorite) Color.White else Color.White.copy(alpha = 0.6f)
-        val strokeWidth = 1.5f
-
-        // 先画绿色实心
-        drawPath(
-            path = favoritePath,
-            color = filledColor,
-            style = Fill
-        )
-        // 再画白色描边
-        drawPath(
-            path = favoritePath,
-            color = outlineColor,
-            style = Stroke(width = strokeWidth)
-        )
+        when {
+            isFavorite -> {
+                // 选中：绿色实心，干净无描边（避免描边扩张导致视觉错位）
+                drawPath(path = heartPath, color = AppColors.FavoriteActive, style = Fill)
+            }
+            else -> {
+                // 未选中：白色描边空心
+                drawPath(path = heartPath, color = Color.White.copy(alpha = 0.6f), style = Stroke(width = 1.5f))
+            }
+        }
     }
 }
