@@ -1228,11 +1228,11 @@ private fun LyricPage(
                                 ) { idx, lyricLine ->
                                     val isCurrent = idx == currentLineIndex
                                     val isNext = idx == currentLineIndex + 1
-                                    // 复用同一个 label，derivedStateOf 确保只在行索引变化时触发动画重建
+                                    // 每个 item 用独立 label，避免所有歌词共享同一个动画状态导致高亮混乱
                                     val alpha by animateFloatAsState(
                                         targetValue = if (isCurrent) 1f else 0.45f,
                                         animationSpec = tween(300),
-                                        label = "lyricAlpha"
+                                        label = "lyricAlpha_$idx"
                                     )
                                     val textColor = if (isCurrent) Color.White else MaterialTheme.colorScheme.onSurface.copy(alpha = alpha)
                                     Box {
