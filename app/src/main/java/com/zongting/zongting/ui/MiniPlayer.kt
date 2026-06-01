@@ -221,35 +221,20 @@ private fun MiniFavoriteIcon(
     tint: Color,
     modifier: Modifier = Modifier
 ) {
-    val favoritePath = remember {
-        Path().apply {
-            // 爱心路径（左半，中心在0,0，尺寸约 24x24）
-            moveTo(0f, 3f)
-            cubicTo(-1f, -2f, -8f, -2f, -8f, 5f)
-            cubicTo(-8f, 10f, 0f, 15f, 0f, 15f)
-            cubicTo(0f, 15f, 8f, 10f, 8f, 5f)
-            cubicTo(8f, -2f, 1f, -2f, 0f, 3f)
-            close()
-        }
-    }
-
-    Canvas(modifier = modifier) {
-        val scale = size.minDimension / 24f
-        val filledColor = if (isFavorite) AppColors.FavoriteActive else Color.Transparent
-        val outlineColor = if (isFavorite) Color.White else Color.White.copy(alpha = 0.6f)
-        val strokeWidth = 1.5f * scale
-
-        // 先画绿色实心
-        drawPath(
-            path = favoritePath,
-            color = filledColor,
-            style = Fill
-        )
-        // 再画白色描边
-        drawPath(
-            path = favoritePath,
-            color = outlineColor,
-            style = Stroke(width = strokeWidth)
+    // 白色空心轮廓始终在底层
+    Icon(
+        imageVector = Icons.Outlined.FavoriteBorder,
+        contentDescription = null,
+        tint = Color.White,
+        modifier = modifier
+    )
+    // 绿色实心在心形选中时渲染在最上层
+    if (isFavorite) {
+        Icon(
+            imageVector = Icons.Filled.Favorite,
+            contentDescription = "收藏",
+            tint = AppColors.FavoriteActive,
+            modifier = modifier
         )
     }
 }
