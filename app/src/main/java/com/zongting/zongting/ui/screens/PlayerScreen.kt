@@ -2228,13 +2228,14 @@ fun PlayerScreenPADLandscape(
                                             val isCurrent = index == currentIndex
                                             val isNext = index == currentIndex + 1
                                             val isPrev = index == currentIndex - 1
+                                            val isPlayed = index < currentIndex - 1  // 播放过的
                                             val alpha = if (isCurrent) 1f else 0.5f
                                             val fontSize = if (isCurrent) 32.sp else if (isNext) 30.sp else 22.sp
-                                            val leadSpace = if (isNext) "  " else ""
+                                            val leadSpace = if (isCurrent) "" else if (isNext) "  " else "    "
 
                                             Row(
                                                 modifier = Modifier.fillMaxWidth(),
-                                                horizontalArrangement = if (isPrev || isCurrent) Arrangement.Start else Arrangement.End
+                                                horizontalArrangement = if (isPlayed) Arrangement.End else Arrangement.Start
                                             ) {
                                                 val displayText = if (isCurrent) line.text.ifEmpty { " " }.let { if (line.text.isEmpty()) " " else line.text + " " } else line.text.ifEmpty { " " }
                                                 Box {
