@@ -1135,46 +1135,30 @@ private fun LyricPage(
                     BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
                         val configuration = LocalConfiguration.current
                         val isLandscape = configuration.orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE
+                        // 字号：参考网易云，当前行 20sp，非当前行 14sp，下一行 17sp
                         val currentLineFontSize = if (isLandscape) {
-                            if (isExpanded) 50.sp else 36.sp
-                        } else 24.sp
-                        val otherLineFontSize = if (isLandscape) 28.sp else 15.sp
-                        val nextLineFontSize = if (isLandscape) {
-                            if (isExpanded) 44.sp else 32.sp
+                            if (isExpanded) 36.sp else 28.sp
                         } else 20.sp
-                        val lineHeightDp = if (isLandscape) 40.dp else 26.dp
+                        val otherLineFontSize = if (isLandscape) 22.sp else 14.sp
+                        val nextLineFontSize = if (isLandscape) {
+                            if (isExpanded) 32.sp else 24.sp
+                        } else 17.sp
                         val horizontalPadding = if (isExpanded) 48.dp else if (isLandscape) 40.dp else 24.dp
                         val boxHeightPx = with(LocalDensity.current) { maxHeight.toPx() }
-                        // 固定行策略：当前播放行始终对齐固定行位置，不随 currentLineIndex 变化而飘移
-                        // 竖屏：第2行 | 横屏：第1行（顶部）
-                        val rowOffset = if (isLandscape) 0 else 2
-                        // 统一行距44dp，与滚动计算 lineHeightPx 一致
-                        val lineHeightPx = with(LocalDensity.current) { lineHeightDp.toPx() }
-                        // 顶部/底部 padding = rowOffset * lineHeightDp，确保：
-                        // 1. 前 rowOffset 行歌词显示在顶部渐变遮罩下方
-                        // 2. 后 rowOffset 行歌词显示在底部渐变遮罩上方
-                        val lyricContentPadding = PaddingValues(vertical = lineHeightDp * rowOffset)
+                        val boxHeightDp = maxHeight
+                        // 滚动时当前行对齐屏幕 1/3 处（网易云风格：上方约 4-5 行，下方约 5-6 行）
+                        val scrollToPosition = boxHeightPx / 3f
+                        val lineSpacing = if (isLandscape) 16.dp else 12.dp
+                        val centerPadding = boxHeightDp / 2
 
                         // 渐变叠加层已移除
                         var lastScrolledIndex by remember { mutableIntStateOf(-1) }
                         LaunchedEffect(currentLineIndex, lazyListState) {
                             if (lines.isNotEmpty() && currentLineIndex in lines.indices) {
                                 if (lastScrolledIndex == currentLineIndex) return@LaunchedEffect
-                                // 固定行策略：当前行内容顶部 = rowOffset * lineHeightPx（始终不变）
-                                // scrollOffset = boxHeightPx/2 - rowOffset * lineHeightPx
-                                // 推导：
-                                //   item i 的内容顶部 = scrollOffset + i * lineHeightPx（contentPadding 之后的起点）
-                                //   固定行位置：scrollOffset + rowOffset * lineHeightPx = boxHeightPx/2
-                                //   → scrollOffset = boxHeightPx/2 - rowOffset * lineHeightPx
-                                // 当 currentLineIndex < rowOffset 时，让内容从开头自然显示（前几行在顶部渐变下方）
-                                val rawScrollOffset = if (currentLineIndex < rowOffset) {
-                                    0 // scrollToItem(index, 0) 让 item index 的顶部对齐内容起点
-                                } else {
-                                    (boxHeightPx / 2f - rowOffset * lineHeightPx).toInt().coerceAtLeast(0)
-                                }
                                 lazyListState.scrollToItem(
                                     index = currentLineIndex,
-                                    scrollOffset = rawScrollOffset
+                                    scrollOffset = scrollToPosition.toInt()
                                 )
                                 lastScrolledIndex = currentLineIndex
                             }
@@ -1196,8 +1180,8 @@ private fun LyricPage(
                                     .fillMaxSize()
                                     .padding(horizontal = horizontalPadding),
                                 horizontalAlignment = Alignment.Start,
-                                verticalArrangement = Arrangement.spacedBy(0.dp),
-                                contentPadding = lyricContentPadding
+                                verticalArrangement = Arrangement.spacedBy(lineSpacing),
+                                contentPadding = PaddingValues(vertical = centerPadding)
                             ) {
                                 itemsIndexed(
                                     items = lines,
@@ -1212,7 +1196,8 @@ private fun LyricPage(
                                         label = "lyricAlpha_$idx"
                                     )
                                     val textColor = if (isCurrent) Color.White else MaterialTheme.colorScheme.onSurface.copy(alpha = alpha)
-                                    Box(modifier = Modifier.height(lineHeightDp).fillMaxWidth()) {
+                                    // 不再用固定高度 Box，让文字自然占据高度（参考网易云）
+                                    Box(modifier = Modifier.fillMaxWidth()) {
                                         // 阴影层（黑色描边）
                                         if (isCurrent) {
                                             Text(
