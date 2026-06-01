@@ -1147,16 +1147,11 @@ private fun LyricPage(
                         val boxHeightPx = with(LocalDensity.current) { maxHeight.toPx() }
                         val lineHeightPx = with(LocalDensity.current) { lineHeightDp.toPx() }
                         val lineHeight3xPx = lineHeightPx * 3f
+                        // 固定行策略：当前播放行始终对齐固定行位置，不随 currentLineIndex 变化而飘移
+                        // PAD 竖屏：第3行 | 手机竖屏：第5行 | 横屏：第1行（顶部）
+                        val rowOffset = if (isLandscape) 0 else if (isExpanded) 3 else 5
 
-                        // 计算当前行在 LazyColumn 视口中的 Y 中心坐标
-                        // 滚动时 firstVisibleItemIndex / firstVisibleItemScrollOffset 变化，触发 recomposition
-                        val firstVisibleIdx = lazyListState.firstVisibleItemIndex
-                        val firstVisibleOffset = lazyListState.firstVisibleItemScrollOffset
-                        // contentPadding=0，内容区从 scrollOffset 位置开始在视口中显示
-                        // 当前行在视口中的实际 Y 中心 = scrollOffset + i * lineHeightPx + lineHeightPx/2
-                        val currentLineCenterY = firstVisibleOffset +
-                            currentLineIndex * lineHeightPx +
-                            lineHeightPx / 2f
+                        // 渐变叠加层：绝对定位于当前行中心线，上下各 1.5 倍行高
 
                         // 目标行始终为 currentLineIndex（切歌时自动更新）
                         // 注意：只监听 currentLineIndex，不监听 position，
@@ -1165,15 +1160,15 @@ private fun LyricPage(
                         LaunchedEffect(currentLineIndex, lazyListState) {
                             if (lines.isNotEmpty() && currentLineIndex in lines.indices) {
                                 if (lastScrolledIndex == currentLineIndex) return@LaunchedEffect
-                                // 居中策略：当前行中心对齐视口垂直中心
-                                // contentPadding=0，内容区从 scrollOffset 开始在视口中显示
-                                // item i 的内容顶部 = scrollOffset + i * lineHeightPx
-                                // 居中条件：scrollOffset + i*lineHeightPx + lineHeightPx/2 = boxHeightPx/2
-                                // → scrollOffset = boxHeightPx/2 - i*lineHeightPx - lineHeightPx/2
-                                // 注意：scrollOffset 必须 >= 0，否则内容区起点在视口上方（无效）
-                                // 当计算值为负时，说明当前行本身就在视口上半部分，scrollOffset=0 即可（当前行贴近顶部）
-                                val rawScrollOffset = (boxHeightPx / 2f - currentLineIndex * lineHeightPx - lineHeightPx / 2f)
-                                val targetScrollOffset = maxOf(0f, rawScrollOffset).toInt()
+                                // 固定行策略：当前行内容顶部 = rowOffset * lineHeightPx（始终不变）
+                                // contentPadding=0，scrollOffset 直接决定 item 0 的内容顶部位置
+                                // scrollOffset = rowOffset * lineHeightPx - (boxHeightPx - lineHeightPx) / 2
+                                // 推导：
+                                //   item i 的内容顶部 = scrollOffset + i * lineHeightPx
+                                //   固定行位置：scrollOffset + rowOffset * lineHeightPx = boxHeightPx/2
+                                //   → scrollOffset = boxHeightPx/2 - rowOffset * lineHeightPx
+                                val rawScrollOffset = boxHeightPx / 2f - rowOffset * lineHeightPx
+                                val targetScrollOffset = maxOf(0, rawScrollOffset.toInt())
                                 lazyListState.scrollToItem(
                                     index = currentLineIndex,
                                     scrollOffset = targetScrollOffset
@@ -1195,6 +1190,9 @@ private fun LyricPage(
                             modifier = Modifier.fillMaxSize()
                         ) {
                             // 单一垂直渐变背景：定位于当前行中心线，上下各 1.5x 行高（在歌词之后）
+                            // 当前行在视口中的内容顶部 = 固定行 * lineHeightPx
+                            // 当前行在视口中的内容中心 = 固定行 * lineHeightPx + lineHeightPx/2
+                            val currentLineCenterY = rowOffset * lineHeightPx + lineHeightPx / 2f
                             // 上下限 clamp 防止 offset 越界
                             val gradientTopY = (currentLineCenterY - lineHeight3xPx / 2f).coerceIn(0f, boxHeightPx - lineHeight3xPx)
                             val gradientHeight = lineHeight3xPx.coerceAtMost(boxHeightPx)
