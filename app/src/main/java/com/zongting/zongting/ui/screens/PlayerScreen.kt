@@ -2185,18 +2185,25 @@ fun PlayerScreenPADLandscape(
                                         Text("纯音乐，欣赏中...", color = Color.White.copy(alpha = 0.4f), style = MaterialTheme.typography.bodyLarge)
                                     }
                                 } else {
-                                    val currentIndex = lyrics.indexOfLast { it.timestamp <= playbackState.position }.coerceAtLeast(0)
-                                    val listState = rememberLazyListState()
+                                    val currentIndex = lyrics.indexOfLast { it.timestamp <= playbackState.position }
+                                        .coerceAtLeast(0)
 
-                                    LaunchedEffect(currentIndex) {
-                                        listState.animateScrollToItem(
-                                            index = maxOf(0, currentIndex - 1),
-                                            scrollOffset = -(listState.layoutInfo.viewportSize.height / 2 - 48).toInt()
-                                        )
-                                    }
+                                val listState = rememberLazyListState()
+                                val density = LocalDensity.current
+                                val itemSpacing = with(density) { 10.dp.toPx() }
+                                val itemHeight = with(density) { 36.dp.toPx() }
+                                val totalItemHeight = itemHeight + itemSpacing
+                                val paddingTop = with(density) { 16.dp.toPx() }
 
-                                    LazyColumn(
-                                        modifier = Modifier.fillMaxSize().padding(end = 48.dp),
+                                LaunchedEffect(currentIndex) {
+                                    listState.animateScrollToItem(
+                                        index = maxOf(0, currentIndex - 1),
+                                        scrollOffset = -((listState.layoutInfo.viewportSize.height / 2) - (2 * totalItemHeight + itemHeight / 2)).toInt()
+                                    )
+                                }
+
+                                LazyColumn(
+                                    modifier = Modifier.fillMaxSize().padding(end = 48.dp),
                                         state = listState,
                                         horizontalAlignment = Alignment.End,
                                         verticalArrangement = Arrangement.spacedBy(10.dp),
