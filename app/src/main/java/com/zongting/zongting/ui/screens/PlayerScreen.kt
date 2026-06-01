@@ -1999,44 +1999,35 @@ private fun FavoriteIcon(
     modifier: Modifier = Modifier,
     contentDescription: String? = null
 ) {
-    val heartPath = remember {
+    val favoritePath = remember {
         Path().apply {
-            // 爱心路径，24x24 坐标系
-            moveTo(12f, 19f)
-            cubicTo(12f, 19f, 4f, 13.5f, 4f, 8.5f)
-            cubicTo(4f, 5.5f, 6.5f, 3f, 9.5f, 3f)
-            cubicTo(11f, 3f, 12f, 4f, 12f, 4f)
-            cubicTo(12f, 4f, 13f, 3f, 14.5f, 3f)
-            cubicTo(17.5f, 3f, 20f, 5.5f, 20f, 8.5f)
-            cubicTo(20f, 13.5f, 12f, 19f, 12f, 19f)
+            // 爱心路径（左半，中心在0,0，尺寸约 24x24）
+            moveTo(0f, 3f)
+            cubicTo(-1f, -2f, -8f, -2f, -8f, 5f)
+            cubicTo(-8f, 10f, 0f, 15f, 0f, 15f)
+            cubicTo(0f, 15f, 8f, 10f, 8f, 5f)
+            cubicTo(8f, -2f, 1f, -2f, 0f, 3f)
             close()
         }
     }
 
     Canvas(modifier = modifier) {
         val scale = size.minDimension / 24f
+        val filledColor = if (isFavorite) AppColors.FavoriteActive else Color.Transparent
+        val outlineColor = if (isFavorite) Color.White else Color.White.copy(alpha = 0.6f)
         val strokeWidth = 1.5f * scale
 
-        if (isFavorite) {
-            // 选中：绿色实心（先画）
-            drawPath(
-                path = heartPath,
-                color = AppColors.FavoriteActive,
-                style = Fill
-            )
-            // 白色描边叠加（同一 path，无几何错位）
-            drawPath(
-                path = heartPath,
-                color = Color.White,
-                style = Stroke(width = strokeWidth)
-            )
-        } else {
-            // 未选中：白色描边空心
-            drawPath(
-                path = heartPath,
-                color = Color.White.copy(alpha = 0.6f),
-                style = Stroke(width = strokeWidth)
-            )
-        }
+        // 先画绿色实心
+        drawPath(
+            path = favoritePath,
+            color = filledColor,
+            style = Fill
+        )
+        // 再画白色描边
+        drawPath(
+            path = favoritePath,
+            color = outlineColor,
+            style = Stroke(width = strokeWidth)
+        )
     }
 }
