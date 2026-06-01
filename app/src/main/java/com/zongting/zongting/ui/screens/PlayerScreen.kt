@@ -1997,12 +1997,16 @@ private fun FavoriteIcon(
     modifier: Modifier = Modifier,
     contentDescription: String? = null
 ) {
-    Icon(
-        imageVector = Icons.Filled.Favorite,
-        contentDescription = contentDescription,
-        tint = if (isFavorite) AppColors.FavoriteActive else Color.Transparent,
-        modifier = modifier
-    )
+    // 下层：绿色实心（始终画，选中时显示，未选中时隐藏）
+    if (isFavorite) {
+        Icon(
+            imageVector = Icons.Filled.Favorite,
+            contentDescription = contentDescription,
+            tint = AppColors.FavoriteActive,
+            modifier = modifier
+        )
+    }
+    // 上层：白色空心（始终画，始终显示）
     Icon(
         imageVector = Icons.Outlined.FavoriteBorder,
         contentDescription = null,
