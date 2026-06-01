@@ -882,7 +882,11 @@ private fun LibrarySongRow(
                 )
             }
 
-            if (trailing != null) {
+            if (trailing != null && onFavoriteClick != null) {
+                IconButton(onClick = onFavoriteClick) {
+                    trailing()
+                }
+            } else if (trailing != null) {
                 trailing()
             } else if (onFavoriteClick != null) {
                 IconButton(onClick = onFavoriteClick) {

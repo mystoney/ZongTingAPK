@@ -160,9 +160,7 @@ fun SearchScreen(
                         }
                     }
                 ),
-                modifier = Modifier
-                    .weight(1f)
-                    .height(scaledChipHeight),
+                modifier = Modifier.weight(1f),
                 shape = RoundedCornerShape(scaledChipHeight.value.toInt().dp)
             )
             Spacer(modifier = Modifier.width(8.dp))
