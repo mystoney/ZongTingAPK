@@ -1166,18 +1166,24 @@ private fun LyricPage(
                         val rowOffset = if (isLandscape) 0 else if (isExpanded) 2 else 4
 
                         // 目标行始终为 currentLineIndex（切歌时自动更新）
-                        // derivedStateOf 确保只在行索引变化时触发滚动
+                        // 注意：不要在这里检查 isScrollInProgress，否则每次 currentLineIndex 变化
+                        // 都会因为上一个动画还在跑（300ms）而被跳过，导致歌词永远滚不动
                         LaunchedEffect(currentLineIndex) {
                             if (lines.isNotEmpty() && currentLineIndex in lines.indices) {
-                                // debounce：只在前一个动画真正完成后才启动新的
                                 kotlinx.coroutines.delay(100)
-                                if (!lazyListState.isScrollInProgress) {
-                                    lazyListState.animateScrollToItem(
-                                        index = currentLineIndex,
-                                        scrollOffset = (verticalPaddingPx + (currentLineIndex - rowOffset) * lineHeightPx).toInt()
-                                    )
-                                }
+                                lazyListState.animateScrollToItem(
+                                    index = currentLineIndex,
+                                    scrollOffset = (verticalPaddingPx + (currentLineIndex - rowOffset) * lineHeightPx).toInt()
+                                )
                             }
+                        }
+
+                        // 追踪用户是否在手动滚动列表，驱动 isUserScrolling 状态
+                        LaunchedEffect(lazyListState) {
+                            snapshotFlow { lazyListState.isScrollInProgress }
+                                .collect { scrolling ->
+                                    if (scrolling) isUserScrolling = true
+                                }
                         }
 
                         // 渐变叠加层：绝对定位于当前行中心线，上下各 1.5 倍行高
