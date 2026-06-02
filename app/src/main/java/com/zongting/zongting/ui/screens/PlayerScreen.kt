@@ -65,8 +65,11 @@ import com.zongting.zongting.player.SleepTimerManager
 import com.zongting.zongting.ui.LyricLine
 import com.zongting.zongting.ui.LyricState
 import com.zongting.zongting.ui.MainViewModel
-import com.zongting.zongting.ui.theme.AppColors
 import com.zongting.zongting.ui.PlaybackState
+import com.zongting.zongting.ui.FavoriteIcon
+import com.zongting.zongting.ui.PlayModeIcon
+import com.zongting.zongting.ui.PlayPauseIcon
+import com.zongting.zongting.ui.theme.AppColors
 import androidx.compose.material3.windowsizeclass.WindowSizeClass
 import androidx.compose.material3.windowsizeclass.WindowWidthSizeClass
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
@@ -147,7 +150,11 @@ fun PlayerScreen(
             onNext = { viewModel.playNext() },
             onSeek = { pos -> viewModel.seekTo(pos) },
             onDrag = { pos -> viewModel.updateProgress(pos, playbackState.duration) },
-            imageLoader = viewModel.cachedImageLoader
+            imageLoader = viewModel.cachedImageLoader,
+            onShowPlaylist = { },
+            onToggleSavePlaylist = { },
+            onSleepTimerClick = { },
+            onRingtoneCutterClick = { }
         )
         return
     }
@@ -449,17 +456,6 @@ private fun PlayerBottomBar(
     var localPlayMode by remember { mutableIntStateOf(playMode) }
     LaunchedEffect(playMode) { localPlayMode = playMode }
 
-    val playModeIcon = when (localPlayMode) {
-        1 -> Icons.Default.RepeatOne
-        2 -> Icons.Default.Shuffle
-        else -> Icons.Default.Repeat
-    }
-    val playModeDesc = when (localPlayMode) {
-        0 -> "顺序播放"
-        1 -> "单曲循环"
-        else -> "随机播放"
-    }
-
     Surface(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp),
@@ -493,11 +489,7 @@ private fun PlayerBottomBar(
                 }
 
                 FilledIconButton(onClick = onTogglePlay, modifier = Modifier.size(scaledFilledBtnSize), shape = CircleShape) {
-                    Icon(
-                        if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
-                        contentDescription = if (isPlaying) "暂停" else "播放",
-                        modifier = Modifier.size(scaledLargeIconSize)
-                    )
+                    PlayPauseIcon(isPlaying = isPlaying, modifier = Modifier.size(scaledLargeIconSize))
                 }
 
                 IconButton(onClick = onNext, modifier = Modifier.size(scaledBtnSize)) {
@@ -516,7 +508,7 @@ private fun PlayerBottomBar(
                     localPlayMode = (localPlayMode + 1) % 3
                     onTogglePlayMode()
                 }) {
-                    Icon(imageVector = playModeIcon, contentDescription = playModeDesc, modifier = Modifier.size(scaledSmallIconSize))
+                    PlayModeIcon(playMode = localPlayMode, modifier = Modifier.size(scaledSmallIconSize))
                 }
 
                 IconButton(onClick = { onShowPlaylist(true) }) {
@@ -657,9 +649,8 @@ private fun PlayerBottomBar(
                                     val rowScale = if (isExpandedRow) 1.3f else 1f
                                     val rowIconSize = (24.dp.value * rowScale).dp.coerceAtLeast(24.dp)
                                     IconButton(onClick = onTogglePlay) {
-                                        Icon(
-                                            imageVector = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
-                                            contentDescription = if (isPlaying) "暂停" else "播放",
+                                        PlayPauseIcon(
+                                            isPlaying = isPlaying,
                                             tint = MaterialTheme.colorScheme.primary,
                                             modifier = Modifier.size(rowIconSize)
                                         )
@@ -1815,17 +1806,7 @@ fun PlayerScreenLandscape(
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
                                     IconButton(onClick = onTogglePlayMode) {
-                                        val (icon, desc) = when (playMode) {
-                                            0 -> Icons.Default.Repeat to "列表循环"
-                                            1 -> Icons.Default.Repeat to "单曲循环"
-                                            else -> Icons.Default.Shuffle to "随机播放"
-                                        }
-                                        Icon(
-                                            imageVector = icon,
-                                            contentDescription = desc,
-                                            tint = Color.White.copy(alpha = 0.8f),
-                                            modifier = Modifier.size(btnSize)
-                                        )
+                                        PlayModeIcon(playMode = playMode, tint = Color.White.copy(alpha = 0.8f), modifier = Modifier.size(btnSize))
                                     }
 
                                     IconButton(onClick = onPrevious) {
@@ -1844,12 +1825,7 @@ fun PlayerScreenLandscape(
                                         ),
                                         modifier = Modifier.size(btnSize * 1.5f)
                                     ) {
-                                        Icon(
-                                            imageVector = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
-                                            contentDescription = if (isPlaying) "暂停" else "播放",
-                                            tint = Color.White,
-                                            modifier = Modifier.size(btnSize)
-                                        )
+                                        PlayPauseIcon(isPlaying = isPlaying, tint = Color.White, modifier = Modifier.size(btnSize))
                                     }
 
                                     IconButton(onClick = onNext) {
@@ -2040,7 +2016,11 @@ fun PlayerScreenPADLandscape(
     onNext: () -> Unit,
     onSeek: (Long) -> Unit,
     onDrag: (Long) -> Unit,
-    imageLoader: coil.ImageLoader
+    imageLoader: coil.ImageLoader,
+    onShowPlaylist: (Boolean) -> Unit = {},
+    onToggleSavePlaylist: () -> Unit = {},
+    onSleepTimerClick: () -> Unit = {},
+    onRingtoneCutterClick: () -> Unit = {}
 ) {
     val backgroundColor = Color(0xFF0D0D1A)
     val accentColor = AppColors.Accent
@@ -2329,39 +2309,34 @@ fun PlayerScreenPADLandscape(
                         colors = IconButtonDefaults.filledIconButtonColors(containerColor = accentColor),
                         modifier = Modifier.size(coreBtnSize * 1.7f)
                     ) {
-                        Icon(imageVector = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow, contentDescription = if (isPlaying) "暂停" else "播放", tint = Color.White, modifier = Modifier.size(coreBtnSize))
+                        PlayPauseIcon(isPlaying = isPlaying, tint = Color.White, modifier = Modifier.size(coreBtnSize))
                     }
                     // 下一首
                     IconButton(onClick = onNext, modifier = Modifier.size(coreBtnSize * 1.3f)) {
                         Icon(imageVector = Icons.Default.SkipNext, contentDescription = "下一首", tint = Color.White, modifier = Modifier.size(coreBtnSize))
                     }
                     // 播放列表
-                    IconButton(onClick = { /* 暂时不实现 */ }, modifier = Modifier.size(fnBtnSize * 1.4f)) {
+                    IconButton(onClick = { onShowPlaylist(true) }, modifier = Modifier.size(fnBtnSize * 1.4f)) {
                         Icon(imageVector = Icons.AutoMirrored.Filled.PlaylistPlay, contentDescription = "播放列表", tint = Color.White.copy(alpha = 0.8f), modifier = Modifier.size(fnBtnSize))
                     }
                     // 循环模式
                     IconButton(onClick = onTogglePlayMode, modifier = Modifier.size(fnBtnSize * 1.4f)) {
-                        val (icon, desc) = when (playMode) {
-                            0 -> Icons.Default.Repeat to "列表循环"
-                            1 -> Icons.Default.Repeat to "单曲循环"
-                            else -> Icons.Default.Shuffle to "随机播放"
-                        }
-                        Icon(imageVector = icon, contentDescription = desc, tint = Color.White.copy(alpha = 0.8f), modifier = Modifier.size(fnBtnSize))
+                        PlayModeIcon(playMode = playMode, tint = Color.White.copy(alpha = 0.8f), modifier = Modifier.size(fnBtnSize))
                     }
                     // 收藏
                     IconButton(onClick = onToggleFavorite, modifier = Modifier.size(fnBtnSize * 1.4f)) {
                         FavoriteIcon(isFavorite = isFavorite, tint = if (isFavorite) AppColors.FavoriteActive else Color.White.copy(alpha = 0.8f), contentDescription = "收藏", modifier = Modifier.size(fnBtnSize))
                     }
                     // 定时
-                    IconButton(onClick = { /* 暂时不实现 */ }, modifier = Modifier.size(fnBtnSize * 1.4f)) {
+                    IconButton(onClick = onSleepTimerClick, modifier = Modifier.size(fnBtnSize * 1.4f)) {
                         Icon(imageVector = Icons.Default.Timer, contentDescription = "定时", tint = Color.White.copy(alpha = 0.8f), modifier = Modifier.size(fnBtnSize))
                     }
                     // 铃声
-                    IconButton(onClick = { /* 暂时不实现 */ }, modifier = Modifier.size(fnBtnSize * 1.4f)) {
+                    IconButton(onClick = { onRingtoneCutterClick() }, modifier = Modifier.size(fnBtnSize * 1.4f)) {
                         Icon(imageVector = Icons.Default.Notifications, contentDescription = "铃声", tint = Color.White.copy(alpha = 0.8f), modifier = Modifier.size(fnBtnSize))
                     }
                     // 添加到播放列表
-                    IconButton(onClick = { /* 暂时不实现 */ }, modifier = Modifier.size(fnBtnSize * 1.4f)) {
+                    IconButton(onClick = onToggleSavePlaylist, modifier = Modifier.size(fnBtnSize * 1.4f)) {
                         Icon(imageVector = Icons.Default.PlaylistAdd, contentDescription = "添加", tint = Color.White.copy(alpha = 0.8f), modifier = Modifier.size(fnBtnSize))
                     }
                 }
@@ -2375,32 +2350,4 @@ private fun formatTime(ms: Long): String {
     val min = totalSec / 60
     val sec = totalSec % 60
     return "%d:%02d".format(min, sec)
-}
-
-/**
- * 收藏图标：选中时白色描边 + AppColors.FavoriteActive 填充
- */
-@Composable
-private fun FavoriteIcon(
-    isFavorite: Boolean,
-    tint: Color,
-    modifier: Modifier = Modifier,
-    contentDescription: String? = null
-) {
-    // 下层：绿色实心（始终画，选中时显示，未选中时隐藏）
-    if (isFavorite) {
-        Icon(
-            imageVector = Icons.Filled.Favorite,
-            contentDescription = contentDescription,
-            tint = AppColors.FavoriteActive,
-            modifier = modifier
-        )
-    }
-    // 上层：白色空心（始终画，始终显示）
-    Icon(
-        imageVector = Icons.Outlined.FavoriteBorder,
-        contentDescription = null,
-        tint = Color.White,
-        modifier = modifier
-    )
 }

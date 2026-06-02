@@ -6,15 +6,8 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Favorite
-import androidx.compose.material.icons.filled.Pause
-import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material.icons.filled.Repeat
-import androidx.compose.material.icons.filled.RepeatOne
-import androidx.compose.material.icons.filled.Shuffle
 import androidx.compose.material.icons.filled.SkipNext
 import androidx.compose.material.icons.filled.SkipPrevious
-import androidx.compose.material.icons.outlined.FavoriteBorder
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -32,6 +25,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.material3.windowsizeclass.WindowSizeClass
 import coil.compose.AsyncImage
 import com.zongting.zongting.data.model.Song
+import com.zongting.zongting.ui.FavoriteIcon
+import com.zongting.zongting.ui.PlayModeIcon
+import com.zongting.zongting.ui.PlayPauseIcon
 import com.zongting.zongting.ui.theme.AppColors
 
 @Composable
@@ -71,17 +67,6 @@ fun MiniPlayer(
     // 乐观更新：本地记住当前图标状态，点击立即切换，异步同步真实 playMode
     var localPlayMode by remember { mutableIntStateOf(playMode) }
     LaunchedEffect(playMode) { localPlayMode = playMode }
-
-    val playModeIcon = when (localPlayMode) {
-        1 -> Icons.Filled.RepeatOne
-        2 -> Icons.Filled.Shuffle
-        else -> Icons.Filled.Repeat
-    }
-    val playModeDesc = when (localPlayMode) {
-        0 -> "顺序播放"
-        1 -> "单曲循环"
-        else -> "随机播放"
-    }
 
     Box(
         modifier = modifier
@@ -149,7 +134,7 @@ fun MiniPlayer(
                     onClick = onToggleFavorite,
                     modifier = Modifier.size(buttonTouchTarget)
                 ) {
-                    MiniFavoriteIcon(
+                    FavoriteIcon(
                         isFavorite = isFavorite,
                         tint = if (isFavorite) AppColors.FavoriteActive else AppColors.FavoriteInactive,
                         modifier = Modifier.size(iconSize)
@@ -164,12 +149,7 @@ fun MiniPlayer(
                     },
                     modifier = Modifier.size(buttonTouchTarget)
                 ) {
-                    Icon(
-                        imageVector = playModeIcon,
-                        contentDescription = playModeDesc,
-                        tint = Color.White,
-                        modifier = Modifier.size(iconSize)
-                    )
+                    PlayModeIcon(playMode = localPlayMode, tint = Color.White, modifier = Modifier.size(iconSize))
                 }
 
                 // 上一首
@@ -190,12 +170,7 @@ fun MiniPlayer(
                     onClick = onPlayPause,
                     modifier = Modifier.size(playTouchTarget)
                 ) {
-                    Icon(
-                        if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
-                        contentDescription = if (isPlaying) "暂停" else "播放",
-                        tint = Color.White,
-                        modifier = Modifier.size(playIconSize)
-                    )
+                    PlayPauseIcon(isPlaying = isPlaying, tint = Color.White, modifier = Modifier.size(playIconSize))
                 }
 
                 // 下一首
@@ -213,28 +188,4 @@ fun MiniPlayer(
             }
         }
     }
-}
-
-@Composable
-private fun MiniFavoriteIcon(
-    isFavorite: Boolean,
-    tint: Color,
-    modifier: Modifier = Modifier
-) {
-    // 下层：绿色实心（始终画，选中时显示，未选中时隐藏）
-    if (isFavorite) {
-        Icon(
-            imageVector = Icons.Filled.Favorite,
-            contentDescription = "收藏",
-            tint = AppColors.FavoriteActive,
-            modifier = modifier
-        )
-    }
-    // 上层：白色空心（始终画，始终显示）
-    Icon(
-        imageVector = Icons.Outlined.FavoriteBorder,
-        contentDescription = null,
-        tint = Color.White,
-        modifier = modifier
-    )
 }
