@@ -2348,7 +2348,7 @@ fun PlayerScreenPADLandscape(
                     )
                     // 播放列表
                     PlaylistIcon(
-                        onClick = { onShowPlaylist(true) },
+                        onClick = { showPlaylistSheetLocal = true },
                         modifier = Modifier.size(fnBtnSize * 1.4f),
                         tint = Color.White.copy(alpha = 0.8f)
                     )
@@ -2363,24 +2363,169 @@ fun PlayerScreenPADLandscape(
                     // 定时
                     TimerIcon(
                         isActive = false,
-                        onClick = onSleepTimerClick,
+                        onClick = { showSleepTimerDialogLocal = true },
                         modifier = Modifier.size(fnBtnSize * 1.4f),
                         tint = Color.White.copy(alpha = 0.8f)
                     )
                     // 铃声
                     RingtoneIcon(
-                        onClick = onRingtoneCutterClick,
+                        onClick = { showRingtoneCutterLocal = true },
                         modifier = Modifier.size(fnBtnSize * 1.4f),
                         tint = Color.White.copy(alpha = 0.8f)
                     )
                     // 添加到播放列表
                     AddToPlaylistIcon(
-                        onClick = onToggleSavePlaylist,
+                        onClick = { showSavePlaylistDialogLocal = true },
                         modifier = Modifier.size(fnBtnSize * 1.4f),
                         tint = Color.White.copy(alpha = 0.8f)
                     )
                 }
             }
+        }
+
+        // 定时关闭弹窗（铃声截取界面时隐藏）
+        if (showSleepTimerDialogLocal && !showRingtoneCutterLocal) {
+            SleepTimerDialog(
+                isActive = isTimerActive,
+                remainingSeconds = timerRemaining,
+                onStartTimer = { mins ->
+                    SleepTimerManager.start(context, mins)
+                },
+                onCancelTimer = {
+                    SleepTimerManager.cancelWithNotification(context)
+                },
+                onDismiss = { showSleepTimerDialogLocal = false }
+            )
+        }
+
+        // 添加到歌单弹窗（铃声截取界面时隐藏）
+        if (showSavePlaylistDialogLocal && !showRingtoneCutterLocal) {
+            SavePlaylistDialog(
+                songCount = 1,
+                playlists = userPlaylists,
+                onSelectPlaylist = { playlistId ->
+                    currentSong?.let { song -> onAddSongToPlaylist(playlistId, song) {} }
+                },
+                onCreatePlaylist = { name ->
+                    currentSong?.let { song ->
+                        onCreatePlaylistAndAddSong(name, song)
+                    }
+                },
+                onDismiss = { showSavePlaylistDialogLocal = false }
+            )
+        }
+
+        // 播放列表底部弹出面板
+        if (showPlaylistSheetLocal) {
+            ModalBottomSheet(
+                onDismissRequest = { showPlaylistSheetLocal = false },
+                sheetState = rememberModalBottomSheetState(),
+                containerColor = Color(0xF20B1E10)
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(Color(0xF20B1E10))
+                        .padding(horizontal = 16.dp)
+                        .padding(bottom = 32.dp)
+                ) {
+                    Text(
+                        text = "当前播放列表 (${currentPlaylist.size}首)",
+                        style = MaterialTheme.typography.titleLarge,
+                        modifier = Modifier.padding(bottom = 16.dp)
+                    )
+                    if (currentPlaylist.isEmpty()) {
+                        Text(
+                            text = "播放列表为空",
+                            style = MaterialTheme.typography.bodyLarge,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(vertical = 32.dp)
+                        )
+                    } else {
+                        LazyColumn(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .background(Color(0xF20B1E10))
+                                .heightIn(max = 400.dp),
+                            state = playlistListState,
+                        ) {
+                            itemsIndexed(currentPlaylist) { index, song ->
+                                val isCurrentSong = song.rid == currentSong?.rid
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(vertical = 8.dp)
+                                        .combinedClickable(
+                                            onClick = { onPlaySong(song) },
+                                            onDoubleClick = { onPlaySong(song) }
+                                        ),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text(
+                                        text = "${index + 1}",
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        color = if (isCurrentSong) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                                        modifier = Modifier.width(32.dp)
+                                    )
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text(
+                                            text = song.name,
+                                            style = MaterialTheme.typography.bodyLarge,
+                                            color = if (isCurrentSong) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
+                                            fontWeight = if (isCurrentSong) FontWeight.Bold else FontWeight.Normal,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis
+                                        )
+                                        Text(
+                                            text = song.artist,
+                                            style = MaterialTheme.typography.bodyMedium,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis
+                                        )
+                                    }
+                                    if (isCurrentSong) {
+                                        val rowIconSize = (24.dp.value * 1.3f).dp.coerceAtLeast(24.dp)
+                                        IconButton(onClick = onTogglePlay) {
+                                            PlayPauseIcon(
+                                                isPlaying = isPlaying,
+                                                tint = MaterialTheme.colorScheme.primary,
+                                                modifier = Modifier.size(rowIconSize)
+                                            )
+                                        }
+                                    }
+                                }
+                                if (index < currentPlaylist.lastIndex) {
+                                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // 铃声截取界面（全屏覆盖）
+        if (showRingtoneCutterLocal) {
+            val lyrics = (lyricState as? LyricState.Success)?.lyrics ?: emptyList()
+            val durationMs = playbackState.duration.coerceAtLeast(0L)
+
+            val ringtoneViewModel: com.zongting.zongting.ringtone.RingtoneCutterViewModel =
+                androidx.hilt.navigation.compose.hiltViewModel()
+            LaunchedEffect(currentSong, durationMs, lyrics) {
+                if (durationMs > 0) {
+                    ringtoneViewModel.initialize(currentSong, durationMs, lyrics)
+                }
+            }
+
+            RingtoneCutterScreen(
+                onBackClick = {
+                    ringtoneViewModel.stopPreview()
+                    showRingtoneCutterLocal = false
+                },
+                viewModel = ringtoneViewModel,
+                lyrics = lyrics
+            )
         }
     }
 }
