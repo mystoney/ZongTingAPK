@@ -15,16 +15,12 @@ import androidx.compose.material.icons.filled.Shuffle
 import androidx.compose.material.icons.filled.SkipNext
 import androidx.compose.material.icons.filled.SkipPrevious
 import androidx.compose.material.icons.outlined.FavoriteBorder
-import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.Box
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.Path
-import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.ui.graphics.StrokeCap
 import com.zongting.zongting.ui.theme.AppColors
 
 // ===== 播放 / 暂停 =====
@@ -128,46 +124,22 @@ fun FavoriteIcon(
     contentDescription: String? = null
 ) {
     Box(modifier = modifier) {
-        Canvas(modifier = Modifier.matchParentSize()) {
-            val path = Path().apply {
-                val w = size.width
-                val h = size.height
-                val bowWidth = w * 0.5f
-                val bowHeight = h * 0.38f
-                val leftX = (w - bowWidth) / 2
-                val rightX = leftX + bowWidth
-                val topY = h * 0.28f
-                val bottomY = h * 0.95f
-                moveTo(w / 2, topY)
-                cubicTo(
-                    leftX - bowWidth * 0.1f, topY - bowHeight * 0.3f,
-                    leftX - bowWidth * 0.2f, topY + bowHeight * 0.6f,
-                    leftX, topY + bowHeight * 0.8f
-                )
-                cubicTo(
-                    leftX, topY + bowHeight * 1.3f,
-                    w / 2, bottomY,
-                    w / 2, bottomY
-                )
-                cubicTo(
-                    w / 2, bottomY,
-                    rightX, topY + bowHeight * 1.3f,
-                    rightX, topY + bowHeight * 0.8f
-                )
-                cubicTo(
-                    rightX + bowWidth * 0.2f, topY + bowHeight * 0.6f,
-                    rightX + bowWidth * 0.1f, topY - bowHeight * 0.3f,
-                    w / 2, topY
-                )
-                close()
-            }
-            // 绿色实心（仅收藏时）
-            if (isFavorite) {
-                drawPath(path, AppColors.FavoriteActive)
-            }
-            // 白色描边（永远显示）
-            drawPath(path, tint, style = Stroke(width = size.width * 0.35f, cap = StrokeCap.Round))
+        // 下层：绿色实心（仅收藏时）
+        if (isFavorite) {
+            Icon(
+                imageVector = Icons.Filled.Favorite,
+                contentDescription = contentDescription,
+                tint = AppColors.FavoriteActive,
+                modifier = Modifier.matchParentSize()
+            )
         }
+        // 上层：白色空心描边（永远显示）
+        Icon(
+            imageVector = Icons.Outlined.FavoriteBorder,
+            contentDescription = contentDescription,
+            tint = tint,
+            modifier = Modifier.matchParentSize()
+        )
     }
 }
 
