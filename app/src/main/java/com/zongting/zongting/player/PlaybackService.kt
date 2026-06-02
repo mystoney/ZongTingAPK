@@ -116,28 +116,23 @@ object PlayerManager {
                 onPlayingChanged?.invoke(playing)
                 // 管理最近播放10秒计时器
                 if (playing) {
-                    // 开始播放：启动/恢复计时器
                     val song = currentSong
-                    if (song != null && !recentTimerFired) {
-                        if (recentTimerSong?.rid != song.rid) {
-                            // 换了新歌，重置计时器
-                            recentTimerJob?.cancel()
-                            recentTimerSong = song
-                            recentTimerStartMs = System.currentTimeMillis()
-                            recentTimerFired = false
-                            recentTimerJob = scope.launch {
-                                delay(10_000L)  // 等待10秒
-                                val current = currentSong
-                                if (current?.rid == song.rid && !recentTimerFired) {
-                                    recentTimerFired = true
-                                    onSongBecameRecent?.invoke(song)
-                                }
+                    // 没有活动计时器时启动（切歌后第一次播放 / 从暂停恢复）
+                    // 注意：onMediaItemTransition 会把 recentTimerJob 置 null，所以这里必须用"job 为空"作为启动条件
+                    if (song != null && !recentTimerFired && recentTimerJob == null) {
+                        recentTimerSong = song
+                        recentTimerStartMs = System.currentTimeMillis()
+                        recentTimerJob = scope.launch {
+                            delay(10_000L)  // 等待10秒
+                            val current = currentSong
+                            if (current?.rid == song.rid && !recentTimerFired) {
+                                recentTimerFired = true
+                                onSongBecameRecent?.invoke(song)
                             }
                         }
-                        // else: 同一首歌恢复播放，计时器继续
                     }
                 } else {
-                    // 暂停：取消计时器（暂停期间不计时）
+                    // 暂停：取消计时器（暂停期间不计时），但保留 recentTimerSong 和 recentTimerFired 状态以便恢复
                     recentTimerJob?.cancel()
                     recentTimerJob = null
                 }

@@ -13,6 +13,7 @@ import com.zongting.zongting.data.repository.FavoriteRepository
 import com.zongting.zongting.data.repository.MusicRepository
 import com.zongting.zongting.data.repository.PlaybackStateRepository
 import com.zongting.zongting.data.repository.PlaylistRepository
+import com.zongting.zongting.data.repository.RecentlyPlayedRepository
 import com.zongting.zongting.player.PlayerManager
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.Flow
@@ -31,7 +32,8 @@ class MainViewModel @Inject constructor(
     private val repository: MusicRepository,
     private val favoriteRepository: FavoriteRepository,
     private val playlistRepository: PlaylistRepository,
-    private val playbackStateRepository: PlaybackStateRepository
+    private val playbackStateRepository: PlaybackStateRepository,
+    private val recentlyPlayedRepository: RecentlyPlayedRepository
 ) : ViewModel() {
 
     // 复用 ImageLoader，避免 VinylRecord 每次重组都新建实例
@@ -88,6 +90,10 @@ class MainViewModel @Inject constructor(
             _favoriteSongList.value = songs
             _favoriteSongs.value = songs.map { it.rid }.toSet()
         }
+        // 从磁盘加载最近播放
+        viewModelScope.launch {
+            _recentlyPlayed.value = recentlyPlayedRepository.recentlyPlayed.first()
+        }
         // 恢复上次播放状态
         viewModelScope.launch {
             val state = playbackStateRepository.playbackStateFlow.first()
@@ -113,13 +119,20 @@ class MainViewModel @Inject constructor(
         }
     }
 
-    /** 将歌曲加入最近播放（最大100首，去重，由 PlayerManager 10秒计时器调用） */
+    /** 将歌曲加入最近播放（最大30首，去重，由 PlayerManager 10秒计时器调用）并写入磁盘 */
     private fun addToRecentlyPlayed(song: Song) {
         val recent = _recentlyPlayed.value.toMutableList()
         recent.removeAll { it.rid == song.rid }
         recent.add(0, song)
-        if (recent.size > 100) recent.removeAt(recent.lastIndex)
-        _recentlyPlayed.value = recent
+        if (recent.size > MAX_RECENTLY_PLAYED) {
+            // 保留前 30 首
+            val trimmed = recent.take(MAX_RECENTLY_PLAYED)
+            _recentlyPlayed.value = trimmed
+            viewModelScope.launch { recentlyPlayedRepository.saveRecentlyPlayed(trimmed) }
+        } else {
+            _recentlyPlayed.value = recent
+            viewModelScope.launch { recentlyPlayedRepository.saveRecentlyPlayed(recent) }
+        }
     }
 
     fun isFavorite(rid: Long): Boolean = _favoriteSongs.value.contains(rid)
@@ -662,6 +675,11 @@ class MainViewModel @Inject constructor(
         viewModelScope.launch {
             playbackStateRepository.savePlaybackState(_currentPlaylist.value, _currentIndex.value)
         }
+    }
+
+    companion object {
+        /** 最近播放最大保存数量 */
+        const val MAX_RECENTLY_PLAYED = 30
     }
 }
 
