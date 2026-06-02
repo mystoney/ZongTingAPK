@@ -28,6 +28,8 @@ import com.zongting.zongting.data.model.Song
 import com.zongting.zongting.ui.FavoriteIcon
 import com.zongting.zongting.ui.PlayModeIcon
 import com.zongting.zongting.ui.PlayPauseIcon
+import com.zongting.zongting.ui.SkipNextIcon
+import com.zongting.zongting.ui.SkipPreviousIcon
 import com.zongting.zongting.ui.theme.AppColors
 
 @Composable
@@ -153,17 +155,11 @@ fun MiniPlayer(
                 }
 
                 // 上一首
-                IconButton(
+                SkipPreviousIcon(
                     onClick = onPrevious,
-                    modifier = Modifier.size(buttonTouchTarget)
-                ) {
-                    Icon(
-                        Icons.Default.SkipPrevious,
-                        contentDescription = "上一首",
-                        tint = Color.White,
-                        modifier = Modifier.size(iconSize)
-                    )
-                }
+                    tint = Color.White,
+                    modifier = Modifier.size(iconSize)
+                )
 
                 // 播放/暂停按钮（稍大）
                 IconButton(
@@ -174,17 +170,11 @@ fun MiniPlayer(
                 }
 
                 // 下一首
-                IconButton(
+                SkipNextIcon(
                     onClick = onNext,
-                    modifier = Modifier.size(buttonTouchTarget)
-                ) {
-                    Icon(
-                        Icons.Default.SkipNext,
-                        contentDescription = "下一首",
-                        tint = Color.White,
-                        modifier = Modifier.size(iconSize)
-                    )
-                }
+                    tint = Color.White,
+                    modifier = Modifier.size(iconSize)
+                )
             }
         }
     }

@@ -66,9 +66,15 @@ import com.zongting.zongting.ui.LyricLine
 import com.zongting.zongting.ui.LyricState
 import com.zongting.zongting.ui.MainViewModel
 import com.zongting.zongting.ui.PlaybackState
+import com.zongting.zongting.ui.AddToPlaylistIcon
 import com.zongting.zongting.ui.FavoriteIcon
+import com.zongting.zongting.ui.PlaylistIcon
 import com.zongting.zongting.ui.PlayModeIcon
 import com.zongting.zongting.ui.PlayPauseIcon
+import com.zongting.zongting.ui.RingtoneIcon
+import com.zongting.zongting.ui.SkipNextIcon
+import com.zongting.zongting.ui.SkipPreviousIcon
+import com.zongting.zongting.ui.TimerIcon
 import com.zongting.zongting.ui.theme.AppColors
 import androidx.compose.material3.windowsizeclass.WindowSizeClass
 import androidx.compose.material3.windowsizeclass.WindowWidthSizeClass
@@ -487,17 +493,21 @@ private fun PlayerBottomBar(
                 horizontalArrangement = Arrangement.SpaceEvenly,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                IconButton(onClick = onPrevious, modifier = Modifier.size(scaledBtnSize)) {
-                    Icon(Icons.Default.SkipPrevious, contentDescription = "上一首", modifier = Modifier.size(scaledIconSize))
-                }
+                SkipPreviousIcon(
+                    onClick = onPrevious,
+                    modifier = Modifier.size(scaledBtnSize),
+                    tint = MaterialTheme.colorScheme.onSurface
+                )
 
                 FilledIconButton(onClick = onTogglePlay, modifier = Modifier.size(scaledFilledBtnSize), shape = CircleShape) {
                     PlayPauseIcon(isPlaying = isPlaying, modifier = Modifier.size(scaledLargeIconSize))
                 }
 
-                IconButton(onClick = onNext, modifier = Modifier.size(scaledBtnSize)) {
-                    Icon(Icons.Default.SkipNext, contentDescription = "下一首", modifier = Modifier.size(scaledIconSize))
-                }
+                SkipNextIcon(
+                    onClick = onNext,
+                    modifier = Modifier.size(scaledBtnSize),
+                    tint = MaterialTheme.colorScheme.onSurface
+                )
             }
 
             // 附加功能按钮（播放模式 / 播放列表 / 添加到歌单 / 收藏）
@@ -514,31 +524,26 @@ private fun PlayerBottomBar(
                     PlayModeIcon(playMode = localPlayMode, tint = Color.White, modifier = Modifier.size(scaledSmallIconSize))
                 }
 
-                IconButton(onClick = { onShowPlaylist(true) }) {
-                    Icon(imageVector = Icons.AutoMirrored.Filled.PlaylistPlay, contentDescription = "播放列表", modifier = Modifier.size(scaledSmallIconSize))
-                }
+                PlaylistIcon(
+                    onClick = { onShowPlaylist(true) },
+                    tint = MaterialTheme.colorScheme.onSurface
+                )
 
-                IconButton(onClick = onToggleSavePlaylist) {
-                    Icon(imageVector = Icons.Default.PlaylistAdd, contentDescription = "保存到歌单", modifier = Modifier.size(scaledSmallIconSize))
-                }
+                AddToPlaylistIcon(
+                    onClick = onToggleSavePlaylist,
+                    tint = MaterialTheme.colorScheme.onSurface
+                )
 
-                IconButton(onClick = onSleepTimerClick) {
-                    Icon(
-                        imageVector = if (isTimerActive) Icons.Default.BedtimeOff else Icons.Default.Bedtime,
-                        contentDescription = "定时关闭",
-                        tint = if (isTimerActive) Color(0xFF7C4DFF) else MaterialTheme.colorScheme.onSurface,
-                        modifier = Modifier.size(scaledSmallIconSize)
-                    )
-                }
+                TimerIcon(
+                    isActive = isTimerActive,
+                    onClick = onSleepTimerClick,
+                    tint = if (isTimerActive) Color(0xFF7C4DFF) else MaterialTheme.colorScheme.onSurface
+                )
 
-                IconButton(onClick = { onRingtoneCutterClick() }) {
-                    Icon(
-                        imageVector = Icons.Default.MusicNote,
-                        contentDescription = "设为铃声",
-                        tint = MaterialTheme.colorScheme.onSurface,
-                        modifier = Modifier.size(scaledSmallIconSize)
-                    )
-                }
+                RingtoneIcon(
+                    onClick = onRingtoneCutterClick,
+                    tint = MaterialTheme.colorScheme.onSurface
+                )
 
                 IconButton(onClick = onToggleFavorite) {
                     FavoriteIcon(
@@ -1812,14 +1817,11 @@ fun PlayerScreenLandscape(
                                         PlayModeIcon(playMode = playMode, tint = Color.White.copy(alpha = 0.8f), modifier = Modifier.size(btnSize))
                                     }
 
-                                    IconButton(onClick = onPrevious) {
-                                        Icon(
-                                            imageVector = Icons.Default.SkipPrevious,
-                                            contentDescription = "上一首",
-                                            tint = Color.White,
-                                            modifier = Modifier.size(btnSize)
-                                        )
-                                    }
+                                    SkipPreviousIcon(
+                                        onClick = onPrevious,
+                                        tint = Color.White,
+                                        modifier = Modifier.size(btnSize)
+                                    )
 
                                     FilledIconButton(
                                         onClick = onTogglePlay,
@@ -1831,14 +1833,11 @@ fun PlayerScreenLandscape(
                                         PlayPauseIcon(isPlaying = isPlaying, tint = Color.White, modifier = Modifier.size(btnSize))
                                     }
 
-                                    IconButton(onClick = onNext) {
-                                        Icon(
-                                            imageVector = Icons.Default.SkipNext,
-                                            contentDescription = "下一首",
-                                            tint = Color.White,
-                                            modifier = Modifier.size(btnSize)
-                                        )
-                                    }
+                                    SkipNextIcon(
+                                        onClick = onNext,
+                                        tint = Color.White,
+                                        modifier = Modifier.size(btnSize)
+                                    )
 
                                     IconButton(onClick = onToggleFavorite) {
                                         FavoriteIcon(
@@ -2303,9 +2302,11 @@ fun PlayerScreenPADLandscape(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     // 上一首
-                    IconButton(onClick = onPrevious, modifier = Modifier.size(coreBtnSize * 1.3f)) {
-                        Icon(imageVector = Icons.Default.SkipPrevious, contentDescription = "上一首", tint = Color.White, modifier = Modifier.size(coreBtnSize))
-                    }
+                    SkipPreviousIcon(
+                        onClick = onPrevious,
+                        modifier = Modifier.size(coreBtnSize * 1.3f),
+                        tint = Color.White
+                    )
                     // 播放
                     FilledIconButton(
                         onClick = onTogglePlay,
@@ -2315,13 +2316,17 @@ fun PlayerScreenPADLandscape(
                         PlayPauseIcon(isPlaying = isPlaying, tint = Color.White, modifier = Modifier.size(coreBtnSize))
                     }
                     // 下一首
-                    IconButton(onClick = onNext, modifier = Modifier.size(coreBtnSize * 1.3f)) {
-                        Icon(imageVector = Icons.Default.SkipNext, contentDescription = "下一首", tint = Color.White, modifier = Modifier.size(coreBtnSize))
-                    }
+                    SkipNextIcon(
+                        onClick = onNext,
+                        modifier = Modifier.size(coreBtnSize * 1.3f),
+                        tint = Color.White
+                    )
                     // 播放列表
-                    IconButton(onClick = { onShowPlaylist(true) }, modifier = Modifier.size(fnBtnSize * 1.4f)) {
-                        Icon(imageVector = Icons.AutoMirrored.Filled.PlaylistPlay, contentDescription = "播放列表", tint = Color.White.copy(alpha = 0.8f), modifier = Modifier.size(fnBtnSize))
-                    }
+                    PlaylistIcon(
+                        onClick = { onShowPlaylist(true) },
+                        modifier = Modifier.size(fnBtnSize * 1.4f),
+                        tint = Color.White.copy(alpha = 0.8f)
+                    )
                     // 循环模式
                     IconButton(onClick = onTogglePlayMode, modifier = Modifier.size(fnBtnSize * 1.4f)) {
                         PlayModeIcon(playMode = playMode, tint = Color.White.copy(alpha = 0.8f), modifier = Modifier.size(fnBtnSize))
@@ -2331,17 +2336,24 @@ fun PlayerScreenPADLandscape(
                         FavoriteIcon(isFavorite = isFavorite, tint = if (isFavorite) AppColors.FavoriteActive else Color.White.copy(alpha = 0.8f), contentDescription = "收藏", modifier = Modifier.size(fnBtnSize))
                     }
                     // 定时
-                    IconButton(onClick = onSleepTimerClick, modifier = Modifier.size(fnBtnSize * 1.4f)) {
-                        Icon(imageVector = Icons.Default.Timer, contentDescription = "定时", tint = Color.White.copy(alpha = 0.8f), modifier = Modifier.size(fnBtnSize))
-                    }
+                    TimerIcon(
+                        isActive = false,
+                        onClick = onSleepTimerClick,
+                        modifier = Modifier.size(fnBtnSize * 1.4f),
+                        tint = Color.White.copy(alpha = 0.8f)
+                    )
                     // 铃声
-                    IconButton(onClick = { onRingtoneCutterClick() }, modifier = Modifier.size(fnBtnSize * 1.4f)) {
-                        Icon(imageVector = Icons.Default.Notifications, contentDescription = "铃声", tint = Color.White.copy(alpha = 0.8f), modifier = Modifier.size(fnBtnSize))
-                    }
+                    RingtoneIcon(
+                        onClick = onRingtoneCutterClick,
+                        modifier = Modifier.size(fnBtnSize * 1.4f),
+                        tint = Color.White.copy(alpha = 0.8f)
+                    )
                     // 添加到播放列表
-                    IconButton(onClick = onToggleSavePlaylist, modifier = Modifier.size(fnBtnSize * 1.4f)) {
-                        Icon(imageVector = Icons.Default.PlaylistAdd, contentDescription = "添加", tint = Color.White.copy(alpha = 0.8f), modifier = Modifier.size(fnBtnSize))
-                    }
+                    AddToPlaylistIcon(
+                        onClick = onToggleSavePlaylist,
+                        modifier = Modifier.size(fnBtnSize * 1.4f),
+                        tint = Color.White.copy(alpha = 0.8f)
+                    )
                 }
             }
         }
