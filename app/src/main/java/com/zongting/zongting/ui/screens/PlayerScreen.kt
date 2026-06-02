@@ -91,6 +91,7 @@ fun PlayerScreen(
     val playbackState by viewModel.playbackState.collectAsState()
     val lyricState by viewModel.lyricState.collectAsState()
     val currentPlaylist by viewModel.currentPlaylist.collectAsState()
+    val favoriteSongs by viewModel.favoriteSongs.collectAsState()
     var showSleepTimerDialog by remember { mutableStateOf(false) }
     var showRingtoneCutter by remember { mutableStateOf(false) }
 
@@ -148,7 +149,7 @@ fun PlayerScreen(
             playbackState = playbackState,
             lyricState = lyricState,
             playMode = viewModel.playMode.value,
-            isFavorite = currentSong?.let { viewModel.isFavorite(it.rid) } ?: false,
+            isFavorite = currentSong?.let { favoriteSongs.contains(it.rid) } ?: false,
             onBackClick = onBackClick,
             onTogglePlay = { viewModel.togglePlayPause() },
             onTogglePlayMode = { viewModel.togglePlayMode() },
@@ -184,7 +185,7 @@ fun PlayerScreen(
             isPlaying = isPlaying,
             playbackState = playbackState,
             playMode = viewModel.playMode.value,
-            isFavorite = currentSong?.let { viewModel.isFavorite(it.rid) } ?: false,
+            isFavorite = currentSong?.let { favoriteSongs.contains(it.rid) } ?: false,
             lyricState = lyricState,
             onBackClick = onBackClick,
             onTogglePlay = { viewModel.togglePlayPause() },
@@ -362,7 +363,7 @@ fun PlayerScreen(
             isPlaying = isPlaying,
             playbackState = playbackState,
             playMode = viewModel.playMode.value,
-            isFavorite = currentSong?.let { viewModel.isFavorite(it.rid) } ?: false,
+            isFavorite = currentSong?.let { favoriteSongs.contains(it.rid) } ?: false,
             showPlaylist = showPlaylistSheet,
             onTogglePlay = { viewModel.togglePlayPause() },
             onTogglePlayMode = { viewModel.togglePlayMode() },
