@@ -151,10 +151,13 @@ fun PlayerScreen(
             onSeek = { pos -> viewModel.seekTo(pos) },
             onDrag = { pos -> viewModel.updateProgress(pos, playbackState.duration) },
             imageLoader = viewModel.cachedImageLoader,
-            onShowPlaylist = { },
-            onToggleSavePlaylist = { },
-            onSleepTimerClick = { },
-            onRingtoneCutterClick = { }
+            onShowPlaylist = { showPlaylistSheet = it },
+            onToggleSavePlaylist = { showSavePlaylistDialog = true },
+            onSleepTimerClick = { showSleepTimerDialog = true },
+            onRingtoneCutterClick = {
+                PlayerManager.pause()
+                showRingtoneCutter = true
+            }
         )
         return
     }
@@ -508,7 +511,7 @@ private fun PlayerBottomBar(
                     localPlayMode = (localPlayMode + 1) % 3
                     onTogglePlayMode()
                 }) {
-                    PlayModeIcon(playMode = localPlayMode, modifier = Modifier.size(scaledSmallIconSize))
+                    PlayModeIcon(playMode = localPlayMode, tint = Color.White, modifier = Modifier.size(scaledSmallIconSize))
                 }
 
                 IconButton(onClick = { onShowPlaylist(true) }) {
