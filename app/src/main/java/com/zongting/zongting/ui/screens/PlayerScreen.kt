@@ -500,7 +500,7 @@ private fun PlayerBottomBar(
                 )
 
                 FilledIconButton(onClick = onTogglePlay, modifier = Modifier.size(scaledFilledBtnSize), shape = CircleShape) {
-                    PlayPauseIcon(isPlaying = isPlaying, modifier = Modifier.size(scaledLargeIconSize))
+                    PlayPauseIcon(isPlaying = isPlaying, tint = Color.White, modifier = Modifier.size(scaledLargeIconSize))
                 }
 
                 SkipNextIcon(

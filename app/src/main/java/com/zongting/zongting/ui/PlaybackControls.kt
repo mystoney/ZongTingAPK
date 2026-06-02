@@ -38,11 +38,20 @@ fun PlayPauseIcon(
     tint: Color = Color.Unspecified,
     contentDescription: String? = null
 ) {
+    val activeColor = AppColors.FavoriteActive // 绿色
+    // 下层：绿色实心
+    Icon(
+        imageVector = if (isPlaying) Icons.Filled.Pause else Icons.Filled.PlayArrow,
+        contentDescription = null,
+        tint = activeColor,
+        modifier = modifier
+    )
+    // 上层：白色描边
     Icon(
         imageVector = if (isPlaying) Icons.Filled.Pause else Icons.Filled.PlayArrow,
         contentDescription = contentDescription ?: if (isPlaying) "暂停" else "播放",
-        modifier = modifier,
-        tint = tint
+        tint = tint,
+        modifier = modifier
     )
 }
 
