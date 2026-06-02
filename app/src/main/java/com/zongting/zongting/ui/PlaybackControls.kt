@@ -127,53 +127,47 @@ fun FavoriteIcon(
     modifier: Modifier = Modifier,
     contentDescription: String? = null
 ) {
-    if (isFavorite) {
-        // 绿色实心 + 白色厚边框（Canvas 绘制厚 stroke，透出绿色填充）
-        Box(modifier = modifier) {
-            Canvas(modifier = Modifier.matchParentSize()) {
-                val path = Path().apply {
-                    val w = size.width
-                    val h = size.height
-                    val bowWidth = w * 0.5f
-                    val bowHeight = h * 0.38f
-                    val leftX = (w - bowWidth) / 2
-                    val rightX = leftX + bowWidth
-                    val topY = h * 0.28f
-                    val bottomY = h * 0.95f
-                    moveTo(w / 2, topY)
-                    cubicTo(
-                        leftX - bowWidth * 0.1f, topY - bowHeight * 0.3f,
-                        leftX - bowWidth * 0.2f, topY + bowHeight * 0.6f,
-                        leftX, topY + bowHeight * 0.8f
-                    )
-                    cubicTo(
-                        leftX, topY + bowHeight * 1.3f,
-                        w / 2, bottomY,
-                        w / 2, bottomY
-                    )
-                    cubicTo(
-                        w / 2, bottomY,
-                        rightX, topY + bowHeight * 1.3f,
-                        rightX, topY + bowHeight * 0.8f
-                    )
-                    cubicTo(
-                        rightX + bowWidth * 0.2f, topY + bowHeight * 0.6f,
-                        rightX + bowWidth * 0.1f, topY - bowHeight * 0.3f,
-                        w / 2, topY
-                    )
-                    close()
-                }
-                drawPath(path, tint, style = Stroke(width = size.width * 0.35f, cap = StrokeCap.Round))
+    Box(modifier = modifier) {
+        Canvas(modifier = Modifier.matchParentSize()) {
+            val path = Path().apply {
+                val w = size.width
+                val h = size.height
+                val bowWidth = w * 0.5f
+                val bowHeight = h * 0.38f
+                val leftX = (w - bowWidth) / 2
+                val rightX = leftX + bowWidth
+                val topY = h * 0.28f
+                val bottomY = h * 0.95f
+                moveTo(w / 2, topY)
+                cubicTo(
+                    leftX - bowWidth * 0.1f, topY - bowHeight * 0.3f,
+                    leftX - bowWidth * 0.2f, topY + bowHeight * 0.6f,
+                    leftX, topY + bowHeight * 0.8f
+                )
+                cubicTo(
+                    leftX, topY + bowHeight * 1.3f,
+                    w / 2, bottomY,
+                    w / 2, bottomY
+                )
+                cubicTo(
+                    w / 2, bottomY,
+                    rightX, topY + bowHeight * 1.3f,
+                    rightX, topY + bowHeight * 0.8f
+                )
+                cubicTo(
+                    rightX + bowWidth * 0.2f, topY + bowHeight * 0.6f,
+                    rightX + bowWidth * 0.1f, topY - bowHeight * 0.3f,
+                    w / 2, topY
+                )
+                close()
+            }
+            // 绿色实心（仅收藏时）
+            if (isFavorite) {
                 drawPath(path, AppColors.FavoriteActive)
             }
+            // 白色描边（永远显示）
+            drawPath(path, tint, style = Stroke(width = size.width * 0.35f, cap = StrokeCap.Round))
         }
-    } else {
-        Icon(
-            imageVector = Icons.Outlined.FavoriteBorder,
-            contentDescription = contentDescription,
-            tint = tint,
-            modifier = modifier
-        )
     }
 }
 
