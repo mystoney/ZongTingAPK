@@ -15,11 +15,16 @@ import androidx.compose.material.icons.filled.Shuffle
 import androidx.compose.material.icons.filled.SkipNext
 import androidx.compose.material.icons.filled.SkipPrevious
 import androidx.compose.material.icons.outlined.FavoriteBorder
+import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.layout.Box
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.StrokeCap
 import com.zongting.zongting.ui.theme.AppColors
 
 // ===== 播放 / 暂停 =====
@@ -108,8 +113,8 @@ fun SkipNextIcon(
 // ===== 收藏 =====
 
 /**
- * 收藏图标：选中时显示绿色实心心形 + 白色空心叠加，未选中时只显示空心。
- * 统一在各处使用，保持收藏动画和样式一致。
+ * 收藏图标：选中时显示绿色实心心形 + 白色厚边框，未选中时显示空心。
+ * 白色边框使用 Canvas 绘制厚 stroke，确保在任何背景上都清晰可见。
  *
  * 用法示例：
  *   FavoriteIcon(isFavorite = isFavorite, tint = Color.White)
@@ -122,22 +127,54 @@ fun FavoriteIcon(
     modifier: Modifier = Modifier,
     contentDescription: String? = null
 ) {
-    // 下层：绿色实心（选中时显示）
     if (isFavorite) {
+        // 绿色实心 + 白色厚边框（Canvas 绘制厚 stroke，透出绿色填充）
+        Box(modifier = modifier) {
+            Canvas(modifier = Modifier.matchParentSize()) {
+                val path = Path().apply {
+                    val w = size.width
+                    val h = size.height
+                    val bowWidth = w * 0.5f
+                    val bowHeight = h * 0.38f
+                    val leftX = (w - bowWidth) / 2
+                    val rightX = leftX + bowWidth
+                    val topY = h * 0.28f
+                    val bottomY = h * 0.95f
+                    moveTo(w / 2, topY)
+                    cubicTo(
+                        leftX - bowWidth * 0.1f, topY - bowHeight * 0.3f,
+                        leftX - bowWidth * 0.2f, topY + bowHeight * 0.6f,
+                        leftX, topY + bowHeight * 0.8f
+                    )
+                    cubicTo(
+                        leftX, topY + bowHeight * 1.3f,
+                        w / 2, bottomY,
+                        w / 2, bottomY
+                    )
+                    cubicTo(
+                        w / 2, bottomY,
+                        rightX, topY + bowHeight * 1.3f,
+                        rightX, topY + bowHeight * 0.8f
+                    )
+                    cubicTo(
+                        rightX + bowWidth * 0.2f, topY + bowHeight * 0.6f,
+                        rightX + bowWidth * 0.1f, topY - bowHeight * 0.3f,
+                        w / 2, topY
+                    )
+                    close()
+                }
+                drawPath(path, tint, style = Stroke(width = size.width * 0.35f, cap = StrokeCap.Round))
+                drawPath(path, AppColors.FavoriteActive)
+            }
+        }
+    } else {
         Icon(
-            imageVector = Icons.Filled.Favorite,
+            imageVector = Icons.Outlined.FavoriteBorder,
             contentDescription = contentDescription,
-            tint = AppColors.FavoriteActive,
+            tint = tint,
             modifier = modifier
         )
     }
-    // 上层：空心（始终显示，提供边框轮廓）
-    Icon(
-        imageVector = Icons.Outlined.FavoriteBorder,
-        contentDescription = null,
-        tint = tint,
-        modifier = modifier
-    )
 }
 
 // ===== 播放模式 =====

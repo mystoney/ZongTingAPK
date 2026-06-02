@@ -140,6 +140,7 @@ fun PlayerScreen(
 
     // PAD 横屏：新布局
     val isExpanded = windowSizeClass.widthSizeClass == WindowWidthSizeClass.Expanded
+    val padPlaylistListState = rememberLazyListState()
     if (isExpanded) {
         PlayerScreenPADLandscape(
             currentSong = currentSong,
@@ -156,6 +157,14 @@ fun PlayerScreen(
             onNext = { viewModel.playNext() },
             onSeek = { pos -> viewModel.seekTo(pos) },
             onDrag = { pos -> viewModel.updateProgress(pos, playbackState.duration) },
+            currentPlaylist = currentPlaylist,
+            onPlaySong = { song -> viewModel.playSong(song, currentPlaylist) },
+            playlistListState = padPlaylistListState,
+            userPlaylists = viewModel.userPlaylists.value,
+            isTimerActive = isTimerActive,
+            timerRemaining = timerRemaining,
+            onAddSongToPlaylist = { playlistId, song, onDone -> viewModel.addSongToPlaylist(playlistId, song, onDone) },
+            onCreatePlaylistAndAddSong = { name, song -> viewModel.createPlaylistAndAddSong(name, song) },
             imageLoader = viewModel.cachedImageLoader,
             onShowPlaylist = { showPlaylistSheet = it },
             onToggleSavePlaylist = { showSavePlaylistDialog = true },
@@ -1842,7 +1851,7 @@ fun PlayerScreenLandscape(
                                     IconButton(onClick = onToggleFavorite) {
                                         FavoriteIcon(
                                             isFavorite = isFavorite,
-                                            tint = if (isFavorite) AppColors.FavoriteActive else Color.White.copy(alpha = 0.8f),
+                                            tint = Color.White.copy(alpha = 0.8f),
                                             contentDescription = "收藏",
                                             modifier = Modifier.size(btnSize)
                                         )
@@ -2018,6 +2027,14 @@ fun PlayerScreenPADLandscape(
     onNext: () -> Unit,
     onSeek: (Long) -> Unit,
     onDrag: (Long) -> Unit,
+    currentPlaylist: List<Song>,
+    onPlaySong: (Song) -> Unit,
+    playlistListState: LazyListState,
+    userPlaylists: List<UserPlaylist>,
+    isTimerActive: Boolean,
+    timerRemaining: Long,
+    onAddSongToPlaylist: (String, Song, () -> Unit) -> Unit,
+    onCreatePlaylistAndAddSong: (String, Song) -> Unit,
     imageLoader: coil.ImageLoader,
     onShowPlaylist: (Boolean) -> Unit = {},
     onToggleSavePlaylist: () -> Unit = {},
@@ -2026,6 +2043,14 @@ fun PlayerScreenPADLandscape(
 ) {
     val backgroundColor = Color(0xFF0D0D1A)
     val accentColor = AppColors.Accent
+
+    // 本地 dialog/sheet 状态（解决 return 后父级不渲染的问题）
+    var showSleepTimerDialogLocal by remember { mutableStateOf(false) }
+    var showSavePlaylistDialogLocal by remember { mutableStateOf(false) }
+    var showRingtoneCutterLocal by remember { mutableStateOf(false) }
+    var showPlaylistSheetLocal by remember { mutableStateOf(false) }
+
+    val context = LocalContext.current
 
     Box(modifier = Modifier.fillMaxSize().background(backgroundColor)) {
         // 模糊背景封面
@@ -2333,7 +2358,7 @@ fun PlayerScreenPADLandscape(
                     }
                     // 收藏
                     IconButton(onClick = onToggleFavorite, modifier = Modifier.size(fnBtnSize * 1.4f)) {
-                        FavoriteIcon(isFavorite = isFavorite, tint = if (isFavorite) AppColors.FavoriteActive else Color.White.copy(alpha = 0.8f), contentDescription = "收藏", modifier = Modifier.size(fnBtnSize))
+                        FavoriteIcon(isFavorite = isFavorite, tint = Color.White.copy(alpha = 0.8f), contentDescription = "收藏", modifier = Modifier.size(fnBtnSize))
                     }
                     // 定时
                     TimerIcon(
