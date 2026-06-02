@@ -548,7 +548,7 @@ private fun PlayerBottomBar(
                 IconButton(onClick = onToggleFavorite) {
                     FavoriteIcon(
                         isFavorite = isFavorite,
-                        tint = if (isFavorite) AppColors.FavoriteActive else MaterialTheme.colorScheme.onSurface,
+                        tint = Color.White,
                         contentDescription = if (isFavorite) "取消喜欢" else "我喜欢",
                         modifier = Modifier.size(scaledSmallIconSize)
                     )

@@ -138,7 +138,7 @@ fun MiniPlayer(
                 ) {
                     FavoriteIcon(
                         isFavorite = isFavorite,
-                        tint = if (isFavorite) AppColors.FavoriteActive else AppColors.FavoriteInactive,
+                        tint = Color.White,
                         modifier = Modifier.size(iconSize)
                     )
                 }
