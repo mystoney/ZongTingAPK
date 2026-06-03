@@ -76,8 +76,8 @@ fun MainNavigation(
     val isLandscapePhone = !isExpanded && configuration.screenWidthDp > configuration.screenHeightDp
     // PAD 判定：宽度 ≥ 600dp（包含 Medium 竖屏 + Expanded 横屏）
     val isPad = windowSizeClass.widthSizeClass != WindowWidthSizeClass.Compact
-    // PAD 文字统一放大 2.5x（仅 sp，不影响 dp 布局）
-    val fontScaleMultiplier = if (isPad) 2.5f else 1.0f
+    // PAD 文字统一放大 2.2x（仅 sp，不影响 dp 布局）
+    val fontScaleMultiplier = if (isPad) 2.2f else 1.0f
     val baseDensity = LocalDensity.current
     val effectiveDensity = remember(baseDensity, fontScaleMultiplier) {
         Density(
@@ -191,7 +191,7 @@ fun MainNavigation(
                     .weight(1f)
                     .fillMaxHeight()
             ) {
-                NavHostContent(navController, mainViewModel, updateViewModel, currentSong, isPlaying, favoriteSongs, favoriteSongList, recentlyPlayed, userPlaylists, expandedPlaylist, pendingVersionInfo.value, updateEvent, updatePhase, windowSizeClass, isLandscapePhone, onPlaylistExpandChange = { expandedPlaylist = it })
+                NavHostContent(navController, mainViewModel, updateViewModel, currentSong, isPlaying, favoriteSongs, favoriteSongList, recentlyPlayed, userPlaylists, expandedPlaylist, pendingVersionInfo.value, updateEvent, updatePhase, windowSizeClass, isLandscapePhone, onPlaylistExpandChange = { expandedPlaylist = it }, baseDensity = baseDensity)
             }
         }
     } else {
@@ -234,7 +234,7 @@ fun MainNavigation(
                     .fillMaxSize()
                     .padding(paddingValues)
             ) {
-                NavHostContent(navController, mainViewModel, updateViewModel, currentSong, isPlaying, favoriteSongs, favoriteSongList, recentlyPlayed, userPlaylists, expandedPlaylist, pendingVersionInfo.value, updateEvent, updatePhase, windowSizeClass, isLandscapePhone, onPlaylistExpandChange = { expandedPlaylist = it })
+                NavHostContent(navController, mainViewModel, updateViewModel, currentSong, isPlaying, favoriteSongs, favoriteSongList, recentlyPlayed, userPlaylists, expandedPlaylist, pendingVersionInfo.value, updateEvent, updatePhase, windowSizeClass, isLandscapePhone, onPlaylistExpandChange = { expandedPlaylist = it }, baseDensity = baseDensity)
             }
         }
     }
@@ -258,7 +258,8 @@ private fun NavHostContent(
     updatePhase: UpdatePhase,
     windowSizeClass: WindowSizeClass,
     isLandscapePhone: Boolean,
-    onPlaylistExpandChange: (UserPlaylist?) -> Unit
+    onPlaylistExpandChange: (UserPlaylist?) -> Unit,
+    baseDensity: Density
 ) {
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentDestination = navBackStackEntry?.destination
@@ -411,18 +412,21 @@ private fun NavHostContent(
             )
         }
         composable(Screen.Player.route) {
-            PlayerScreen(
-                windowSizeClass = windowSizeClass,
-                isLandscapePhone = isLandscapePhone,
-                onBackClick = {
-                    if (isLandscapePhone) {
-                        navController.navigate(Screen.Home.route) { popUpTo(Screen.Home.route) { inclusive = true } }
-                    } else {
-                        navController.popBackStack()
-                    }
-                },
-                viewModel = mainViewModel
-            )
+            // PlayerScreen 单独用 baseDensity，不应用 PAD 字体放大（baseDensity = LocalDensity.current）
+            CompositionLocalProvider(LocalDensity provides baseDensity) {
+                PlayerScreen(
+                    windowSizeClass = windowSizeClass,
+                    isLandscapePhone = isLandscapePhone,
+                    onBackClick = {
+                        if (isLandscapePhone) {
+                            navController.navigate(Screen.Home.route) { popUpTo(Screen.Home.route) { inclusive = true } }
+                        } else {
+                            navController.popBackStack()
+                        }
+                    },
+                    viewModel = mainViewModel
+                )
+            }
         }
     }
 

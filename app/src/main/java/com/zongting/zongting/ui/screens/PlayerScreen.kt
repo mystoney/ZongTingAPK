@@ -2101,13 +2101,9 @@ fun PlayerScreenPADLandscape(
                         // cover 按"左列实际宽度"算，不再依赖全屏宽
                         val coverSize = minOf(maxWidth * 0.85f, screenHeight * 0.7f)
 
-                        // 文字三档降级：左列越窄，字号越小（保证歌名永远完整可见）
-                        val leftColWidth = maxWidth
-                        val (nameFontSp, artistFontSp) = when {
-                            leftColWidth >= 320.dp -> 26f to 17f
-                            leftColWidth >= 260.dp -> 22f to 15f
-                            else -> 19f to 14f
-                        }
+                        // 歌名 / 歌手（无降档，固定 sp，由 Stoney 后续按需调整）
+                        val nameFontSp = 26f
+                        val artistFontSp = 17f
 
                         Column(
                             horizontalAlignment = Alignment.CenterHorizontally,
@@ -2201,8 +2197,6 @@ fun PlayerScreenPADLandscape(
                             .fillMaxHeight()
                     ) {
                         // 留 48dp 右内边距给文字呼吸
-                        val lyricMaxWidthDp = (maxWidth - 48.dp).value
-
                         when (val state = lyricState) {
                             is LyricState.Loading -> {
                                 Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -2251,17 +2245,8 @@ fun PlayerScreenPADLandscape(
                                             val isPlayed = index < currentIndex - 1
                                             val isFarFuture = index > currentIndex + 1
                                             val alpha = if (isCurrent) 1f else 0.5f
-                                            // 理想字号：当前 35 / 下一句 30 / 其他 22
+                                            // 理想字号：当前 35 / 下一句 30 / 其他 22（不再做按宽度缩字）
                                             val baseFontSp = if (isCurrent) 35f else if (isNext) 30f else 22f
-                                            // 按本行字符数 + 右列宽度算出能放下的最大字号（限 16-50sp）
-                                            val actualFontSp = fitFontSize(
-                                                text = line.text.ifEmpty { " " },
-                                                maxWidthDp = lyricMaxWidthDp,
-                                                baseSp = baseFontSp,
-                                                minSp = 16f,
-                                                maxSp = 50f
-                                            )
-                                            val actualFontSize = actualFontSp.sp
                                             val leadSpace = ""
 
                                             Row(
@@ -2270,27 +2255,27 @@ fun PlayerScreenPADLandscape(
                                             ) {
                                                 val displayText = if (isCurrent && line.text.isNotEmpty()) line.text + " " else if (line.text.isEmpty()) " " else line.text
                                                 Box {
-                                                    if (isCurrent) {
-                                                        Text(
-                                                            text = "$leadSpace$displayText",
-                                                            color = Color.Black.copy(alpha = 0.8f),
-                                                            fontSize = actualFontSize,
-                                                            fontWeight = FontWeight.Bold,
-                                                            maxLines = 1,
-                                                            softWrap = false,
-                                                            overflow = TextOverflow.Ellipsis,
-                                                            modifier = Modifier.offset(x = 1.5.dp, y = 1.5.dp)
-                                                        )
-                                                    }
+                                                if (isCurrent) {
                                                     Text(
                                                         text = "$leadSpace$displayText",
-                                                        color = Color.White.copy(alpha = alpha),
-                                                        fontSize = actualFontSize,
-                                                        fontWeight = if (isCurrent) FontWeight.Bold else FontWeight.Normal,
+                                                        color = Color.Black.copy(alpha = 0.8f),
+                                                        fontSize = baseFontSp.sp,
+                                                        fontWeight = FontWeight.Bold,
                                                         maxLines = 1,
                                                         softWrap = false,
-                                                        overflow = TextOverflow.Ellipsis
+                                                        overflow = TextOverflow.Ellipsis,
+                                                        modifier = Modifier.offset(x = 1.5.dp, y = 1.5.dp)
                                                     )
+                                                }
+                                                Text(
+                                                    text = "$leadSpace$displayText",
+                                                    color = Color.White.copy(alpha = alpha),
+                                                    fontSize = baseFontSp.sp,
+                                                    fontWeight = if (isCurrent) FontWeight.Bold else FontWeight.Normal,
+                                                    maxLines = 1,
+                                                    softWrap = false,
+                                                    overflow = TextOverflow.Ellipsis
+                                                )
                                                 }
                                             }
                                         }
@@ -2564,30 +2549,4 @@ private fun formatTime(ms: Long): String {
     val min = totalSec / 60
     val sec = totalSec % 60
     return "%d:%02d".format(min, sec)
-}
-
-// Estimate text width in "em" units (1.0 = one full-width char at given font size)
-private fun estimateTextWidthEm(text: String): Float {
-    var em = 0f
-    for (ch in text) {
-        em += when {
-            ch.code in 0x4E00..0x9FFF -> 1.0f           // CJK Unified
-            ch.code in 0x3400..0x4DBF -> 1.0f           // CJK Ext A
-            ch.code in 0x20000..0x2A6DF -> 1.0f         // CJK Ext B
-            ch.code in 0xFF00..0xFFEF -> 1.0f           // Full-width punct
-            ch.isLetterOrDigit() -> 0.55f
-            ch == ' ' -> 0.3f
-            else -> 0.5f
-        }
-    }
-    return em
-}
-
-// Calculate largest font size (sp) that fits `text` on one line within `maxWidthDp`
-// baseSp = 理想字号，actual = min(baseSp, 能放下的最大字号)，下限 minSp 防止太小
-private fun fitFontSize(text: String, maxWidthDp: Float, baseSp: Float, minSp: Float = 16f, maxSp: Float = 50f): Float {
-    val em = estimateTextWidthEm(text)
-    if (em <= 0f) return baseSp.coerceIn(minSp, maxSp)
-    val maxFit = (maxWidthDp * 0.95f) / em  // 5% 留白
-    return baseSp.coerceAtMost(maxFit).coerceIn(minSp, maxSp)
 }
