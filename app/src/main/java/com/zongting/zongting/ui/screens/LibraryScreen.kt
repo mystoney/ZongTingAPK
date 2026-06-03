@@ -28,12 +28,14 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import com.zongting.zongting.BuildConfig
 import com.zongting.zongting.data.model.Song
 import com.zongting.zongting.data.model.UserPlaylist
+import com.zongting.zongting.ui.PAD_LEFT_PANEL_RATIO
 import com.zongting.zongting.ui.theme.AppColors
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
@@ -169,10 +171,10 @@ fun LibraryScreen(
 
         // 左/右侧分栏布局
         Row(modifier = Modifier.fillMaxSize()) {
-            // 左侧标签列表
+            // 左侧标签列表（PAD 横屏按屏宽比例分配，与排行榜一致）
             LazyColumn(
                 modifier = Modifier
-                    .width((100 * scale).dp)
+                    .width(if (isExpanded) (LocalConfiguration.current.screenWidthDp * PAD_LEFT_PANEL_RATIO).dp else (100 * scale).dp)
                     .fillMaxHeight(),
                 verticalArrangement = Arrangement.spacedBy((6 * scale).dp),
                 contentPadding = PaddingValues(vertical = (6 * scale).dp)

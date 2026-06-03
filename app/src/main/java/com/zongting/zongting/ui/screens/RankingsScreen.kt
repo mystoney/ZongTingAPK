@@ -32,6 +32,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import com.zongting.zongting.data.model.Bang
 import com.zongting.zongting.data.model.Song
 import com.zongting.zongting.ui.MainViewModel
+import com.zongting.zongting.ui.PAD_LEFT_PANEL_RATIO
 import com.zongting.zongting.ui.theme.AppColors
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -45,7 +46,7 @@ fun RankingsScreen(
     onBackClick: (() -> Unit)? = null
 ) {
     val leftPanelWidth = when (windowSizeClass?.widthSizeClass) {
-        WindowWidthSizeClass.Expanded -> 260.dp
+        WindowWidthSizeClass.Expanded -> (LocalConfiguration.current.screenWidthDp * PAD_LEFT_PANEL_RATIO).dp
         else -> 130.dp
     }
     val uiState by rankingsViewModel.uiState.collectAsState()

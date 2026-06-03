@@ -68,5 +68,8 @@ const val PAD_MAX_CONTENT_WIDTH_DP = 1920
 /** 平板横屏侧边 NavigationRail 宽度 */
 const val PAD_NAV_RAIL_WIDTH_DP = 80
 
+/** 平板横屏左侧面板宽度占屏宽比例（排行榜 / 音乐库共用，按屏宽相对分配） */
+const val PAD_LEFT_PANEL_RATIO = 0.24f
+
 /** 平板横屏左侧面板宽度（播放页封面、排行榜列表等） */
 const val PAD_LEFT_PANEL_WIDTH_DP = 420
