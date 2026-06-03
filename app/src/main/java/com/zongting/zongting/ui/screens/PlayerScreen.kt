@@ -2089,17 +2089,25 @@ fun PlayerScreenPADLandscape(
                         .fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    // 左侧 45%：唱片 + 来源/歌名/歌手
-                    Box(
+                    // 左侧 38%：唱片 + 来源/歌名/歌手（按列宽自适应）
+                    BoxWithConstraints(
                         modifier = Modifier
-                            .weight(0.45f)
+                            .weight(0.38f)
                             .fillMaxHeight(),
                         contentAlignment = Alignment.Center
                     ) {
                         val configuration = LocalConfiguration.current
-                        val screenWidth = configuration.screenWidthDp.dp
                         val screenHeight = configuration.screenHeightDp.dp
-                        val coverSize = minOf(screenWidth * 0.35f, screenHeight * 0.75f)
+                        // cover 按"左列实际宽度"算，不再依赖全屏宽
+                        val coverSize = minOf(maxWidth * 0.85f, screenHeight * 0.7f)
+
+                        // 文字三档降级：左列越窄，字号越小（保证歌名永远完整可见）
+                        val leftColWidth = maxWidth
+                        val (nameFontSp, artistFontSp) = when {
+                            leftColWidth >= 320.dp -> 26f to 17f
+                            leftColWidth >= 260.dp -> 22f to 15f
+                            else -> 19f to 14f
+                        }
 
                         Column(
                             horizontalAlignment = Alignment.CenterHorizontally,
@@ -2116,13 +2124,13 @@ fun PlayerScreenPADLandscape(
                             )
                         }
 
-                        // 左上角：来源 / 歌名 / 歌手（描边样式）
+                        // 左上角：来源 / 歌名 / 歌手（描边样式，字号随列宽）
                         Column(
                             modifier = Modifier
                                 .align(Alignment.TopStart)
                                 .padding(top = 24.dp, start = 12.dp, end = 12.dp)
                         ) {
-                            // 来源小字
+                            // 来源小字（固定 14sp）
                             val sourceText = when (currentSong.source) {
                                 "kg" -> "酷狗音乐"
                                 "qq" -> "QQ音乐"
@@ -2144,12 +2152,12 @@ fun PlayerScreenPADLandscape(
                                 )
                             }
                             Spacer(modifier = Modifier.height(2.dp))
-                            // 歌名（大字）
+                            // 歌名（大字，按列宽降档）
                             Box {
                                 Text(
                                     text = currentSong.name,
                                     color = Color.Black.copy(alpha = 0.8f),
-                                    fontSize = 26.sp,
+                                    fontSize = nameFontSp.sp,
                                     fontWeight = FontWeight.Bold,
                                     maxLines = 2,
                                     overflow = TextOverflow.Ellipsis,
@@ -2158,25 +2166,27 @@ fun PlayerScreenPADLandscape(
                                 Text(
                                     text = currentSong.name,
                                     color = Color.White,
-                                    fontSize = 26.sp,
+                                    fontSize = nameFontSp.sp,
                                     fontWeight = FontWeight.Bold,
                                     maxLines = 2,
                                     overflow = TextOverflow.Ellipsis
                                 )
                             }
                             Spacer(modifier = Modifier.height(4.dp))
-                            // 歌手
+                            // 歌手（按列宽降档）
                             Box {
                                 Text(
                                     text = currentSong.artist,
                                     color = Color.Black.copy(alpha = 0.6f),
-                                    fontSize = 17.sp,
+                                    fontSize = artistFontSp.sp,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
                                     modifier = Modifier.offset(x = 1.dp, y = 1.dp)
                                 )
                                 Text(
                                     text = currentSong.artist,
                                     color = Color.White.copy(alpha = 0.7f),
-                                    fontSize = 17.sp,
+                                    fontSize = artistFontSp.sp,
                                     maxLines = 1,
                                     overflow = TextOverflow.Ellipsis
                                 )
@@ -2184,12 +2194,15 @@ fun PlayerScreenPADLandscape(
                         }
                     }
 
-                    // 右侧 55%：滚动歌词
-                    Box(
+                    // 右侧 62%：滚动歌词（每行按右列实际宽度自适应字号）
+                    BoxWithConstraints(
                         modifier = Modifier
-                            .weight(0.55f)
+                            .weight(0.62f)
                             .fillMaxHeight()
                     ) {
+                        // 留 48dp 右内边距给文字呼吸
+                        val lyricMaxWidthDp = (maxWidth - 48.dp).value
+
                         when (val state = lyricState) {
                             is LyricState.Loading -> {
                                 Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -2235,33 +2248,48 @@ fun PlayerScreenPADLandscape(
                                         itemsIndexed(lyrics) { index, line ->
                                             val isCurrent = index == currentIndex
                                             val isNext = index == currentIndex + 1
-                                            val isPrev = index == currentIndex - 1
-                                            val isPlayed = index < currentIndex - 1  // 播放过的
-                                            val isFarFuture = index > currentIndex + 1  // 更远的未来行
+                                            val isPlayed = index < currentIndex - 1
+                                            val isFarFuture = index > currentIndex + 1
                                             val alpha = if (isCurrent) 1f else 0.5f
-                                            val fontSize = if (isCurrent) 35.sp else if (isNext) 30.sp else 22.sp
+                                            // 理想字号：当前 35 / 下一句 30 / 其他 22
+                                            val baseFontSp = if (isCurrent) 35f else if (isNext) 30f else 22f
+                                            // 按本行字符数 + 右列宽度算出能放下的最大字号（限 16-50sp）
+                                            val actualFontSp = fitFontSize(
+                                                text = line.text.ifEmpty { " " },
+                                                maxWidthDp = lyricMaxWidthDp,
+                                                baseSp = baseFontSp,
+                                                minSp = 16f,
+                                                maxSp = 50f
+                                            )
+                                            val actualFontSize = actualFontSp.sp
                                             val leadSpace = ""
 
                                             Row(
                                                 modifier = Modifier.fillMaxWidth(),
                                                 horizontalArrangement = if (isPlayed || isFarFuture) Arrangement.End else Arrangement.Start
                                             ) {
-                                                val displayText = if (isCurrent) line.text.ifEmpty { " " }.let { if (line.text.isEmpty()) " " else line.text + " " } else line.text.ifEmpty { " " }
+                                                val displayText = if (isCurrent && line.text.isNotEmpty()) line.text + " " else if (line.text.isEmpty()) " " else line.text
                                                 Box {
                                                     if (isCurrent) {
                                                         Text(
                                                             text = "$leadSpace$displayText",
                                                             color = Color.Black.copy(alpha = 0.8f),
-                                                            fontSize = fontSize,
+                                                            fontSize = actualFontSize,
                                                             fontWeight = FontWeight.Bold,
+                                                            maxLines = 1,
+                                                            softWrap = false,
+                                                            overflow = TextOverflow.Ellipsis,
                                                             modifier = Modifier.offset(x = 1.5.dp, y = 1.5.dp)
                                                         )
                                                     }
                                                     Text(
                                                         text = "$leadSpace$displayText",
                                                         color = Color.White.copy(alpha = alpha),
-                                                        fontSize = fontSize,
-                                                        fontWeight = if (isCurrent) FontWeight.Bold else FontWeight.Normal
+                                                        fontSize = actualFontSize,
+                                                        fontWeight = if (isCurrent) FontWeight.Bold else FontWeight.Normal,
+                                                        maxLines = 1,
+                                                        softWrap = false,
+                                                        overflow = TextOverflow.Ellipsis
                                                     )
                                                 }
                                             }
@@ -2536,4 +2564,30 @@ private fun formatTime(ms: Long): String {
     val min = totalSec / 60
     val sec = totalSec % 60
     return "%d:%02d".format(min, sec)
+}
+
+// Estimate text width in "em" units (1.0 = one full-width char at given font size)
+private fun estimateTextWidthEm(text: String): Float {
+    var em = 0f
+    for (ch in text) {
+        em += when {
+            ch.code in 0x4E00..0x9FFF -> 1.0f           // CJK Unified
+            ch.code in 0x3400..0x4DBF -> 1.0f           // CJK Ext A
+            ch.code in 0x20000..0x2A6DF -> 1.0f         // CJK Ext B
+            ch.code in 0xFF00..0xFFEF -> 1.0f           // Full-width punct
+            ch.isLetterOrDigit() -> 0.55f
+            ch == ' ' -> 0.3f
+            else -> 0.5f
+        }
+    }
+    return em
+}
+
+// Calculate largest font size (sp) that fits `text` on one line within `maxWidthDp`
+// baseSp = 理想字号，actual = min(baseSp, 能放下的最大字号)，下限 minSp 防止太小
+private fun fitFontSize(text: String, maxWidthDp: Float, baseSp: Float, minSp: Float = 16f, maxSp: Float = 50f): Float {
+    val em = estimateTextWidthEm(text)
+    if (em <= 0f) return baseSp.coerceIn(minSp, maxSp)
+    val maxFit = (maxWidthDp * 0.95f) / em  // 5% 留白
+    return baseSp.coerceAtMost(maxFit).coerceIn(minSp, maxSp)
 }
