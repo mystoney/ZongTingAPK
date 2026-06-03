@@ -11,8 +11,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.foundation.background
@@ -72,6 +74,17 @@ fun MainNavigation(
     val isExpanded = windowSizeClass.widthSizeClass == WindowWidthSizeClass.Expanded
     val configuration = LocalConfiguration.current
     val isLandscapePhone = !isExpanded && configuration.screenWidthDp > configuration.screenHeightDp
+    // PAD 判定：宽度 ≥ 600dp（包含 Medium 竖屏 + Expanded 横屏）
+    val isPad = windowSizeClass.widthSizeClass != WindowWidthSizeClass.Compact
+    // PAD 文字统一放大 20%（仅 sp，不影响 dp 布局）
+    val fontScaleMultiplier = if (isPad) 1.2f else 1.0f
+    val baseDensity = LocalDensity.current
+    val effectiveDensity = remember(baseDensity, fontScaleMultiplier) {
+        Density(
+            density = baseDensity.density,
+            fontScale = baseDensity.fontScale * fontScaleMultiplier
+        )
+    }
     val navController = rememberNavController()
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentDestination = navBackStackEntry?.destination
@@ -137,6 +150,7 @@ fun MainNavigation(
         }
     } ?: true
 
+    CompositionLocalProvider(LocalDensity provides effectiveDensity) {
     if (isExpanded) {
         // ── 平板横屏：侧边 NavigationRail ────────────────────────────
         Row(modifier = Modifier.fillMaxSize()) {
@@ -145,7 +159,7 @@ fun MainNavigation(
                 modifier = Modifier.fillMaxHeight()
             ) {
                 Spacer(Modifier.weight(1f))
-                bottomNavItems.forEach { screen ->
+                bottomNavItems.forEachIndexed { index, screen ->
                     val isSelected = currentDestination?.route == screen.route ||
                         (screen.route != "rankings" && currentDestination?.route?.startsWith(screen.route) == true)
                     NavigationRailItem(
@@ -165,6 +179,9 @@ fun MainNavigation(
                             indicatorColor = AppColors.PrimaryVariant
                         )
                     )
+                    if (index < bottomNavItems.size - 1) {
+                        Spacer(Modifier.height(16.dp))
+                    }
                 }
                 Spacer(Modifier.weight(1f))
             }
@@ -220,6 +237,7 @@ fun MainNavigation(
                 NavHostContent(navController, mainViewModel, updateViewModel, currentSong, isPlaying, favoriteSongs, favoriteSongList, recentlyPlayed, userPlaylists, expandedPlaylist, pendingVersionInfo.value, updateEvent, updatePhase, windowSizeClass, isLandscapePhone, onPlaylistExpandChange = { expandedPlaylist = it })
             }
         }
+    }
     }
 }
 // ── NavHost + MiniPlayer + UpdateDialog（手机/平板共用） ──────────────────────────
