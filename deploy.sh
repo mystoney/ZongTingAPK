@@ -10,12 +10,14 @@
 
 set -e
 
-SERVER="172.16.1.93"
-SSH_USER="root"
-SSH_PORT="2222"
+# 部署到本机（172.16.1.93 = 本机本身），不走 SSH
+# 保留远程 SSH 配置作为历史参考（暂时不用）
+# SERVER="172.16.1.93"
+# SSH_USER="root"
+# SSH_PORT="22"
 
 # 从 version.properties 读取当前版本
-VER_FILE="/root/ZongTing/app/version.properties"
+VER_FILE="/data/Code/ZongTing/app/version.properties"
 if [ ! -f "$VER_FILE" ]; then
     echo "ERROR: $VER_FILE not found"
     exit 1
@@ -36,7 +38,7 @@ echo "=========================================="
 MODE="${1:-both}"
 
 do_test() {
-    local src="/root/ZongTing/app/build/outputs/apk/beta/debug/app-beta-debug.apk"
+    local src="/data/Code/ZongTing/app/build/outputs/apk/beta/debug/app-beta-debug.apk"
     local dest="/usr/ZongTing/test/zongting-test.apk"
     local vjson="/usr/ZongTing/test/version.json"
     local url="http://172.16.1.93:8080/ZongTing/test/zongting-test.apk"
@@ -48,21 +50,23 @@ do_test() {
     fi
 
     echo ""
-    echo "[TEST] Uploading APK..."
-    scp -P "$SSH_PORT" "$src" "$SSH_USER@$SERVER:$dest"
+    echo "[TEST] Copying APK..."
+    cp -f "$src" "$dest"
+    chmod 644 "$dest"
 
     echo "[TEST] Updating version.json..."
     python3 -c "
 import json
 v = {'versionCode': $BUILD_NUM, 'versionName': '$vname', 'apkUrl': '$url', 'updateContent': '新增定时关闭功能（15/30/45/60分钟/自定义），支持锁屏通知栏显示剩余时间'}
 print(json.dumps(v, indent=2, ensure_ascii=False))
-" | ssh -p "$SSH_PORT" "$SSH_USER@$SERVER" "cat > $vjson"
+" > "$vjson"
+    chmod 644 "$vjson"
 
     echo "[TEST] Done!"
 }
 
 do_release() {
-    local src="/root/ZongTing/app/build/outputs/apk/prod/app-prod-debug.apk"
+    local src="/data/Code/ZongTing/app/build/outputs/apk/prod/app-prod-debug.apk"
     local dest="/usr/ZongTing/release/zongting-release.apk"
     local vjson="/usr/ZongTing/release/version.json"
     local url="http://172.16.1.93:8080/ZongTing/release/zongting-release.apk"
@@ -73,15 +77,17 @@ do_release() {
     fi
 
     echo ""
-    echo "[RELEASE] Uploading APK..."
-    scp -P "$SSH_PORT" "$src" "$SSH_USER@$SERVER:$dest"
+    echo "[RELEASE] Copying APK..."
+    cp -f "$src" "$dest"
+    chmod 644 "$dest"
 
     echo "[RELEASE] Updating version.json..."
     python3 -c "
 import json
 v = {'versionCode': $BUILD_NUM, 'versionName': '$VERSION_NAME', 'apkUrl': '$url'}
 print(json.dumps(v, indent=2, ensure_ascii=False))
-" | ssh -p "$SSH_PORT" "$SSH_USER@$SERVER" "cat > $vjson"
+" > "$vjson"
+    chmod 644 "$vjson"
 
     echo "[RELEASE] Done!"
 }
