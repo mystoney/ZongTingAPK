@@ -76,8 +76,8 @@ fun MainNavigation(
     val isLandscapePhone = !isExpanded && configuration.screenWidthDp > configuration.screenHeightDp
     // PAD 判定：宽度 ≥ 600dp（包含 Medium 竖屏 + Expanded 横屏）
     val isPad = windowSizeClass.widthSizeClass != WindowWidthSizeClass.Compact
-    // PAD 文字统一放大 20%（仅 sp，不影响 dp 布局）
-    val fontScaleMultiplier = if (isPad) 1.2f else 1.0f
+    // PAD 文字统一放大（仅 sp，不影响 dp 布局）— 临时调到 1.5x 让你看出明显差异，确认机制有效后再定最终值
+    val fontScaleMultiplier = if (isPad) 1.5f else 1.0f
     val baseDensity = LocalDensity.current
     val effectiveDensity = remember(baseDensity, fontScaleMultiplier) {
         Density(
