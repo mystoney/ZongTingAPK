@@ -28,8 +28,19 @@ import androidx.compose.material.icons.automirrored.filled.PlaylistPlay
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material.icons.outlined.FavoriteBorder
 import androidx.compose.material3.*
-import androidx.compose.runtime.*
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.derivedStateOf
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -51,6 +62,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.Density
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -83,6 +95,7 @@ import androidx.compose.material3.windowsizeclass.WindowWidthSizeClass
 fun PlayerScreen(
     windowSizeClass: androidx.compose.material3.windowsizeclass.WindowSizeClass,
     isLandscapePhone: Boolean = false,
+    baseDensity: Density,
     onBackClick: () -> Unit,
     viewModel: MainViewModel
 ) {
@@ -173,7 +186,8 @@ fun PlayerScreen(
             onRingtoneCutterClick = {
                 PlayerManager.pause()
                 showRingtoneCutter = true
-            }
+            },
+            baseDensity = baseDensity
         )
         return
     }
@@ -340,18 +354,23 @@ fun PlayerScreen(
                         onNext = { viewModel.playNext() },
                         imageLoader = viewModel.cachedImageLoader
                     )
-                    1 -> LyricPage(
-                        currentSong = currentSong,
-                        lyricState = lyricState,
-                        playbackState = playbackState,
-                        isPlaying = isPlaying,
-                        onTogglePlay = { viewModel.togglePlayPause() },
-                        onPrevious = { viewModel.playPrevious() },
-                        onNext = { viewModel.playNext() },
-                        onDrag = { pos -> viewModel.updateProgress(pos, playbackState.duration) },
-                        onSeek = { viewModel.seekTo(it) },
-                        isExpanded = windowSizeClass.widthSizeClass == WindowWidthSizeClass.Expanded
-                    )
+                    1 -> {
+                        // 歌词：opt-out 2.5x 字体放大，保持 1.0x
+                        CompositionLocalProvider(LocalDensity provides baseDensity) {
+                            LyricPage(
+                                currentSong = currentSong,
+                                lyricState = lyricState,
+                                playbackState = playbackState,
+                                isPlaying = isPlaying,
+                                onTogglePlay = { viewModel.togglePlayPause() },
+                                onPrevious = { viewModel.playPrevious() },
+                                onNext = { viewModel.playNext() },
+                                onDrag = { pos -> viewModel.updateProgress(pos, playbackState.duration) },
+                                onSeek = { viewModel.seekTo(it) },
+                                isPad = windowSizeClass.widthSizeClass != WindowWidthSizeClass.Compact  // Medium(平板竖屏) 或 Expanded(平板横屏) 都算 PAD
+                            )
+                        }
+                    }
                 }
             }
         }
@@ -1147,7 +1166,7 @@ private fun LyricPage(
     onNext: () -> Unit,
     onDrag: (Long) -> Unit,
     onSeek: (Long) -> Unit,
-    isExpanded: Boolean = false  // true = pad (WindowWidthSizeClass.Expanded)
+    isPad: Boolean = false  // true = pad (Compact 以外：Medium 平板竖屏 / Expanded 平板横屏)
 ) {
     val lazyListState = rememberLazyListState()
     var isUserScrolling by remember { mutableStateOf(false) }
@@ -1183,18 +1202,18 @@ private fun LyricPage(
                         val isLandscape = configuration.orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE
                         // 字号：参考网易云，当前行 22sp(+2)，非当前行 14sp，下一行 20sp(+3)
                         val currentLineFontSize = if (isLandscape) {
-                            if (isExpanded) 38.sp else 30.sp
-                        } else 22.sp
-                        val otherLineFontSize = if (isLandscape) 22.sp else 14.sp
+                            if (isPad) 38.sp else 30.sp
+                        } else if (isPad) 38.sp else 22.sp
+                        val otherLineFontSize = if (isLandscape) 22.sp else if (isPad) 22.sp else 14.sp
                         val nextLineFontSize = if (isLandscape) {
-                            if (isExpanded) 35.sp else 27.sp
-                        } else 20.sp
-                        val horizontalPadding = if (isExpanded) 48.dp else if (isLandscape) 40.dp else 24.dp
+                            if (isPad) 35.sp else 27.sp
+                        } else if (isPad) 35.sp else 20.sp
+                        val horizontalPadding = if (isPad) 48.dp else if (isLandscape) 40.dp else 24.dp
                         val boxHeightPx = with(LocalDensity.current) { maxHeight.toPx() }
                         val boxHeightDp = maxHeight
                         // 滚动时当前行对齐屏幕 40% 处
                         val scrollToPosition = boxHeightPx * 2 / 5f
-                        val lineSpacing = if (isLandscape) 16.dp else 12.dp
+                        val lineSpacing = if (isLandscape || isPad) 16.dp else 12.dp
                         val centerPadding = boxHeightDp / 2
 
                         // 渐变叠加层已移除
@@ -2020,6 +2039,7 @@ fun PlayerScreenPADLandscape(
     lyricState: LyricState,
     playMode: Int,
     isFavorite: Boolean,
+    baseDensity: Density,
     onBackClick: () -> Unit,
     onTogglePlay: () -> Unit,
     onTogglePlayMode: () -> Unit,
@@ -2197,7 +2217,9 @@ fun PlayerScreenPADLandscape(
                             .fillMaxHeight()
                     ) {
                         // 留 48dp 右内边距给文字呼吸
-                        when (val state = lyricState) {
+                        // 歌词：opt-out 2.5x 字体放大，保持 1.0x
+                        CompositionLocalProvider(LocalDensity provides baseDensity) {
+                            when (val state = lyricState) {
                             is LyricState.Loading -> {
                                 Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                                     CircularProgressIndicator(color = accentColor)
@@ -2287,6 +2309,7 @@ fun PlayerScreenPADLandscape(
                                     Text("歌词加载中...", color = Color.White.copy(alpha = 0.4f))
                                 }
                             }
+                        }
                         }
                     }
                 }

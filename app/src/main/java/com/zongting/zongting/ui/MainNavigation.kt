@@ -85,6 +85,14 @@ fun MainNavigation(
             fontScale = baseDensity.fontScale * fontScaleMultiplier
         )
     }
+    // PlayerScreen 专用密度：PAD 2.5x（不含歌词），phone 1.0x
+    val playerScale = if (isPad) 2.5f else 1.0f
+    val playerDensity = remember(baseDensity, playerScale) {
+        Density(
+            density = baseDensity.density,
+            fontScale = baseDensity.fontScale * playerScale
+        )
+    }
     val navController = rememberNavController()
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentDestination = navBackStackEntry?.destination
@@ -234,11 +242,11 @@ fun MainNavigation(
                     .fillMaxSize()
                     .padding(paddingValues)
             ) {
-                NavHostContent(navController, mainViewModel, updateViewModel, currentSong, isPlaying, favoriteSongs, favoriteSongList, recentlyPlayed, userPlaylists, expandedPlaylist, pendingVersionInfo.value, updateEvent, updatePhase, windowSizeClass, isLandscapePhone, onPlaylistExpandChange = { expandedPlaylist = it }, baseDensity = baseDensity)
+                NavHostContent(navController, mainViewModel, updateViewModel, currentSong, isPlaying, favoriteSongs, favoriteSongList, recentlyPlayed, userPlaylists, expandedPlaylist, pendingVersionInfo.value, updateEvent, updatePhase, windowSizeClass, isLandscapePhone, onPlaylistExpandChange = { expandedPlaylist = it }, baseDensity = baseDensity, playerDensity = playerDensity)
             }
         }
     }
-    }
+}
 }
 // ── NavHost + MiniPlayer + UpdateDialog（手机/平板共用） ──────────────────────────
 @Composable
@@ -259,7 +267,8 @@ private fun NavHostContent(
     windowSizeClass: WindowSizeClass,
     isLandscapePhone: Boolean,
     onPlaylistExpandChange: (UserPlaylist?) -> Unit,
-    baseDensity: Density
+    baseDensity: Density,
+    playerDensity: Density
 ) {
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentDestination = navBackStackEntry?.destination
@@ -412,11 +421,12 @@ private fun NavHostContent(
             )
         }
         composable(Screen.Player.route) {
-            // PlayerScreen 单独用 baseDensity，不应用 PAD 字体放大（baseDensity = LocalDensity.current）
-            CompositionLocalProvider(LocalDensity provides baseDensity) {
+            // PlayerScreen 单独用 playerDensity（PAD 2.5x / phone 1.0x），歌词部分内部用 baseDensity opt-out
+            CompositionLocalProvider(LocalDensity provides playerDensity) {
                 PlayerScreen(
                     windowSizeClass = windowSizeClass,
                     isLandscapePhone = isLandscapePhone,
+                    baseDensity = baseDensity,
                     onBackClick = {
                         if (isLandscapePhone) {
                             navController.navigate(Screen.Home.route) { popUpTo(Screen.Home.route) { inclusive = true } }
