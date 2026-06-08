@@ -199,7 +199,7 @@ fun MainNavigation(
                     .weight(1f)
                     .fillMaxHeight()
             ) {
-                NavHostContent(navController, mainViewModel, updateViewModel, currentSong, isPlaying, favoriteSongs, favoriteSongList, recentlyPlayed, userPlaylists, expandedPlaylist, pendingVersionInfo.value, updateEvent, updatePhase, windowSizeClass, isLandscapePhone, onPlaylistExpandChange = { expandedPlaylist = it }, baseDensity = baseDensity)
+                NavHostContent(navController, mainViewModel, updateViewModel, currentSong, isPlaying, favoriteSongs, favoriteSongList, recentlyPlayed, userPlaylists, expandedPlaylist, pendingVersionInfo.value, updateEvent, updatePhase, windowSizeClass, isLandscapePhone, onPlaylistExpandChange = { expandedPlaylist = it }, baseDensity = baseDensity, playerDensity = playerDensity)
             }
         }
     } else {
