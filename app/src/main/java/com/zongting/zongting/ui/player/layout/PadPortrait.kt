@@ -41,6 +41,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
 import androidx.compose.material3.windowsizeclass.WindowSizeClass
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -84,11 +85,11 @@ fun PadPortrait(
     actions: PlayerActions,
     imageLoader: ImageLoader,
     windowSizeClass: WindowSizeClass,
+    baseDensity: Density,
 ) {
     val pagerState = rememberPagerState(pageCount = { 2 })
     val coroutineScope = rememberCoroutineScope()
     val context = LocalContext.current
-    val baseDensity = LocalDensity.current
 
     var showSleepTimerDialog by remember { mutableStateOf(false) }
     var showSavePlaylistDialog by remember { mutableStateOf(false) }

@@ -169,6 +169,7 @@ fun PlayerScreen(
             ),
             imageLoader = viewModel.cachedImageLoader,
             windowSizeClass = windowSizeClass,
+            baseDensity = baseDensity,
         )
     } else {
         PhonePortrait(
