@@ -136,7 +136,18 @@ fun MainNavigation(
             is UpdateEvent.UpdateAvailable -> {
                 pendingVersionInfo.value = event.versionInfo
             }
+            is UpdateEvent.Downloading,
+            is UpdateEvent.Downloaded -> {
+                // Keep the versionInfo we already saved when UpdateAvailable fired.
+                // Otherwise the dialog disappears between download-start and download-end
+                // and the user has no way to click "立即安装".
+            }
+            is UpdateEvent.Error -> {
+                // Keep the versionInfo so the user can see the error message
+                // in the dialog and retry from there.
+            }
             else -> {
+                // Checking / null — dialog stays closed.
                 pendingVersionInfo.value = null
             }
         }
