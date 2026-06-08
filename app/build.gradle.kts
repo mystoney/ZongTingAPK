@@ -70,13 +70,13 @@ android {
             dimension = "channel"
             applicationIdSuffix = ".beta"
             versionNameSuffix = "-beta"
-            buildConfigField("String", "VERSION_JSON_URL", "\"http://127.0.0.1:8080/ZongTing/test/version.json\"")
+            buildConfigField("String", "VERSION_JSON_URL", "\"http://172.16.1.91:8080/version.json\"")
             buildConfigField("String", "UPDATE_CHANNEL", "\"test\"")
             resValue("string", "app_name", "纵听测试版")
         }
         create("prod") {
             dimension = "channel"
-            buildConfigField("String", "VERSION_JSON_URL", "\"http://127.0.0.1:8080/ZongTing/release/version.json\"")
+            buildConfigField("String", "VERSION_JSON_URL", "\"http://172.16.1.91:8080/version.json\"")
             buildConfigField("String", "UPDATE_CHANNEL", "\"release\"")
             resValue("string", "app_name", "纵听")
         }

@@ -1,20 +1,14 @@
 #!/bin/bash
-# 纵听部署脚本：上传 APK + 更新 version.json（自动同步版本号）
-# 用法:
-#   ./deploy.sh test      # 只部署测试版
-#   ./deploy.sh release   # 只部署正式版
-#   ./deploy.sh           # 两个都部署
-#
-# 前提：先运行 ./gradlew assembleBetaDebug assembleProdDebug 完成编译
-# incrBuildNum 已在编译后自动递增 version.properties 并 push GitHub
+# 纵听部署脚本：写 version.json 到 APK 编译输出根目录
+# HTTP server (python3 -m http.server 8080) 直接 serve 整个 outputs/ 目录
+# 用法: ./deploy.sh [test|release]  # 默认 test
 
 set -e
 
-# 部署到本机（172.16.1.93 = 本机本身），不走 SSH
-# 保留远程 SSH 配置作为历史参考（暂时不用）
-# SERVER="172.16.1.93"
-# SSH_USER="root"
-# SSH_PORT="22"
+# 部署到本机（172.16.1.91 = 本机本身）
+SERVER_IP="172.16.1.91"
+SERVER_PORT="8080"
+SERVER_BASE="http://${SERVER_IP}:${SERVER_PORT}"
 
 # 从 version.properties 读取当前版本
 VER_FILE="/data/Code/ZongTing/app/version.properties"
@@ -31,74 +25,63 @@ if [ -z "$BUILD_NUM" ] || [ -z "$VERSION_NAME" ]; then
     exit 1
 fi
 
+MODE="${1:-test}"
+OUTPUTS_DIR="/data/Code/ZongTing/app/build/outputs"
+
 echo "=========================================="
-echo " Deploying: v${VERSION_NAME} (build ${BUILD_NUM})"
+echo " Deploying: v${VERSION_NAME} (build ${BUILD_NUM}) — ${MODE}"
 echo "=========================================="
-
-MODE="${1:-both}"
-
-do_test() {
-    local src="/data/Code/ZongTing/app/build/outputs/apk/beta/debug/app-beta-debug.apk"
-    local dest="/usr/ZongTing/test/zongting-test.apk"
-    local vjson="/usr/ZongTing/test/version.json"
-    local url="http://172.16.1.93:8080/ZongTing/test/zongting-test.apk"
-    local vname="${VERSION_NAME}-beta"
-
-    if [ ! -f "$src" ]; then
-        echo "WARNING: $src not found, skipping test"
-        return
-    fi
-
-    echo ""
-    echo "[TEST] Copying APK..."
-    cp -f "$src" "$dest"
-    chmod 644 "$dest"
-
-    echo "[TEST] Updating version.json..."
-    python3 -c "
-import json
-v = {'versionCode': $BUILD_NUM, 'versionName': '$vname', 'apkUrl': '$url', 'updateContent': '新增定时关闭功能（15/30/45/60分钟/自定义），支持锁屏通知栏显示剩余时间'}
-print(json.dumps(v, indent=2, ensure_ascii=False))
-" > "$vjson"
-    chmod 644 "$vjson"
-
-    echo "[TEST] Done!"
-}
-
-do_release() {
-    local src="/data/Code/ZongTing/app/build/outputs/apk/prod/app-prod-debug.apk"
-    local dest="/usr/ZongTing/release/zongting-release.apk"
-    local vjson="/usr/ZongTing/release/version.json"
-    local url="http://172.16.1.93:8080/ZongTing/release/zongting-release.apk"
-
-    if [ ! -f "$src" ]; then
-        echo "WARNING: $src not found, skipping release"
-        return
-    fi
-
-    echo ""
-    echo "[RELEASE] Copying APK..."
-    cp -f "$src" "$dest"
-    chmod 644 "$dest"
-
-    echo "[RELEASE] Updating version.json..."
-    python3 -c "
-import json
-v = {'versionCode': $BUILD_NUM, 'versionName': '$VERSION_NAME', 'apkUrl': '$url'}
-print(json.dumps(v, indent=2, ensure_ascii=False))
-" > "$vjson"
-    chmod 644 "$vjson"
-
-    echo "[RELEASE] Done!"
-}
 
 case "$MODE" in
-    test)     do_test ;;
-    release)  do_release ;;
-    both)     do_test; do_release ;;
-    *)        echo "Usage: $0 [test|release|both]"; exit 1 ;;
+    test)
+        APK_REL="apk/beta/debug/app-beta-debug.apk"
+        VNAME="${VERSION_NAME}-beta"
+        CHANNEL="test"
+        NOTES="${NOTES:-修复 PadPortrait 歌词字体放大问题；layout 模块拆分；PlayerScreen 182 行}"
+        ;;
+    release)
+        APK_REL="apk/prod/release/app-prod-release.apk"
+        VNAME="${VERSION_NAME}"
+        CHANNEL="release"
+        NOTES="${NOTES:-Release build}"
+        ;;
+    *)
+        echo "Usage: $0 [test|release]"
+        exit 1
+        ;;
 esac
 
+APK_URL="${SERVER_BASE}/${APK_REL}"
+VJSON="${OUTPUTS_DIR}/version.json"
+APK_SRC="${OUTPUTS_DIR}/${APK_REL}"
+
+if [ ! -f "$APK_SRC" ]; then
+    echo "WARNING: $APK_SRC not found"
+    echo "  Run ./gradlew :app:assembleBetaDebug (or assembleProdRelease) first."
+    exit 1
+fi
+
+# 写 version.json
+python3 <<EOF > "$VJSON"
+import json
+v = {
+    "versionCode": $BUILD_NUM,
+    "versionName": "$VNAME",
+    "apkUrl": "$APK_URL",
+    "updateContent": "$NOTES",
+    "releaseNotes": "$NOTES",
+    "forceUpdate": False,
+    "channel": "$CHANNEL"
+}
+print(json.dumps(v, indent=2, ensure_ascii=False))
+EOF
+
+chmod 644 "$VJSON"
+
+echo ""
+echo "[${MODE^^}] version.json updated: $VJSON"
+echo "[${MODE^^}] APK URL:             $APK_URL"
+cat "$VJSON"
 echo ""
 echo "=========================================="
 echo " Deployment complete: v${VERSION_NAME} (build ${BUILD_NUM})"
