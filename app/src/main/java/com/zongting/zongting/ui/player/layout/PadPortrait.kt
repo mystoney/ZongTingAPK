@@ -1,97 +1,83 @@
 package com.zongting.zongting.ui.player.layout
 
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.aspectRatio
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.widthIn
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Bedtime
 import androidx.compose.material.icons.filled.Favorite
-import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.Tune
-import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
+import androidx.compose.material3.Tab
+import androidx.compose.material3.TabRow
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.material3.windowsizeclass.WindowSizeClass
 import androidx.hilt.navigation.compose.hiltViewModel
 import coil.ImageLoader
-import com.zongting.zongting.data.model.Song
 import com.zongting.zongting.player.PlayerManager
 import com.zongting.zongting.player.SleepTimerManager
 import com.zongting.zongting.ui.screens.RingtoneCutterScreen
 import com.zongting.zongting.ringtone.RingtoneCutterViewModel
-import com.zongting.zongting.ui.theme.AppColors
 import com.zongting.zongting.ui.LyricState
-import com.zongting.zongting.ui.PlayPauseIcon
 import com.zongting.zongting.ui.player.PlayerActions
 import com.zongting.zongting.ui.player.PlayerUiState
+import com.zongting.zongting.ui.player.component.AlbumCoverPage
 import com.zongting.zongting.ui.player.component.LyricPage
 import com.zongting.zongting.ui.player.component.PlayerBottomBar
 import com.zongting.zongting.ui.player.component.SavePlaylistDialog
 import com.zongting.zongting.ui.player.component.SleepTimerDialog
-import com.zongting.zongting.ui.player.component.VinylRecord
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
 /**
- * Three-column layout for **portrait**-orientation tablets (Medium width
+ * Player layout for **portrait**-orientation tablets (Medium width
  * size class, height greater than width).
  *
- * Layout — `widthIn(max=1100.dp)` centered, three vertical columns side by side:
- *
- * ┌─────────── AppBar (back / title / quick actions) ───────────┐
- * │  Vinyl + meta    │   LyricPage (no pager)   │  Queue list  │
- * │      0.40        │         0.35             │     0.25     │
- * ├──────────────── PlayerBottomBar (cross-column) ─────────────┤
- *
- * The right column is rendered as a LazyColumn with the up-next queue;
- * tapping a row seeks to and starts that song. Because the queue is
- * always visible, [PlayerBottomBar]'s built-in queue modal is not used
- * here (it would double-render the same data) — its `onShowPlaylist`
- * callback is therefore wired to a no-op.
+ * Layout — same as [PhonePortrait]: a 2-tab HorizontalPager (播放 / 歌词)
+ * wrapped in a Column with [PadPortraitTopBar] on top and
+ * [PlayerBottomBar] at the bottom. The difference from [PhonePortrait]
+ * is only the overall scale (PAD uses larger controls / text — to be
+ * tuned later) and the top-bar implementation ([PadPortraitTopBar] vs.
+ * [androidx.compose.material3.TopAppBar]).
  *
  * @param state snapshot of all reactive state the player needs.
  * @param actions callback bundle for every user-driven event.
- * @param imageLoader Coil loader used by [VinylRecord] to fetch the
- *   album artwork; supplied by the caller to share the same instance
- *   across the app.
+ * @param imageLoader Coil loader used by [AlbumCoverPage].
  * @param windowSizeClass propagated to [PlayerBottomBar] so its scale
- *   factor (icon / button sizes) stays consistent with the rest of
- *   the player UI.
+ *   factor (icon / button sizes) stays consistent.
  */
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
 fun PadPortrait(
     state: PlayerUiState,
@@ -99,113 +85,120 @@ fun PadPortrait(
     imageLoader: ImageLoader,
     windowSizeClass: WindowSizeClass,
 ) {
-    val queueListState = rememberLazyListState()
+    val pagerState = rememberPagerState(pageCount = { 2 })
+    val coroutineScope = rememberCoroutineScope()
     val context = LocalContext.current
+    val baseDensity = LocalDensity.current
 
-    // Dialog state — same pattern as PhonePortrait. The trigger callbacks
-    // handed down to PlayerBottomBar flip these local flags instead of
-    // relying on a top-level `show*Dialog` (no longer needed since each
-    // layout owns its dialog lifecycle now).
     var showSleepTimerDialog by remember { mutableStateOf(false) }
     var showSavePlaylistDialog by remember { mutableStateOf(false) }
     var showRingtoneCutter by remember { mutableStateOf(false) }
+    var isSeeking by remember { mutableStateOf(false) }
 
-    Box(
-        modifier = Modifier.fillMaxSize(),
-        contentAlignment = Alignment.Center
-    ) {
-        Column(
-            modifier = Modifier
-                .widthIn(max = 1100.dp)
-                .fillMaxHeight()
-                .background(MaterialTheme.colorScheme.background)
-                .padding(16.dp)
-        ) {
-            // ───── AppBar ─────
-            PadPortraitTopBar(state, actions)
+    Box(modifier = Modifier.fillMaxSize()) {
+        Box(modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background))
 
-            Spacer(Modifier.height(8.dp))
+        Column(modifier = Modifier.fillMaxSize()) {
+            if (!showRingtoneCutter) {
+                PadPortraitTopBar(state, actions)
 
-            // ───── Three-column body ─────
-            Row(
-                modifier = Modifier
-                    .weight(1f)
-                    .fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(16.dp)
-            ) {
-                // Column 1 — Vinyl + meta (40%)
-                PadPortraitCoverColumn(
-                    state = state,
-                    actions = actions,
-                    imageLoader = imageLoader,
-                    modifier = Modifier
-                        .weight(0.40f)
-                        .fillMaxHeight()
-                )
-
-                // Column 2 — Lyrics (35%)
-                Box(
-                    modifier = Modifier
-                        .weight(0.35f)
-                        .fillMaxHeight()
-                ) {
-                    LyricPage(
-                        currentSong = state.currentSong,
-                        lyricState = state.lyricState,
-                        playbackState = state.playbackState,
-                        isPlaying = state.isPlaying,
-                        onTogglePlay = actions.onTogglePlay,
-                        onPrevious = actions.onPrevious,
-                        onNext = actions.onNext,
-                        onDrag = actions.onDrag,
-                        onSeek = actions.onSeek,
-                        isPad = true
-                    )
+                if (state.currentSong != null) {
+                    TabRow(
+                        selectedTabIndex = pagerState.currentPage,
+                        containerColor = Color.Transparent,
+                        contentColor = MaterialTheme.colorScheme.primary,
+                        divider = {}
+                    ) {
+                        Tab(
+                            selected = pagerState.currentPage == 0,
+                            onClick = { coroutineScope.launch { pagerState.animateScrollToPage(0) } },
+                            text = { Text("播放", style = MaterialTheme.typography.labelMedium) }
+                        )
+                        Tab(
+                            selected = pagerState.currentPage == 1,
+                            onClick = { coroutineScope.launch { pagerState.animateScrollToPage(1) } },
+                            text = { Text("歌词", style = MaterialTheme.typography.labelMedium) }
+                        )
+                    }
                 }
-
-                // Column 3 — Queue (25%)
-                PadPortraitQueueColumn(
-                    state = state,
-                    actions = actions,
-                    listState = queueListState,
-                    modifier = Modifier
-                        .weight(0.25f)
-                        .fillMaxHeight()
-                )
             }
 
-            Spacer(Modifier.height(8.dp))
+            if (!showRingtoneCutter) {
+                HorizontalPager(
+                    state = pagerState,
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .weight(1f)
+                ) { page ->
+                    when (page) {
+                        0 -> AlbumCoverPage(
+                            currentSong = state.currentSong,
+                            isPlaying = state.isPlaying,
+                            playbackState = state.playbackState,
+                            playMode = state.playMode,
+                            onTogglePlay = actions.onTogglePlay,
+                            onSeek = { pos ->
+                                isSeeking = true
+                                actions.onSeek(pos)
+                                coroutineScope.launch {
+                                    delay(500L)
+                                    isSeeking = false
+                                }
+                            },
+                            onDrag = actions.onDrag,
+                            onPrevious = actions.onPrevious,
+                            onNext = actions.onNext,
+                            imageLoader = imageLoader
+                        )
+                        1 -> {
+                            // 歌词：opt-out 字体放大，保持当前 density
+                            CompositionLocalProvider(LocalDensity provides baseDensity) {
+                                LyricPage(
+                                    currentSong = state.currentSong,
+                                    lyricState = state.lyricState,
+                                    playbackState = state.playbackState,
+                                    isPlaying = state.isPlaying,
+                                    onTogglePlay = actions.onTogglePlay,
+                                    onPrevious = actions.onPrevious,
+                                    onNext = actions.onNext,
+                                    onDrag = actions.onDrag,
+                                    onSeek = actions.onSeek,
+                                    isPad = true
+                                )
+                            }
+                        }
+                    }
+                }
+            }
 
-            // ───── Cross-column bottom bar ─────
-            PlayerBottomBar(
-                currentSong = state.currentSong,
-                isPlaying = state.isPlaying,
-                playbackState = state.playbackState,
-                playMode = state.playMode,
-                isFavorite = state.isFavorite,
-                showPlaylist = false,                  // queue already shown in column 3
-                onTogglePlay = actions.onTogglePlay,
-                onTogglePlayMode = actions.onTogglePlayMode,
-                onShowPlaylist = { /* no-op: queue is always visible */ },
-                onToggleSavePlaylist = { showSavePlaylistDialog = true },
-                onToggleFavorite = actions.onToggleFavorite,
-                onSleepTimerClick = { showSleepTimerDialog = true },
-                onRingtoneCutterClick = {
-                    // PhonePortrait pauses the player before opening the
-                    // cutter (no playback underneath while editing). Same
-                    // behavior here — PlayerManager is the static singleton.
-                    PlayerManager.pause()
-                    showRingtoneCutter = true
-                },
-                isTimerActive = state.isTimerActive,
-                timerRemaining = state.timerRemaining,
-                onPrevious = actions.onPrevious,
-                onNext = actions.onNext,
-                currentPlaylist = state.currentPlaylist,
-                onPlaySong = actions.onPlaySong,
-                playlistListState = queueListState,
-                windowSizeClass = windowSizeClass
-            )
+            if (!showRingtoneCutter) {
+                PlayerBottomBar(
+                    currentSong = state.currentSong,
+                    isPlaying = state.isPlaying,
+                    playbackState = state.playbackState,
+                    playMode = state.playMode,
+                    isFavorite = state.isFavorite,
+                    showPlaylist = false,
+                    onTogglePlay = actions.onTogglePlay,
+                    onTogglePlayMode = actions.onTogglePlayMode,
+                    onShowPlaylist = { },
+                    onToggleSavePlaylist = { showSavePlaylistDialog = true },
+                    onToggleFavorite = actions.onToggleFavorite,
+                    onSleepTimerClick = { showSleepTimerDialog = true },
+                    onRingtoneCutterClick = {
+                        PlayerManager.pause()
+                        showRingtoneCutter = true
+                    },
+                    isTimerActive = state.isTimerActive,
+                    timerRemaining = state.timerRemaining,
+                    onPrevious = actions.onPrevious,
+                    onNext = actions.onNext,
+                    currentPlaylist = state.currentPlaylist,
+                    onPlaySong = actions.onPlaySong,
+                    playlistListState = rememberLazyListState(),
+                    windowSizeClass = windowSizeClass
+                )
+            }
 
             // ───── Dialogs / full-screen ringtone cutter ─────
             if (showSleepTimerDialog && !showRingtoneCutter) {
@@ -298,7 +291,7 @@ private fun PadPortraitTopBar(
         }
         IconButton(onClick = actions.onToggleFavorite) {
             Icon(
-                imageVector = if (state.isFavorite) Icons.Default.Favorite else Icons.Default.Favorite,
+                imageVector = Icons.Default.Favorite,
                 contentDescription = if (state.isFavorite) "取消喜欢" else "我喜欢",
                 tint = if (state.isFavorite) Color.Red else MaterialTheme.colorScheme.onSurface
             )
@@ -326,192 +319,3 @@ private fun PadPortraitTopBar(
         }
     }
 }
-
-@Composable
-private fun PadPortraitCoverColumn(
-    state: PlayerUiState,
-    actions: PlayerActions,
-    imageLoader: ImageLoader,
-    modifier: Modifier = Modifier,
-) {
-    val song = state.currentSong
-    Column(
-        modifier = modifier,
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(12.dp)
-    ) {
-        if (song == null) {
-            // 静默占位：保持栏位但不渲染任何内容
-        } else {
-            // VinylRecord
-            VinylRecord(
-                albumArtUrl = song.coverUrl ?: song.pic,
-                isPlaying = state.isPlaying,
-                modifier = Modifier
-                    .fillMaxWidth(0.85f)
-                    .aspectRatio(1f),
-                imageLoader = imageLoader
-            )
-            // Song meta
-            Column(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalAlignment = Alignment.CenterHorizontally
-            ) {
-                Text(
-                    text = song.name,
-                    style = MaterialTheme.typography.titleLarge,
-                    fontWeight = FontWeight.SemiBold,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    textAlign = TextAlign.Center
-                )
-                Spacer(Modifier.height(4.dp))
-                Text(
-                    text = song.artist,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    textAlign = TextAlign.Center
-                )
-                Spacer(Modifier.height(2.dp))
-                Text(
-                    text = song.album,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    textAlign = TextAlign.Center
-                )
-            }
-        }
-    }
-}
-
-@Composable
-private fun PadPortraitQueueColumn(
-    state: PlayerUiState,
-    actions: PlayerActions,
-    listState: androidx.compose.foundation.lazy.LazyListState,
-    modifier: Modifier = Modifier,
-) {
-    Surface(
-        modifier = modifier,
-        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f),
-        shape = MaterialTheme.shapes.medium
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(horizontal = 8.dp, vertical = 12.dp)
-        ) {
-            Row(
-                modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Icon(
-                    imageVector = Icons.Default.MusicNote,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.onSurface,
-                    modifier = Modifier.size(16.dp)
-                )
-                Spacer(Modifier.width(6.dp))
-                Text(
-                    text = "队列 (${state.currentPlaylist.size})",
-                    style = MaterialTheme.typography.titleSmall,
-                    fontWeight = FontWeight.SemiBold
-                )
-            }
-            if (state.currentPlaylist.isEmpty()) {
-                Box(
-                    modifier = Modifier.fillMaxSize(),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(
-                        text = "播放列表为空",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-            } else {
-                LazyColumn(
-                    state = listState,
-                    modifier = Modifier.fillMaxSize(),
-                    contentPadding = PaddingValues(vertical = 4.dp)
-                ) {
-                    itemsIndexed(state.currentPlaylist, key = { _, s -> s.rid }) { index, song ->
-                        QueueRow(
-                            index = index,
-                            song = song,
-                            isCurrent = song.rid == state.currentSong?.rid,
-                            isPlaying = state.isPlaying,
-                            onClick = { actions.onPlaySong(song) },
-                            onPlayPause = actions.onTogglePlay
-                        )
-                        if (index < state.currentPlaylist.lastIndex) {
-                            HorizontalDivider(
-                                color = MaterialTheme.colorScheme.outlineVariant,
-                                thickness = 0.5.dp
-                            )
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun QueueRow(
-    index: Int,
-    song: Song,
-    isCurrent: Boolean,
-    isPlaying: Boolean,
-    onClick: () -> Unit,
-    onPlayPause: () -> Unit,
-) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable(onClick = onClick)
-            .padding(vertical = 6.dp, horizontal = 4.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Text(
-            text = "${index + 1}",
-            style = MaterialTheme.typography.bodySmall,
-            color = if (isCurrent) AppColors.Accent else MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.width(24.dp)
-        )
-        Column(
-            modifier = Modifier.weight(1f)
-        ) {
-            Text(
-                text = song.name,
-                style = MaterialTheme.typography.bodyMedium,
-                color = if (isCurrent) AppColors.Accent else MaterialTheme.colorScheme.onSurface,
-                fontWeight = if (isCurrent) FontWeight.Bold else FontWeight.Normal,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
-            Text(
-                text = song.artist,
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
-        }
-        if (isCurrent) {
-            IconButton(onClick = onPlayPause, modifier = Modifier.size(32.dp)) {
-                PlayPauseIcon(
-                    isPlaying = isPlaying,
-                    tint = AppColors.Accent,
-                    modifier = Modifier.size(20.dp)
-                )
-            }
-        }
-    }
-}
-
-
