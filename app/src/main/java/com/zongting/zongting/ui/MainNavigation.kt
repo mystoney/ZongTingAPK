@@ -73,9 +73,12 @@ fun MainNavigation(
 ) {
     val isExpanded = windowSizeClass.widthSizeClass == WindowWidthSizeClass.Expanded
     val configuration = LocalConfiguration.current
-    val isLandscapePhone = !isExpanded && configuration.screenWidthDp > configuration.screenHeightDp
-    // PAD 判定：宽度 ≥ 600dp（包含 Medium 竖屏 + Expanded 横屏）
-    val isPad = windowSizeClass.widthSizeClass != WindowWidthSizeClass.Compact
+    // 是否手机：用最小宽度(smallestScreenWidthDp)判定，不随方向变化。
+    // 一加 12 横屏 widthDp=994dp(看似 PAD)，但 smallest=452dp(明显手机)。
+    val isPhone = configuration.smallestScreenWidthDp < 600
+    val isLandscapePhone = isPhone && configuration.screenWidthDp > configuration.screenHeightDp
+    // PAD 判定：最小宽度 ≥ 600dp（平板，不随方向变化）
+    val isPad = configuration.smallestScreenWidthDp >= 600
     // PAD 文字统一放大 2.2x（仅 sp，不影响 dp 布局）
     val fontScaleMultiplier = if (isPad) 2.2f else 1.0f
     val baseDensity = LocalDensity.current
