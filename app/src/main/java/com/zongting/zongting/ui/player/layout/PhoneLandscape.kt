@@ -172,12 +172,12 @@ fun PhoneLandscape(
                             ) {
                                 Text(
                                     text = formatDuration(playbackState.position),
-                                    style = MaterialTheme.typography.bodySmall,
+                                    fontSize = 10.sp,
                                     color = Color.White.copy(alpha = 0.7f)
                                 )
                                 Text(
                                     text = formatDuration(playbackState.duration),
-                                    style = MaterialTheme.typography.bodySmall,
+                                    fontSize = 10.sp,
                                     color = Color.White.copy(alpha = 0.7f)
                                 )
                             }
@@ -231,7 +231,7 @@ fun PhoneLandscape(
                         }
                     }
 
-                    // 左上角大字歌名（与歌词当前行样式一致）
+                    // 左上角歌名（与歌词当前行样式一致）
                     Box(
                         modifier = Modifier
                             .align(Alignment.TopStart)
@@ -240,7 +240,7 @@ fun PhoneLandscape(
                         Text(
                             text = currentSong.name,
                             color = Color.Black.copy(alpha = 0.8f),
-                            fontSize = 22.sp,
+                            fontSize = 18.sp,
                             fontWeight = FontWeight.Bold,
                             maxLines = 2,
                             overflow = TextOverflow.Ellipsis,
@@ -249,7 +249,7 @@ fun PhoneLandscape(
                         Text(
                             text = currentSong.name,
                             color = Color.White,
-                            fontSize = 22.sp,
+                            fontSize = 18.sp,
                             fontWeight = FontWeight.Bold,
                             maxLines = 2,
                             overflow = TextOverflow.Ellipsis
@@ -325,7 +325,7 @@ fun PhoneLandscape(
                                         val isCurrent = index == currentIndex
                                         val isNext = index == currentIndex + 1
                                         val alpha = if (isCurrent) 1f else 0.5f
-                                        val fontSize = if (isCurrent) 24.sp else if (isNext) 20.sp else 14.sp
+                                        val fontSize = if (isCurrent) 20.sp else if (isNext) 16.sp else 12.sp
 
                                         Row(
                                             verticalAlignment = Alignment.CenterVertically,
@@ -336,7 +336,7 @@ fun PhoneLandscape(
                                                     Text(
                                                         text = line.text.ifEmpty { " " },
                                                         color = Color.Black.copy(alpha = 0.8f),
-                                                        fontSize = 24.sp,
+                                                        fontSize = 20.sp,
                                                         fontWeight = FontWeight.Bold,
                                                         modifier = Modifier.offset(x = 1.5.dp, y = 1.5.dp)
                                                     )
