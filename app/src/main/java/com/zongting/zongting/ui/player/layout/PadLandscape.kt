@@ -190,8 +190,8 @@ fun PadLandscape(
                         val coverSize = minOf(maxWidth * 0.85f, screenHeight * 0.7f)
 
                         // 歌名 / 歌手（无降档，固定 sp，由 Stoney 后续按需调整）
-                        val nameFontSp = 26f
-                        val artistFontSp = 17f
+                        val nameFontSp = 14f
+                        val artistFontSp = 12f
 
                         Column(
                             horizontalAlignment = Alignment.CenterHorizontally,
@@ -334,7 +334,7 @@ fun PadLandscape(
                                                 val isPlayed = index < currentIndex - 1
                                                 val isFarFuture = index > currentIndex + 1
                                                 val alpha = if (isCurrent) 1f else 0.5f
-                                                val baseFontSp = if (isCurrent) 35f else if (isNext) 30f else 22f
+                                                val baseFontSp = if (isCurrent) 30f else if (isNext) 26f else 19f
                                                 val leadSpace = ""
 
                                                 Row(
@@ -393,12 +393,12 @@ fun PadLandscape(
                     ) {
                         Text(
                             text = formatDuration(playbackState.position),
-                            style = MaterialTheme.typography.bodySmall,
+                            fontSize = 10.sp,
                             color = Color.White.copy(alpha = 0.7f)
                         )
                         Text(
                             text = formatDuration(playbackState.duration),
-                            style = MaterialTheme.typography.bodySmall,
+                            fontSize = 10.sp,
                             color = Color.White.copy(alpha = 0.7f)
                         )
                     }
