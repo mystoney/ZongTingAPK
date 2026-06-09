@@ -240,7 +240,7 @@ fun PhoneLandscape(
                         Text(
                             text = currentSong.name,
                             color = Color.Black.copy(alpha = 0.8f),
-                            fontSize = 18.sp,
+                            fontSize = 14.sp,
                             fontWeight = FontWeight.Bold,
                             maxLines = 2,
                             overflow = TextOverflow.Ellipsis,
@@ -249,7 +249,7 @@ fun PhoneLandscape(
                         Text(
                             text = currentSong.name,
                             color = Color.White,
-                            fontSize = 18.sp,
+                            fontSize = 14.sp,
                             fontWeight = FontWeight.Bold,
                             maxLines = 2,
                             overflow = TextOverflow.Ellipsis
